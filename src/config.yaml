@@ -1,0 +1,38 @@
+defaults:
+  - _self_
+  - tests: config/Phillipsburg
+cwd: /Users/taddbindas/projects/LGAR-Torch
+save_name: debugger
+output_dir: ${cwd}/output
+variables:
+  num_soil_types: 15  # must be less than or equal to MAX_NUM_SOIL_TYPES
+  num_soil_layers: 3  # must be less than or equal to MAX_NUM_SOIL_LAYERS
+  num_fronts: 0  # must be less than MAX_NUM_FRONTS
+  root_zone_bottom_layer: 2  # example, if set to 2, then the root zone is in layer 1 and 2
+  AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET
+  ET_expon: 1.0  # exponent that allows curvature of the rising portion of the Budyko curve
+  wilting_point_psi_cm: 154950/10.  # AJ-correction
+  soil_type_by_layer:
+    - 13  # Sand
+    - 14  # Sandy Loam
+    - 15  # Clay
+
+################## HYDRA CONFIG #######################
+hydra:
+  help:
+    app_name: LGAR-TORCH
+    header: == ${hydra.help.app_name} ==
+    template: |-
+      ${hydra.help.header}
+
+      This is ${hydra.help.app_name}!
+      Work in progress
+
+      ${hydra.help.footer}
+    footer: |-
+      Powered by Hydra (https://hydra.cc)
+      Use --hydra-help to view Hydra specific help
+  job:
+    name: ${save_name}
+  run:
+    dir: ${cwd}/output/${now:%Y-%m-%d}_${hydra.job.name}/${now:%H-%M-%S}
