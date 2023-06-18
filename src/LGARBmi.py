@@ -1,8 +1,8 @@
 """the BMI class for LGAR"""
-
 from bmipy import Bmi
 import logging
 from omegaconf import DictConfig
+import time
 import torch
 
 log = logging.getLogger("LGARBmi")
@@ -12,7 +12,12 @@ class LGARBmi(Bmi):
     """The LGAR BMI class"""
 
     _name = "LGAR Torch"
+    _input_var_names = ("atmosphere_water__precipitation_leq-volume_flux",
+                        "land_surface_air__temperature", )
+    _output_var_names = ("snowpack__liquid-equivalent_depth",
+                         "snowpack__melt_volume_flux", )
     def __init__(self, cfg: DictConfig):
+        self.start = time.perf_counter()
         return 0
 
     def initialize(self, config_file: DictConfig) -> None:
@@ -66,8 +71,10 @@ class LGARBmi(Bmi):
         loop. This typically includes deallocating memory, closing files and
         printing reports.
         """
+        end = time.perf_counter()
+
         log.info(f"\n---------------------- Simulation Summary  ------------------------ \n")
-        log.info(f"Time (sec)                 = {elapsed} \n")
+        log.info(f"Time (sec)                 = {end-self.start:.6f} \n")
         log.info(f"-------------------------- Mass balance ------------------- \n")
         log.info(f"initial water in soil      = {volstart} cm\n")
         log.info(f"total precipitation input  = {volprecip}cm\n")
@@ -78,7 +85,7 @@ class LGARBmi(Bmi):
         log.info(f"total percolation          = {volrech} cm\n")
         log.info(f"total AET                  = {volAET} cm\n")
         log.info(f"total PET                  = {volPET} cm\n")
-        log.info(f"global balance             =   {global_error_cm} cm\n")
+        log.info(f"global balance             = {global_error_cm} cm\n")
 
     def get_component_name(self) -> str:
         """Name of the component.
