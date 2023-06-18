@@ -4,6 +4,7 @@ import logging
 from omegaconf import DictConfig
 import time
 import torch
+from typing import Tuple
 
 log = logging.getLogger("LGARBmi")
 
