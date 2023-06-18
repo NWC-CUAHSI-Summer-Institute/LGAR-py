@@ -1,26 +1,31 @@
+defaults:
+  - _self_
+  - data: config/Phillisburg
 cwd: /Users/taddbindas/projects/LGAR-Torch
-verbosity: None
-forcing_file: ${cwd}/data/forcing_data_resampled_uniform_Phillipsburg.csv
-soil_params_file: ${cwd}/data/vG_default_params.dat
-layer_thickness: #[cm]
-  - 44.0
-  - 131.0
-  - 25.0
-initial_psi: 2000.0 #[cm]
-timestep: 300 #[sec]
-endtime: 7500.0 #[hr]
-forcing_resolution: 3600 #[sec]
-ponded_depth_max: 2 #[cm]
-use_closed_form_G: False
-layer_soil_type:
-  - 13
-  - 14
-  - 15
-max_soil_types: 25
-wilting_point_psi: 15495.0 #[cm]
-giuh_ordinates:
-  - 0.06
-  - 0.51
-  - 0.28
-  - 0.12
-  - 0.03
+save_name: debugger
+output_dir: ${cwd}/ouutput
+initializations:
+  num_soil_types: 15  # must be less than or equal to MAX_NUM_SOIL_TYPES
+  num_soil_layers: 3  # must be less than or equal to MAX_NUM_SOIL_LAYERS
+  num_fronts: 0  # must be less than MAX_NUM_FRONTS
+  root_zone_bottom_layer: 2  # example, iff set to 2, then the root zone is in layer 1 and 2
+
+################## HYDRA CONFIG #######################
+hydra:
+  help:
+    app_name: LGAR-TORCH
+    header: == ${hydra.help.app_name} ==
+    template: |-
+      ${hydra.help.header}
+
+      This is ${hydra.help.app_name}!
+      Work in progress
+
+      ${hydra.help.footer}
+    footer: |-
+      Powered by Hydra (https://hydra.cc)
+      Use --hydra-help to view Hydra specific help
+  job:
+    name: ${save_name}
+  run:
+    dir: /mnt/sdb1/Database/SI2023/output/${now:%Y-%m-%d}_${hydra.job.name}/${now:%H-%M-%S}
