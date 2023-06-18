@@ -12,10 +12,24 @@ class LGARBmi(Bmi):
     """The LGAR BMI class"""
 
     _name = "LGAR Torch"
-    _input_var_names = ("atmosphere_water__precipitation_leq-volume_flux",
-                        "land_surface_air__temperature", )
-    _output_var_names = ("snowpack__liquid-equivalent_depth",
-                         "snowpack__melt_volume_flux", )
+    _input_var_names = (
+        "precip_mm_per_15min",  # Forcing Variable
+        "PET_mm_per_15min",  # Forcing Variable
+    )
+    _output_var_names = (
+        "volprecip",  # cumulative amount of precip
+        "volstart",  # volume of water in the soil at the beginning of the simulation
+        "volend",  # volume of water in the soil at the end of the simulation
+        "volin",  # volume of precip added to the ponded depth
+        "volrunoff",  # volume of water removed from the surface as runoff
+        "volon",  # volume of water remaining on the surface at the end of the sim.
+        "volAET",  # cumulative amount of actual ET
+        "volPET",  # cumulative amount of potential ET
+        "volrech",  # cumulative amount of water leaving the bottom of the soil
+    )
+    # note: at the end of each time step the following must be true(assuming volon = 0 at t = 0):
+    # volstart + volprecip - volAET - volin - volrunoff - volon - volrech - volend = 0.0
+
     def __init__(self, cfg: DictConfig):
         self.start = time.perf_counter()
         return 0
@@ -73,7 +87,9 @@ class LGARBmi(Bmi):
         """
         end = time.perf_counter()
 
-        log.info(f"\n---------------------- Simulation Summary  ------------------------ \n")
+        log.info(
+            f"\n---------------------- Simulation Summary  ------------------------ \n"
+        )
         log.info(f"Time (sec)                 = {end-self.start:.6f} \n")
         log.info(f"-------------------------- Mass balance ------------------- \n")
         log.info(f"initial water in soil      = {volstart} cm\n")
@@ -376,7 +392,7 @@ class LGARBmi(Bmi):
         raise NotImplementedError
 
     def get_value_at_indices(
-            self, name: str, dest: torch.Tensor, inds: torch.Tensor
+        self, name: str, dest: torch.Tensor, inds: torch.Tensor
     ) -> torch.Tensor:
         """Get values at particular indices.
 
@@ -414,7 +430,7 @@ class LGARBmi(Bmi):
         raise NotImplementedError
 
     def set_value_at_indices(
-            self, name: str, inds: torch.Tensor, src: torch.Tensor
+        self, name: str, inds: torch.Tensor, src: torch.Tensor
     ) -> None:
         """Specify a new value for a model variable at particular indices.
 
@@ -682,7 +698,7 @@ class LGARBmi(Bmi):
         raise NotImplementedError
 
     def get_grid_nodes_per_face(
-            self, grid: int, nodes_per_face: torch.Tensor
+        self, grid: int, nodes_per_face: torch.Tensor
     ) -> torch.Tensor:
         """Get the number of nodes for each face.
 
