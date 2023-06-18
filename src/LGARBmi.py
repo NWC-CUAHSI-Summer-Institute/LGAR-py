@@ -16,6 +16,21 @@ class LGARBmi(Bmi):
     _input_var_names = (
         "precip_mm_per_15min",  # Forcing Variable
         "PET_mm_per_15min",  # Forcing Variable
+        "Se", # this is the relative (scaled 0-1) water content, like Theta
+        "theta_init"  # thickness of individual layers, allocate memory at run time
+        "fdepth",  # cumulative thickness of layers, allocate memory at run time
+        "ftheta",   # initial water content
+        "theta1",  # fred's test variable ffor creating new wetting fronts
+        "theta2",  # usually the limits of integration of Geff or width of a front, theta1 <= theta2
+        "dry_depth",
+        "ponded_depth_cm",  # more explicit variable name, commonly called h_p or H_p
+        "delta_theta",  # the width of a front, such that its volume=depth*delta_theta
+        "precip_timestep_cm"
+        "precrip_previous_timestep_cm",
+        "PET_timestep_cm"
+        "AET_timestep_cm",
+        "AET_thresh_Theta",  # threshold scaled moisture content (0-1) above which AET=PET
+        "AET_expon",  # exponent that allows curvature of the rising portion of the Budyko curve
     )
     _output_var_names = (
         "volprecip",  # cumulative amount of precip
@@ -31,11 +46,19 @@ class LGARBmi(Bmi):
     # note: at the end of each time step the following must be true(assuming volon = 0 at t = 0):
     # volstart + volprecip - volAET - volin - volrunoff - volon - volrech - volend = 0.0
 
-    def __init__(self, cfg: DictConfig):
-        self.start = time.perf_counter()
-        return 0
+    def __init__(self):
+        self._model = None
+        self._values = {}
+        self._var_units = {}
+        self._var_loc = "node"
+        self._var_grid_id = 0
+        self._grid_type = {}
 
-    def initialize(self, config_file: DictConfig) -> None:
+        self._start_time = time.perf_counter()
+        self._end_time = None
+        self._time_units = "s"
+
+    def initialize(self, cfg: DictConfig) -> None:
         """Perform startup tasks for the model.
 
         Perform all tasks that take place before entering the model's time
@@ -56,7 +79,14 @@ class LGARBmi(Bmi):
         recommended. A template of a model's configuration file
         with placeholder values is used by the BMI.
         """
-        raise NotImplementedError
+
+        # calculate the cumulative(absolute) depth from land surface to bottom of each soil layer
+        cum_layer_thickness_cm = torch.zeros([cfg.num_soil_layers])
+        for i in range(1, cfg.variables.num_soil_layers):
+            cum_layer_thickness_cm[i] = (cfg.tests.layer_thickness_cm[i] + cum_layer_thickness_cm[i - 1])
+
+
+        self._grid_type = {0: "scalar"}
 
     def update(self) -> None:
         """Advance model state by one time step.
@@ -86,12 +116,12 @@ class LGARBmi(Bmi):
         loop. This typically includes deallocating memory, closing files and
         printing reports.
         """
-        end = time.perf_counter()
+        self._end_time = time.perf_counter()
 
         log.info(
             f"\n---------------------- Simulation Summary  ------------------------ \n"
         )
-        log.info(f"Time (sec)                 = {end-self.start:.6f} \n")
+        log.info(f"Time (sec)                 = {self._end_time -self._start_time:.6f} \n")
         log.info(f"-------------------------- Mass balance ------------------- \n")
         log.info(f"initial water in soil      = {volstart} cm\n")
         log.info(f"total precipitation input  = {volprecip}cm\n")
