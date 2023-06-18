@@ -1,13 +1,21 @@
 """the BMI class for LGAR"""
 
 from bmipy import Bmi
+import logging
+from omegaconf import DictConfig
 import torch
 
+log = logging.getLogger("LGARBmi")
+
+
 class LGARBmi(Bmi):
-    def __init__(self):
+    """The LGAR BMI class"""
+
+    _name = "LGAR Torch"
+    def __init__(self, cfg: DictConfig):
         return 0
 
-    def initialize(self, config_file: str) -> None:
+    def initialize(self, config_file: DictConfig) -> None:
         """Perform startup tasks for the model.
 
         Perform all tasks that take place before entering the model's time
@@ -17,7 +25,7 @@ class LGARBmi(Bmi):
 
         Parameters
         ----------
-        config_file : str, optional
+        config_file : DictConfig
             The path to the model configuration file.
 
         Notes
@@ -58,7 +66,19 @@ class LGARBmi(Bmi):
         loop. This typically includes deallocating memory, closing files and
         printing reports.
         """
-        raise NotImplementedError
+        log.info(f"\n---------------------- Simulation Summary  ------------------------ \n")
+        log.info(f"Time (sec)                 = {elapsed} \n")
+        log.info(f"-------------------------- Mass balance ------------------- \n")
+        log.info(f"initial water in soil      = {volstart} cm\n")
+        log.info(f"total precipitation input  = {volprecip}cm\n")
+        log.info(f"total infiltration         = {volin} cm\n")
+        log.info(f"final water in soil        = {volend} cm\n")
+        log.info(f"water remaining on surface = {volon} cm\n")
+        log.info(f"surface runoff             = {volrunoff} cm\n")
+        log.info(f"total percolation          = {volrech} cm\n")
+        log.info(f"total AET                  = {volAET} cm\n")
+        log.info(f"total PET                  = {volPET} cm\n")
+        log.info(f"global balance             =   {global_error_cm} cm\n")
 
     def get_component_name(self) -> str:
         """Name of the component.
