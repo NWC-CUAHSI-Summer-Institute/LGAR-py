@@ -1,0 +1,53 @@
+"""A file to hold all soil functions"""
+import pandas as pd
+import torch
+
+
+def calc_theta_from_h(
+    h: torch.Tensor, soil_properties: pd.DataFrame, device: str
+) -> torch.Tensor():
+    """
+    function to calculate theta from h
+
+    :parameter h: the initial psi (cm)
+    :parameter soil_properties: All soils and their properties
+    :parameter device: the device that we're using
+    """
+    alpha = torch.tensor(soil_properties["alpha(cm^-1)"], device=device)
+    n = torch.tensor(soil_properties["n"], device=device)
+    m = torch.tensor(soil_properties["m"], device=device)
+    theta_e = torch.tensor(soil_properties["theta_e"], device=device)
+    theta_r = torch.tensor(soil_properties["theta_r"], device=device)
+    return (
+        1.0 / (torch.pow(1.0 + torch.pow(alpha * h, n), m)) * (theta_e - theta_r)
+    ) + theta_r
+
+
+def calc_se_from_theta(
+    theta: torch.Tensor, e: torch.Tensor, r: torch.Tensor
+) -> torch.Tensor:
+    """
+    function to calculate Se from theta
+    :param theta: the calculated inital theta
+    :param e: theta_e
+    :param r: theta_r
+    :return: Se
+    """
+    return torch.div((theta - r), (e - r))
+
+
+def calc_k_from_se(
+    se: torch.Tensor, ksat: torch.Tensor, m: torch.Tensor
+) -> torch.Tensor:
+    """
+    function to calculate K from Se
+    :param se: se
+    :param ksat: saturated hydraulic conductivity
+    :param m: ???
+    :return:
+    """
+    return (
+        ksat
+        * torch.sqrt(se)
+        * torch.pow(1.0 - torch.pow(1.0 - torch.pow(se, 1.0 / m), m), 2.0)
+    )

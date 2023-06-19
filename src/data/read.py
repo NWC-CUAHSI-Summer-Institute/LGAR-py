@@ -41,12 +41,21 @@ def read_forcing_data(cfg: DictConfig) -> (np.ndarray, torch.Tensor, torch.Tenso
 
 def read_soils_file(cfg: DictConfig) -> pd.DataFrame:
     """
-    Reading
-    :param cfg:
+    Reading the soils dataframe
+    :param cfg: the config file
+
+    Below are the variables used inside of the soils dataframe:
+    Texture: The soil classification
+    theta_r: Residual Water Content
+    theta_e: Wilting Point
+    alpha(cm^-1): ???"
+    n: ???
+    m: ???
+    Ks(cm/h): Saturated Hydraulic Conductivity
+
     :return:
     """
     soils_file_path = Path(cfg.data.soil_params_file)
-    device = cfg.device
 
     # Check if forcing file exists
     if not soils_file_path.is_file():

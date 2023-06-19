@@ -1,4 +1,4 @@
-"Texture	        theta_r	theta_e	alpha(cm^-1)	n	m	Ks(cm/h)"
+Texture	        theta_r	theta_e	alpha(cm^-1)	n	m	Ks(cm/h)
 "Clay"	                0.1	0.46	1.00E-02	1.25	0.2	0.612
 "Clay-loam"	        0.08	0.44	2.00E-02	1.42	0.29	0.3348
 "Loam"	                0.06	0.4	1.00E-02	1.47	0.32	0.504

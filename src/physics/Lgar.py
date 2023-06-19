@@ -52,11 +52,19 @@ depth
 				   output to other models (e.g. soil freeze-thaw)
 ############################################################################################
 """
+from collections import deque
 import logging
+import numpy as np
 from omegaconf import DictConfig
 import torch
 
 from src.data.read import read_soils_file
+from src.physics.soil_functions import (
+    calc_theta_from_h,
+    calc_se_from_theta,
+    calc_k_from_se,
+)
+from src.physics.WettingFront import WettingFront
 
 log = logging.getLogger("physics.Lgar")
 
@@ -147,9 +155,7 @@ class LGAR:
             self.cum_layer_thickness[i] = (
                 self.cum_layer_thickness[i - 1].clone() + self.layer_thickness_cm[i]
             )
-        self.num_layers = torch.tensor(
-            len(cfg.data.layer_thickness), dtype=torch.float64, device=self.device
-        )
+        self.num_layers = len(cfg.data.layer_thickness)
         self.soil_depth_cm = self.cum_layer_thickness[-1]
         # is_layer_thickness_set = True
 
@@ -199,9 +205,8 @@ class LGAR:
 
         self.use_closed_form_G = cfg.data.use_closed_form_G
 
-        self.layer_soil_type = torch.tensor(
-            cfg.data.layer_soil_type, dtype=torch.float64, device=self.device
-        )
+        # HARDCODING A 1 SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
+        self.layer_soil_type = np.array(cfg.data.layer_soil_type) - 1
         # is_layer_soil_type_set = True
 
         self.num_soil_types = torch.tensor(
@@ -237,15 +242,105 @@ class LGAR:
         )
 
         self.frozen_factor = torch.ones(
-            int(self.num_layers.item()), dtype=torch.float64, device=self.device
+            int(self.num_layers), dtype=torch.float64, device=self.device
         )
 
+        num_wetting_vars = 4
+        # Creating a torch matrix that will hold wetting fronts.
+        # Each wetting front is a row. Columns are depth, theta, layer, dzdt_cm_per_h
+        self.wetting_fronts = deque()
         self.initialize_wetting_front()
 
-    def initialize_wetting_front(self):
+        # Running a mass balance check
+        self.calc_mass_balance()
+
+        # initially we start with a dry surface (no surface ponding)
+        self.ponded_depth_cm = torch.tensor(0, dtype=torch.float64, device=self.device)
+        # No. of spatial intervals used in trapezoidal integration to compute G
+        self.nint = 120  # hacked, not needed to be an input option
+        self.num_wetting_fronts = self.num_layers
+        self.time_s = 0.0
+        self.timesteps = 0.0
+
+    def initialize_wetting_front(self) -> None:
         """
         calculates initial theta (soil moisture content) and hydraulic conductivity
         from the prescribed psi value for each of the soil layers
+
+        THE PARAMETERS BELOW ARE FROM THE C IMPLEMENTATION. DOCUMENTING BELOW FOR CONSISTENCY
+        :parameter num_layers (int): the number of soil layers
+        :parameter initial_psi_cm: the initial psi of the soil layer
+        :parameter layer_soil_type (array): the type of soil per layer
+        :parameter cum_layer_thickness (array): the cumulative thickness of the soil
+        :parameter frozen factor (array): ???
+        :parameter soil_properties (df): a dataframe of all of the soils and their properties
+        :return: The wetting front per soil layer
+        """
+
+        for i in range(self.num_layers):
+            soil_type = self.layer_soil_type[i]
+            soil_properties = self.soils_df.iloc[soil_type]
+            theta_init = calc_theta_from_h(
+                self.initial_psi, soil_properties, self.device
+            )
+            log.debug(
+                f"Layer: {i}\n"
+                f"Texture: {soil_properties['Texture']}\n"
+                f"Theta_init: {theta_init}\n"
+                f"theta_r: {soil_properties['theta_r']}\n"
+                f"theta_e: {soil_properties['theta_e']}\n"
+                f"alpha(cm^-1) : {soil_properties['alpha(cm^-1)']}\n"
+                f"n: {soil_properties['n']}\n"
+                f"m: {soil_properties['m']}\n"
+                f"Ks(cm/h): {soil_properties['Ks(cm/h)']}\n"
+            )
+            bottom_flag = True
+            wetting_front = WettingFront(
+                depth=self.cum_layer_thickness[i],
+                theta=theta_init,
+                layer=i,
+                bottom_flag=bottom_flag,
+            )
+            wetting_front.psi_cm = self.initial_psi
+            se = calc_se_from_theta(
+                theta=wetting_front.theta,
+                e=soil_properties["theta_e"],
+                r=soil_properties["theta_r"],
+            )
+            ksat_cm_per_h = self.frozen_factor[i] * soil_properties["Ks(cm/h)"]
+            wetting_front.k_cm_per_h = calc_k_from_se(
+                se, ksat_cm_per_h, soil_properties["m"]
+            )
+            self.wetting_fronts.append(wetting_front)
+
+    def calc_mass_balance(self):
+        """
+        Calculates a mass balance from your variables
         :return:
         """
-        return 0
+        sum = torch.tensor(0, dtype=torch.float64)
+
+        if len(self.wetting_fronts) == 0:
+            log.info("No Wetting Fronts")
+            return sum
+
+        for i in range(len(self.wetting_fronts)):
+            current = self.wetting_fronts[i]
+            base_depth = (
+                self.cum_layer_thickness[current.layer - 1]
+                if i > 0
+                else torch.tensor(0.0, dtype=torch.float64, device=self.device)
+            )
+            # This is not the last entry in the list
+            if i < len(self.wetting_fronts) - 1:
+                next = self.wetting_fronts[i + 1]
+                if next.layer == current.layer:
+                    sum = sum + (current.depth_cm - base_depth) * (
+                        current.theta - next.theta
+                    )
+                else:
+                    sum = sum + (current.depth_cm - base_depth) * current.theta
+            else:  # This is the last entry in the list. This must be the deepest front in the final layer
+                sum += current.theta * (current.depth_cm - base_depth)
+
+        return sum
