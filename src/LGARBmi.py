@@ -6,6 +6,8 @@ import time
 import torch
 from typing import Tuple
 
+from src.data.read_forcing import read_forcing_data
+
 log = logging.getLogger("LGARBmi")
 
 
@@ -82,40 +84,9 @@ class LGARBmi(Bmi):
         """
         self._grid_type = {0: "scalar"}
 
-        # calculate the cumulative(absolute) depth from land surface to bottom of each soil layer
-        cum_layer_thickness_cm = torch.zeros([cfg.num_soil_layers])
-        for i in range(1, cfg.variables.num_soil_layers):
-            cum_layer_thickness_cm[i] = (cfg.tests.layer_thickness_cm[i] + cum_layer_thickness_cm[i - 1])
-
-        # calculate the initial theta and wilting point moisture content
-        # ffor the soil in each layer from initial_psi and assumed wilting point psi
-        # and create initial fronts and include them in each of the soil layers
-        front = 0
-        for layer in range(1, cfg.variables.num_soil_layers + 1):
-            front += 1
-            soil = cfg.variables.soil_type_by_layer[layer]
-            theta_init = calc_theta_from_h(initial_psi_cm,
-                                           soil_properties[soil]['vg_alpha_per_cm'],
-                                           soil_properties[soil]['vg_m'],
-                                           soil_properties[soil]['vg_n'],
-                                           soil_properties[soil]['theta_e'],
-                                           soil_properties[soil]['theta_r'])
-
-            # Create the initial moisture profile
-            bottom_flag = True
-            current = {
-                'cum_layer_thickness_cm': cum_layer_thickness_cm[layer],
-                'theta_init': theta_init,
-                'front': front,
-                'layer': layer,
-                'bottom_flag': bottom_flag
-            }
-            current['psi_cm'] = initial_psi_cm
-            Se = calc_Se_from_theta(current['theta'], soil_properties[soil]['theta_e'],
-                                    soil_properties[soil]['theta_r'])
-            current['K_cm_per_s'] = calc_K_from_Se(Se, soil_properties[soil]['Ksat_cm_per_h'],
-                                                   soil_properties[soil]['vg_m'])
-            current_values.append(current)
+        endtime = self.get_end_time()
+        timestep = self.get_time_step()
+        timestep, precipitation, PET = read_forcing_data(cfg.tests.forcing_file)
 
     def update(self) -> None:
         """Advance model state by one time step.
