@@ -148,7 +148,7 @@ class LGAR:
                 self.cum_layer_thickness[i - 1].clone() + self.layer_thickness_cm[i]
             )
         self.num_layers = torch.tensor(
-            self.layer_thickness_cm.shape[0], dtype=torch.float64, device=self.device
+            len(cfg.data.layer_thickness), dtype=torch.float64, device=self.device
         )
         self.soil_depth_cm = self.cum_layer_thickness[-1]
         is_layer_thickness_set = True
@@ -207,13 +207,24 @@ class LGAR:
         )
         is_layer_soil_type_set = True
 
-
-        is_wilting_point_psi_cm_set = True
-
-        is_soil_params_file_set = True
-
+        self.num_soil_types = torch.tensor(
+            cfg.data.max_soil_types, dtype=torch.float64, device=self.device
+        )
         is_max_soil_types_set = True
 
-        is_giuh_ordinates_set = True
+        self.wilting_point_psi = torch.tensor(
+            cfg.data.wilting_point_psi, dtype=torch.float64, device=self.device
+        )
+        is_wilting_point_psi_cm_set = True
 
-        is_soil_z_set = True
+        self.giuh_ordinates = torch.zeros(
+            [len(cfg.data.giuh_ordinates) + 1], dtype=torch.float64, device=self.device
+        )
+        self.giuh_ordinates[1:] = torch.tensor(
+            cfg.data.giuh_ordinates, dtype=torch.float64, device=self.device
+        )
+        self.num_giuh_ordinates = torch.tensor(
+            len(cfg.data.giuh_ordinates), dtype=torch.float64, device=self.device
+        )
+
+        
