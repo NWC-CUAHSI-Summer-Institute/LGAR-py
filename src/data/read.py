@@ -1,5 +1,7 @@
 """A file to store the function where we read the input data"""
 import logging
+
+import pandas
 from omegaconf import DictConfig
 import numpy as np
 import pandas as pd
@@ -35,3 +37,29 @@ def read_forcing_data(cfg: DictConfig) -> (np.ndarray, torch.Tensor, torch.Tenso
     pet = torch.tensor(df["PET(mm/h)"].values, dtype=torch.float64, device=device)
 
     return time, precip, pet
+
+
+def read_soils_file(cfg: DictConfig) -> pd.DataFrame:
+    """
+    Reading
+    :param cfg:
+    :return:
+    """
+    soils_file_path = Path(cfg.data.soil_params_file)
+    device = cfg.device
+
+    # Check if forcing file exists
+    if not soils_file_path.is_file():
+        log.error(f"File {soils_file_path} doesn't exist")
+        raise DataError
+
+    # Checking the file extension so we correctly read the file
+    if soils_file_path.suffix == '.csv':
+        df = pd.read_csv(soils_file_path)
+    elif soils_file_path.suffix == '.dat':
+        df = pd.read_csv(soils_file_path, delimiter=r'\s+', engine='python')
+    else:
+        log.error(f"File {soils_file_path} has an invalid type")
+        df = None
+    return df
+

@@ -6,7 +6,7 @@ import time
 import torch
 from typing import Tuple
 
-from src.data.read_forcing import read_forcing_data
+from src.data.read import read_forcing_data
 from src.physics.Lgar import LGAR
 
 log = logging.getLogger("LGARBmi")

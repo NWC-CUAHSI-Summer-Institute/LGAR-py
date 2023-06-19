@@ -56,6 +56,8 @@ import logging
 from omegaconf import DictConfig
 import torch
 
+from src.data.read import read_soils_file
+
 log = logging.getLogger("physics.Lgar")
 
 
@@ -227,4 +229,4 @@ class LGAR:
             len(cfg.data.giuh_ordinates), dtype=torch.float64, device=self.device
         )
 
-        
+        self.soils_df = read_soils_file(cfg)
