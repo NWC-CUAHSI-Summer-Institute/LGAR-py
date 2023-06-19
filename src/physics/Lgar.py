@@ -147,7 +147,9 @@ class LGAR:
             self.cum_layer_thickness[i] = (
                 self.cum_layer_thickness[i - 1].clone() + self.layer_thickness_cm[i]
             )
-        self.num_layers = torch.tensor(self.layer_thickness_cm.shape[0], dtype=torch.float64, device=self.device)
+        self.num_layers = torch.tensor(
+            self.layer_thickness_cm.shape[0], dtype=torch.float64, device=self.device
+        )
         self.soil_depth_cm = self.cum_layer_thickness[-1]
         is_layer_thickness_set = True
 
@@ -157,7 +159,9 @@ class LGAR:
             for x in self.cum_layer_thickness
         ]
 
-        self.initial_psi = torch.tensor(cfg.data.initial_psi, dtype=torch.float64, device=self.device)
+        self.initial_psi = torch.tensor(
+            cfg.data.initial_psi, dtype=torch.float64, device=self.device
+        )
         is_initial_psi_set = True
 
         timestep_unit = cfg.data.units.timestep_h[0]
@@ -186,8 +190,23 @@ class LGAR:
         assert self.forcing_resolution_h > 0
         is_forcing_resolution_set = True
 
+        self.ponded_depth_max_cm = torch.max(
+            torch.tensor(
+                cfg.data.ponded_depth_max, dtype=torch.float64, device=self.device
+            )
+        )
+        is_ponded_depth_max_cm_set = True
 
+        self.use_closed_form_G = cfg.data.use_closed_form_G
+
+        self.layer_soil_type = torch.zeros(
+            [len(cfg.data.layer_soil_type) + 1], dtype=torch.float64, device=self.device
+        )
+        self.layer_soil_type[1:] = torch.tensor(
+            cfg.data.layer_soil_type, dtype=torch.float64, device=self.device
+        )
         is_layer_soil_type_set = True
+
 
         is_wilting_point_psi_cm_set = True
 
@@ -198,5 +217,3 @@ class LGAR:
         is_giuh_ordinates_set = True
 
         is_soil_z_set = True
-
-        is_ponded_depth_max_cm_set = True
