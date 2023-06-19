@@ -1,4 +1,4 @@
-"""the BMI class for LGAR"""
+"""a file to define the LGARBMI class"""
 from bmipy import Bmi
 import logging
 from omegaconf import DictConfig
@@ -33,20 +33,21 @@ class LGARBmi(Bmi):
         "AET_expon",  # exponent that allows curvature of the rising portion of the Budyko curve
     )
     _output_var_names = (
-        "volprecip",  # cumulative amount of precip
-        "volstart",  # volume of water in the soil at the beginning of the simulation
-        "volend",  # volume of water in the soil at the end of the simulation
-        "volin",  # volume of precip added to the ponded depth
-        "volrunoff",  # volume of water removed from the surface as runoff
-        "volon",  # volume of water remaining on the surface at the end of the sim.
-        "volAET",  # cumulative amount of actual ET
-        "volPET",  # cumulative amount of potential ET
-        "volrech",  # cumulative amount of water leaving the bottom of the soil
+        "precipitation",  # cumulative amount of precip
+        "potential_evapotranspiration",  # cumulative amount of potential ET
+        "actual_evapotranspiration",  # cumulative amount of actual ET
+        "surface_runoff",  # direct surface runoff
+        "giuh_runoff",
+        "soil_storage",
+        "total_discharge",
+        "infiltration",
+        "percolation",
+        "groundwater_to_stream_recharge",
+        "mass_balance",
     )
-    # note: at the end of each time step the following must be true(assuming volon = 0 at t = 0):
-    # volstart + volprecip - volAET - volin - volrunoff - volon - volrech - volend = 0.0
 
     def __init__(self):
+        super().__init__()
         self._model = None
         self._values = {}
         self._var_units = {}
@@ -79,14 +80,42 @@ class LGARBmi(Bmi):
         recommended. A template of a model's configuration file
         with placeholder values is used by the BMI.
         """
+        self._grid_type = {0: "scalar"}
 
         # calculate the cumulative(absolute) depth from land surface to bottom of each soil layer
         cum_layer_thickness_cm = torch.zeros([cfg.num_soil_layers])
         for i in range(1, cfg.variables.num_soil_layers):
             cum_layer_thickness_cm[i] = (cfg.tests.layer_thickness_cm[i] + cum_layer_thickness_cm[i - 1])
 
+        # calculate the initial theta and wilting point moisture content
+        # ffor the soil in each layer from initial_psi and assumed wilting point psi
+        # and create initial fronts and include them in each of the soil layers
+        front = 0
+        for layer in range(1, cfg.variables.num_soil_layers + 1):
+            front += 1
+            soil = cfg.variables.soil_type_by_layer[layer]
+            theta_init = calc_theta_from_h(initial_psi_cm,
+                                           soil_properties[soil]['vg_alpha_per_cm'],
+                                           soil_properties[soil]['vg_m'],
+                                           soil_properties[soil]['vg_n'],
+                                           soil_properties[soil]['theta_e'],
+                                           soil_properties[soil]['theta_r'])
 
-        self._grid_type = {0: "scalar"}
+            # Create the initial moisture profile
+            bottom_flag = True
+            current = {
+                'cum_layer_thickness_cm': cum_layer_thickness_cm[layer],
+                'theta_init': theta_init,
+                'front': front,
+                'layer': layer,
+                'bottom_flag': bottom_flag
+            }
+            current['psi_cm'] = initial_psi_cm
+            Se = calc_Se_from_theta(current['theta'], soil_properties[soil]['theta_e'],
+                                    soil_properties[soil]['theta_r'])
+            current['K_cm_per_s'] = calc_K_from_Se(Se, soil_properties[soil]['Ksat_cm_per_h'],
+                                                   soil_properties[soil]['vg_m'])
+            current_values.append(current)
 
     def update(self) -> None:
         """Advance model state by one time step.
