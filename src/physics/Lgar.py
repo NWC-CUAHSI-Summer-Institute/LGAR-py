@@ -59,6 +59,57 @@ import torch
 log = logging.getLogger("physics.Lgar")
 
 
+def seconds_to_hours(x):
+    return torch.div(x, 3600.0)
+
+
+def minutes_to_hours(x):
+    return torch.div(x, 60.0)
+
+
+def hours_to_hours(x):
+    return torch.div(x, 1.0)
+
+
+def seconds_to_seconds(x):
+    return torch.mul(x, 1.0)
+
+
+def minutes_to_seconds(x):
+    return torch.mul(x, 60.0)
+
+
+def hours_to_seconds(x):
+    return torch.mul(x, 3600.0)
+
+
+def days_to_seconds(x):
+    return torch.mul(x, 86400.0)
+
+
+division_switcher = {
+    "s": seconds_to_hours,
+    "sec": seconds_to_hours,
+    "": seconds_to_hours,
+    "min": minutes_to_hours,
+    "minute": minutes_to_hours,
+    "h": hours_to_hours,
+    "hr": hours_to_hours,
+}
+
+multiplication_switcher = {
+    "s": seconds_to_seconds,
+    "sec": seconds_to_seconds,
+    "": seconds_to_seconds,
+    "min": minutes_to_seconds,
+    "minute": minutes_to_seconds,
+    "h": hours_to_seconds,
+    "hr": hours_to_seconds,
+    "d": days_to_seconds,
+    "day": days_to_seconds,
+}
+
+
 class LGAR:
     def __init__(self, cfg: DictConfig) -> None:
         log.debug(
@@ -96,59 +147,41 @@ class LGAR:
         is_layer_thickness_set = True
 
         log.debug(f"Number of Layers: {self.num_layers}")
-        [log.debug(f"Thickness, cum. depth {x.item()}") for x in self.cum_layer_thickness]
+        [
+            log.debug(f"Thickness, cum. depth {x.item()}")
+            for x in self.cum_layer_thickness
+        ]
 
         self.initial_psi = cfg.data.initial_psi
         is_initial_psi_set = True
 
-        unit = cfg.data.timestep_unit
-        timestep_h = torch.tensor(cfg.data.timestep)
-        if unit in ["[s]", "[sec]", ""]:  # default time unit is seconds
-            self.timestep_h = torch.tensor(timestep_h / 3600)  # convert to hours
-        elif unit in ["[min]", "[minute]"]:
-            self.timestep_h = torch.tensor(timestep_h / 60)  # convert to hours
-        elif unit in ["[h]", "[hr]"]:
-            self.timestep_h = torch.tensor(timestep_h / 1)  # already in hours
-
-        assert self.timestep_h > 0  # Checking to make sure the time is right
+        timestep_unit = cfg.data.units.timestep_h
+        self.timestep_h = division_switcher[timestep_unit](torch.tensor(cfg.data.timestep))
+        assert self.timestep_h > 0
         is_timestep_set = True
 
-        unit = cfg.data.endtime_unit
-        if unit in ["[s]", "[sec]", ""]:
-            self.endtime_s = torch.tensor(float(cfg.data.timestep))
-        elif unit in ["[min]", "[minute]"]:
-            self.endtime_s = torch.tensor(float(cfg.data.timestep) * 60.0)
-        elif unit in ["[h]", "[hr]"]:
-            self.endtime_s = torch.tensor(float(cfg.data.timestep) * 3600.0)
-        elif unit in ["[d]", "[day]"]:
-            self.endtime_s = torch.tensor(float(cfg.data.timestep) * 86400.0)
-        log.debug(f"Config time unit is: {unit}")
-        assert self.endtime_s > 0  # Checking to make sure the endtime is actually an endtime
+        endtime_unit = cfg.data.units.timestep_h
+        self.timestep_h = multiplication_switcher[timestep_unit](torch.tensor(cfg.data.timestep))
+        assert self.timestep_h > 0
         is_endtime_set = True
 
+        forcing_unit = cfg.data.units.timestep_h
+        self.timestep_h = division_switcher[forcing_unit](torch.tensor(cfg.data.timestep))
+        assert self.timestep_h > 0
+        is_forcing_resolution_set = True
 
         is_forcing_resolution_set = True
 
-
         is_layer_soil_type_set = True
-
 
         is_wilting_point_psi_cm_set = True
 
-
         is_soil_params_file_set = True
-
 
         is_max_soil_types_set = True
 
-
         is_giuh_ordinates_set = True
-
 
         is_soil_z_set = True
 
-
         is_ponded_depth_max_cm_set = True
-
-
-

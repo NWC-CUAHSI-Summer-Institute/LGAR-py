@@ -1,7 +1,7 @@
 """a file to define the LGARBMI class"""
 from bmipy import Bmi
 import logging
-from omegaconf import DictConfig
+from omegaconf import OmegaConf, DictConfig
 import time
 import torch
 from typing import Tuple
@@ -63,7 +63,7 @@ class LGARBmi(Bmi):
         self.timestep = None
         self._time_units = "s"
 
-    def initialize(self, cfg: DictConfig) -> None:
+    def initialize(self, config_file: str) -> None:
         """Perform startup tasks for the model.
 
         Perform all tasks that take place before entering the model's time
@@ -73,7 +73,7 @@ class LGARBmi(Bmi):
 
         Parameters
         ----------
-        config_file : DictConfig
+        config_file : str
             The path to the model configuration file.
 
         Notes
@@ -84,6 +84,9 @@ class LGARBmi(Bmi):
         recommended. A template of a model's configuration file
         with placeholder values is used by the BMI.
         """
+        # Convert cfg into a DictConfig obj. We need the cfg in a string format for BMI
+        cfg = OmegaConf.create(eval(config_file))
+
         self._grid_type = {0: "scalar"}
 
         self._model = LGAR(cfg)
