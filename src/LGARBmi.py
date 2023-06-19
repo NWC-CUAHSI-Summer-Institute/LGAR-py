@@ -7,6 +7,7 @@ import torch
 from typing import Tuple
 
 from src.data.read_forcing import read_forcing_data
+from src.physics.Lgar import LGAR
 
 log = logging.getLogger("LGARBmi")
 
@@ -57,8 +58,9 @@ class LGARBmi(Bmi):
         self._var_grid_id = 0
         self._grid_type = {}
 
-        self._start_time = time.perf_counter()
+        self._start_time = 0.0
         self._end_time = None
+        self.timestep = None
         self._time_units = "s"
 
     def initialize(self, cfg: DictConfig) -> None:
@@ -84,9 +86,11 @@ class LGARBmi(Bmi):
         """
         self._grid_type = {0: "scalar"}
 
-        endtime = self.get_end_time()
-        timestep = self.get_time_step()
-        timestep, precipitation, PET = read_forcing_data(cfg.tests.forcing_file)
+        self._model = LGAR(cfg)
+
+        self.endtime = cfg.data.endtime
+        self.timestep = cfg.data.timestep
+        dates, precipitation, PET = read_forcing_data(cfg.data.forcing_file)
 
     def update(self) -> None:
         """Advance model state by one time step.
@@ -354,7 +358,7 @@ class LGARBmi(Bmi):
         float
             The maximum model time.
         """
-        raise NotImplementedError
+        return self._end_time
 
     def get_time_units(self) -> str:
         """Time units of the model.

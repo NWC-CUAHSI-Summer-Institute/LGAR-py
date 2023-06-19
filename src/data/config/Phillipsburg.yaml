@@ -1,4 +1,3 @@
-verbosity: None
 forcing_file: ${cwd}/data/forcing_data_resampled_uniform_Phillipsburg.csv
 soil_params_file: ${cwd}/data/vG_default_params.dat
 layer_thickness: #[cm]
@@ -7,8 +6,10 @@ layer_thickness: #[cm]
   - 25.0
 initial_psi: 2000.0 #[cm]
 timestep: 300 #[sec]
+timestep_unit: [s]
 num_time_step: 90001  # total simulation time is this number times the time_step_s
 endtime: 7500.0 #[hr]
+endtime_unit: [hr]
 forcing_resolution: 3600 #[sec]
 ponded_depth_max: 2 #[cm]
 use_closed_form_G: False

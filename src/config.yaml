@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - tests: config/Phillipsburg
+  - data: config/Phillipsburg
 cwd: /Users/taddbindas/projects/LGAR-Torch
 save_name: debugger
 output_dir: ${cwd}/output
