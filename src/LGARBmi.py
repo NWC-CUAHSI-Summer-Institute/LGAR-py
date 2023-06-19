@@ -4,6 +4,7 @@ import logging
 from omegaconf import OmegaConf, DictConfig
 import time
 import torch
+from tqdm import tqdm
 from typing import Tuple
 
 from src.data.read import read_forcing_data
@@ -73,17 +74,30 @@ class LGARBmi(Bmi):
         with placeholder values is used by the BMI.
         """
         # Convert cfg into a DictConfig obj. We need the cfg in a string format for BMI
-        cfg = OmegaConf.create(eval(config_file))
+        self.cfg = OmegaConf.create(eval(config_file))
 
         self._grid_type = {0: "scalar"}
-        self.device = cfg.device
+        self.device = self.cfg.device
 
-        self._model = LGAR(cfg)
-        self.dates, self.x = read_forcing_data(cfg)
+        self._model = LGAR(self.cfg)
+        self.dates, self.precipitation, self.PET = read_forcing_data(self.cfg)
+        self._values = {
+            "precipitation_rate": self.precipitation,
+            "potential_evapotranspiration_rate": self.PET,
+            "soil_moisture_wetting_fronts": None,
+            "soil_depth_wetting_fronts": None,
+        }
+        self._var_units = {
+            "precipitation_rate": "(mm / h)",
+            "potential_evapotranspiration_rate": "(mm / h)",
+            "soil_moisture_wetting_fronts": None,
+            "soil_depth_wetting_fronts": None,
+        }
 
-        self.endtime = cfg.data.endtime
-        self.timestep = cfg.data.timestep
-        self.nsteps = int(self.endtime/self.timestep)
+        self._end_time = self.cfg.data.endtime
+        self.timestep = self.cfg.data.timestep
+        self.nsteps = int(self._end_time/self.timestep)
+        self.cfg.variables.nsteps = self.nsteps
 
         assert (self.nsteps <= int(self.x.shape[0]))
         log.debug("Variables are written to file: data_variables.csv")
@@ -98,7 +112,6 @@ class LGARBmi(Bmi):
         then they can be computed by the :func:`initialize` method and this
         method can return with no action.
         """
-        raise NotImplementedError
 
     def update_until(self, time: float) -> None:
         """Advance model state until the given time.
@@ -108,7 +121,8 @@ class LGARBmi(Bmi):
         time : float
             A model time later than the current model time.
         """
-        raise NotImplementedError
+        for i in range(time):
+            self.update()
 
     def finalize(self) -> None:
         """Perform tear-down tasks for the model.
@@ -421,7 +435,7 @@ class LGARBmi(Bmi):
         array_like
             A reference to a model variable.
         """
-        raise NotImplementedError
+        return self._values[name]
 
     def get_value_at_indices(
         self, name: str, dest: torch.Tensor, inds: torch.Tensor
@@ -459,7 +473,7 @@ class LGARBmi(Bmi):
         src : array_like
             The new value for the specified variable.
         """
-        raise NotImplementedError
+
 
     def set_value_at_indices(
         self, name: str, inds: torch.Tensor, src: torch.Tensor

@@ -13,7 +13,7 @@ def main(cfg: DictConfig) -> None:
         raise sanity_checks.DataError
     lgar_bmi = LGARBmi()
     lgar_bmi.initialize(str(cfg))
-    lgar_bmi.update()
+    lgar_bmi.update_until(cfg.variables.nsteps)
     lgar_bmi.finalize()
 
 

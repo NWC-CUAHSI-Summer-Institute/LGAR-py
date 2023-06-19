@@ -17,6 +17,7 @@ variables:
     - 13  # Sand
     - 14  # Sandy Loam
     - 15  # Clay
+  nsteps: ???
 
 ################## HYDRA CONFIG #######################
 hydra:
