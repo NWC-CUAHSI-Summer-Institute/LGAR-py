@@ -12,6 +12,7 @@ def calc_theta_from_h(
     :parameter h: the initial psi (cm)
     :parameter soil_properties: All soils and their properties
     :parameter device: the device that we're using
+    :return thickness of individual layers
     """
     alpha = torch.tensor(soil_properties["alpha(cm^-1)"], device=device)
     n = torch.tensor(soil_properties["n"], device=device)
@@ -31,7 +32,7 @@ def calc_se_from_theta(
     :param theta: the calculated inital theta
     :param e: theta_e
     :param r: theta_r
-    :return: Se
+    :return: Se this is the relative (scaled 0-1) water content, like Theta
     """
     return torch.div((theta - r), (e - r))
 
@@ -41,10 +42,10 @@ def calc_k_from_se(
 ) -> torch.Tensor:
     """
     function to calculate K from Se
-    :param se: se
+    :param se: this is the relative (scaled 0-1) water content, like Theta
     :param ksat: saturated hydraulic conductivity
     :param m: ???
-    :return:
+    :return: hydraulic conductivity (K)
     """
     return (
         ksat

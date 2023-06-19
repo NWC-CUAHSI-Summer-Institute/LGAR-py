@@ -36,7 +36,10 @@ def read_forcing_data(cfg: DictConfig) -> (np.ndarray, torch.Tensor, torch.Tenso
     precip = torch.tensor(df["P(mm/h)"].values, dtype=torch.float64, device=device)
     pet = torch.tensor(df["PET(mm/h)"].values, dtype=torch.float64, device=device)
 
-    return time, precip, pet
+    forcings = torch.stack([precip, pet])
+    x = torch.transpose(forcings, 0, 1)
+
+    return time, x
 
 
 def read_soils_file(cfg: DictConfig) -> pd.DataFrame:

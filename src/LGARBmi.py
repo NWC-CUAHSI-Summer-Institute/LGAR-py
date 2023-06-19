@@ -17,23 +17,10 @@ class LGARBmi(Bmi):
 
     _name = "LGAR Torch"
     _input_var_names = (
-        "precip_mm_per_15min",  # Forcing Variable
-        "PET_mm_per_15min",  # Forcing Variable
-        "Se", # this is the relative (scaled 0-1) water content, like Theta
-        "theta_init"  # thickness of individual layers, allocate memory at run time
-        "fdepth",  # cumulative thickness of layers, allocate memory at run time
-        "ftheta",   # initial water content
-        "theta1",  # fred's test variable ffor creating new wetting fronts
-        "theta2",  # usually the limits of integration of Geff or width of a front, theta1 <= theta2
-        "dry_depth",
-        "ponded_depth_cm",  # more explicit variable name, commonly called h_p or H_p
-        "delta_theta",  # the width of a front, such that its volume=depth*delta_theta
-        "precip_timestep_cm"
-        "precrip_previous_timestep_cm",
-        "PET_timestep_cm"
-        "AET_timestep_cm",
-        "AET_thresh_Theta",  # threshold scaled moisture content (0-1) above which AET=PET
-        "AET_expon",  # exponent that allows curvature of the rising portion of the Budyko curve
+        "precipitation_rate",
+        "potential_evapotranspiration_rate",
+        "soil_moisture_wetting_fronts",
+        "soil_depth_wetting_fronts"
     )
     _output_var_names = (
         "precipitation",  # cumulative amount of precip
@@ -92,10 +79,15 @@ class LGARBmi(Bmi):
         self.device = cfg.device
 
         self._model = LGAR(cfg)
+        self.dates, self.x = read_forcing_data(cfg)
 
         self.endtime = cfg.data.endtime
         self.timestep = cfg.data.timestep
-        dates, precipitation, PET = read_forcing_data(cfg)
+        self.nsteps = int(self.endtime/self.timestep)
+
+        assert (self.nsteps <= int(self.x.shape[0]))
+        log.debug("Variables are written to file: data_variables.csv")
+        log.debug("Wetting fronts state is written to file: data_layers.csv")
 
     def update(self) -> None:
         """Advance model state by one time step.
