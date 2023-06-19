@@ -90,7 +90,6 @@ def days_to_seconds(x):
 division_switcher = {
     "s": seconds_to_hours,
     "sec": seconds_to_hours,
-    "": seconds_to_hours,
     "min": minutes_to_hours,
     "minute": minutes_to_hours,
     "h": hours_to_hours,
@@ -100,7 +99,6 @@ division_switcher = {
 multiplication_switcher = {
     "s": seconds_to_seconds,
     "sec": seconds_to_seconds,
-    "": seconds_to_seconds,
     "min": minutes_to_seconds,
     "minute": minutes_to_seconds,
     "h": hours_to_seconds,
@@ -155,19 +153,25 @@ class LGAR:
         self.initial_psi = cfg.data.initial_psi
         is_initial_psi_set = True
 
-        timestep_unit = cfg.data.units.timestep_h
-        self.timestep_h = division_switcher[timestep_unit](torch.tensor(cfg.data.timestep))
+        timestep_unit = cfg.data.units.timestep_h[0]
+        self.timestep_h = division_switcher.get(timestep_unit, seconds_to_hours)(
+            torch.tensor(cfg.data.timestep)
+        )
         assert self.timestep_h > 0
         is_timestep_set = True
 
-        endtime_unit = cfg.data.units.timestep_h
-        self.timestep_h = multiplication_switcher[timestep_unit](torch.tensor(cfg.data.timestep))
-        assert self.timestep_h > 0
+        endtime_unit = cfg.data.units.endtime_s[0]
+        self.endtime_s = multiplication_switcher.get(endtime_unit, seconds_to_seconds)(
+            torch.tensor(cfg.data.endtime)
+        )
+        assert self.endtime_s > 0
         is_endtime_set = True
 
-        forcing_unit = cfg.data.units.timestep_h
-        self.timestep_h = division_switcher[forcing_unit](torch.tensor(cfg.data.timestep))
-        assert self.timestep_h > 0
+        forcing_unit = cfg.data.units.forcing_resolution_h[0]
+        self.forcing_resolution_h = division_switcher.get(
+            forcing_unit, seconds_to_hours
+        )(torch.tensor(cfg.data.forcing_resolution))
+        assert self.forcing_resolution_h > 0
         is_forcing_resolution_set = True
 
         is_forcing_resolution_set = True

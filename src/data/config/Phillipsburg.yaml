@@ -5,10 +5,10 @@ layer_thickness: #[cm]
   - 131.0
   - 25.0
 initial_psi: 2000.0 #[cm]
-timestep_h: 300 #[sec]
+timestep: 300 #[sec]
 num_time_step: 90001  # total simulation time is this number times the time_step_s
-endtime_h: 7500.0 #[hr]
-forcing_resolution_h: 3600
+endtime: 7500.0 #[hr]
+forcing_resolution: 3600
 ponded_depth_max: 2 #[cm]
 use_closed_form_G: False
 layer_soil_type:
