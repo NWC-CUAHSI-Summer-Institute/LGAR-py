@@ -82,8 +82,8 @@ class LGARBmi(Bmi):
         self._model = LGAR(self.cfg)
         self.dates, self.precipitation, self.PET = read_forcing_data(self.cfg)
         self._values = {
-            "precipitation_rate": self.precipitation,
-            "potential_evapotranspiration_rate": self.PET,
+            "precipitation_rate": None,
+            "potential_evapotranspiration_rate": None,
             "soil_moisture_wetting_fronts": None,
             "soil_depth_wetting_fronts": None,
         }
@@ -112,6 +112,8 @@ class LGARBmi(Bmi):
         then they can be computed by the :func:`initialize` method and this
         method can return with no action.
         """
+        if self._model.sft_coupled:
+            self._model.frozen_factor_hydraulic_conductivity()
 
     def update_until(self, time: float) -> None:
         """Advance model state until the given time.
@@ -122,6 +124,8 @@ class LGARBmi(Bmi):
             A model time later than the current model time.
         """
         for i in range(time):
+            self.set_value("precipitation_rate", self.precipitation[time])
+            self.set_value("potential_evapotranspiration_rate", self.PET[time])
             self.update()
 
     def finalize(self) -> None:

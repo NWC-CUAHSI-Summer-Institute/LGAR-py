@@ -344,3 +344,12 @@ class LGAR:
                 sum += current.theta * (current.depth_cm - base_depth)
 
         return sum
+
+    def frozen_factor_hydraulic_conductivity(self) -> None:
+        """
+        calculates frozen factor based on L. Wang et al. (www.hydrol-earth-syst-sci.net/14/557/2010/)
+        uses layered-average soil temperatures and an exponential function to compute frozen fraction
+        for each layer
+        :return: None
+        """
+        raise NotImplementedError
