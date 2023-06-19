@@ -113,6 +113,7 @@ class LGAR:
         log.debug(
             "------------- Initialization from config file ----------------------"
         )
+        self.device = cfg.device
 
         # Setting these options to false (default)
         self.sft_coupled = False
@@ -133,14 +134,20 @@ class LGAR:
         is_ponded_depth_max_cm_set = False
 
         # Setting soil parameters based on the cfg file
-        self.layer_thickness_cm = torch.zeros([len(cfg.data.layer_thickness) + 1])
-        self.layer_thickness_cm[1:] = torch.tensor(cfg.data.layer_thickness)
-        self.cum_layer_thickness = torch.zeros([len(cfg.data.layer_thickness) + 1])
+        self.layer_thickness_cm = torch.zeros(
+            [len(cfg.data.layer_thickness) + 1], dtype=torch.float64, device=self.device
+        )
+        self.layer_thickness_cm[1:] = torch.tensor(
+            cfg.data.layer_thickness, dtype=torch.float64, device=self.device
+        )
+        self.cum_layer_thickness = torch.zeros(
+            [len(cfg.data.layer_thickness) + 1], dtype=torch.float64, device=self.device
+        )
         for i in range(1, self.cum_layer_thickness.shape[0]):
             self.cum_layer_thickness[i] = (
                 self.cum_layer_thickness[i - 1].clone() + self.layer_thickness_cm[i]
             )
-        self.num_layers = self.layer_thickness_cm.shape[0]
+        self.num_layers = torch.tensor(self.layer_thickness_cm.shape[0], dtype=torch.float64, device=self.device)
         self.soil_depth_cm = self.cum_layer_thickness[-1]
         is_layer_thickness_set = True
 
@@ -150,31 +157,35 @@ class LGAR:
             for x in self.cum_layer_thickness
         ]
 
-        self.initial_psi = cfg.data.initial_psi
+        self.initial_psi = torch.tensor(cfg.data.initial_psi, dtype=torch.float64, device=self.device)
         is_initial_psi_set = True
 
         timestep_unit = cfg.data.units.timestep_h[0]
-        self.timestep_h = division_switcher.get(timestep_unit, seconds_to_hours)(
-            torch.tensor(cfg.data.timestep)
+        _func_ = division_switcher.get(timestep_unit, seconds_to_hours)
+        self.timestep_h = _func_(
+            torch.tensor(cfg.data.timestep, dtype=torch.float64, device=self.device)
         )
         assert self.timestep_h > 0
         is_timestep_set = True
 
         endtime_unit = cfg.data.units.endtime_s[0]
-        self.endtime_s = multiplication_switcher.get(endtime_unit, seconds_to_seconds)(
-            torch.tensor(cfg.data.endtime)
+        _func_ = multiplication_switcher.get(endtime_unit, seconds_to_seconds)
+        self.endtime_s = _func_(
+            torch.tensor(cfg.data.endtime, dtype=torch.float64, device=self.device)
         )
         assert self.endtime_s > 0
         is_endtime_set = True
 
         forcing_unit = cfg.data.units.forcing_resolution_h[0]
-        self.forcing_resolution_h = division_switcher.get(
-            forcing_unit, seconds_to_hours
-        )(torch.tensor(cfg.data.forcing_resolution))
+        _func_ = division_switcher.get(forcing_unit, seconds_to_hours)
+        self.forcing_resolution_h = _func_(
+            torch.tensor(
+                cfg.data.forcing_resolution, dtype=torch.float64, device=self.device
+            )
+        )
         assert self.forcing_resolution_h > 0
         is_forcing_resolution_set = True
 
-        is_forcing_resolution_set = True
 
         is_layer_soil_type_set = True
 

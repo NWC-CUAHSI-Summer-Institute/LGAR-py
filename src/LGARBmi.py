@@ -52,6 +52,7 @@ class LGARBmi(Bmi):
     def __init__(self):
         super().__init__()
         self._model = None
+        self.device = None
         self._values = {}
         self._var_units = {}
         self._var_loc = "node"
@@ -88,12 +89,13 @@ class LGARBmi(Bmi):
         cfg = OmegaConf.create(eval(config_file))
 
         self._grid_type = {0: "scalar"}
+        self.device = cfg.device
 
         self._model = LGAR(cfg)
 
         self.endtime = cfg.data.endtime
         self.timestep = cfg.data.timestep
-        dates, precipitation, PET = read_forcing_data(cfg.data.forcing_file)
+        dates, precipitation, PET = read_forcing_data(cfg)
 
     def update(self) -> None:
         """Advance model state by one time step.
