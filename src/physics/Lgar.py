@@ -125,25 +125,90 @@ class LGAR:
         )
         self.device = cfg.device
 
+        # Defining all of the variables that are created in the `initialize()` functions
+        self.layer_thickness_cm = None
+        self.cum_layer_thickness = None
+        self.num_layers = None
+        self.soil_depth_cm = None
+        self.initial_psi = None
+        self.ponded_depth_max_cm = None
+        self.layer_soil_type = None
+        self.num_soil_types = None
+        self.wilting_point_psi_cm = None
+        self.giuh_ordinates = None
+        self.num_giuh_ordinates = None
+
+        self.timestep_h = None
+        self.endtime_s = None
+        self.forcing_resolution_h = None
+
+        self.soils_df = None
+        self.soil_temperature = None
+        self.soil_temperature_z = None
+        self.num_cells_z = None
+        self.forcing_interval = None
+        self.frozen_factor = None
+        self.wetting_fronts = None
+
+        self.ponded_depth_cm = None
+        self.nint = None
+        self.num_wetting_fronts = None
+        self.time_s = None
+        self.timesteps = None
+        self.shape = None
+        self.volprecip_cm = None
+        self.volin_cm = None
+        self.volend_cm = None
+        self.volAET_cm = None
+        self.volrech_cm = None
+        self.volrunoff_cm = None
+        self.volrunoff_giuh_cm = None
+        self.volQ_cm = None
+        self.volon_cm = None
+        self.volprecip_cm = None
+        self.volon_timestep_cm = None
+        self.precip_previous_timestep_cm = None
+        self.volQ_gw_timestep_cm = None
+
+        self.soil_depth_wetting_fronts = None
+        self.soil_moisture_wetting_fronts = None
+        self.precipitation_mm_per_h = None
+        self.PET_mm_per_h = None
+
         # Setting these options to false (default)
         self.sft_coupled = False
         self.use_closed_form_G = False
 
-        # # Setting the parameter check variables to False
-        # is_layer_thickness_set = False
-        # is_initial_psi_set = False
-        # is_timestep_set = False
-        # is_endtime_set = False
-        # is_forcing_resolution_set = False
-        # is_layer_soil_type_set = False
-        # is_wilting_point_psi_cm_set = False
-        # is_soil_params_file_set = False
-        # is_max_soil_types_set = False
-        # is_giuh_ordinates_set = False
-        # is_soil_z_set = False
-        # is_ponded_depth_max_cm_set = False
+        # Setting variables
+        self.initialize_config_parameters(cfg)
+        self.initialize_time_parameters(cfg)
+        self.initialize_wetting_front(cfg)
 
-        # Setting soil parameters based on the cfg file
+        # Running a mass balance check
+        self.calc_mass_balance()
+
+        self.initialize_starting_parameters(cfg)
+
+    def initialize_config_parameters(self, cfg: DictConfig) -> None:
+        """
+        Reading variables from the config file specific to each testcase
+        :param cfg: The config file
+        :return: None
+
+        Here are a list of the variables created:
+        - layer_thickness_cm: the thickness of each soil layer
+        - cum_layer_thickness: A list of the cumulative depth as we traverse through the soil layers
+        - num_layers: The number of soil layers
+        - soil_depth_cm
+        - initial_psi
+        - ponded_depth_max_cm
+        - layer_soil_type
+        - num_soil_types
+        - wilting_point_psi_cm
+        - layer_thickness_cm
+        - giuh_ordinates
+        - num_giuh_ordinates
+        """
         self.layer_thickness_cm = torch.tensor(
             cfg.data.layer_thickness, dtype=torch.float64, device=self.device
         )
@@ -157,7 +222,6 @@ class LGAR:
             )
         self.num_layers = len(cfg.data.layer_thickness)
         self.soil_depth_cm = self.cum_layer_thickness[-1]
-        # is_layer_thickness_set = True
 
         log.debug(f"Number of Layers: {self.num_layers}")
         [
@@ -168,15 +232,39 @@ class LGAR:
         self.initial_psi = torch.tensor(
             cfg.data.initial_psi, dtype=torch.float64, device=self.device
         )
-        # is_initial_psi_set = True
+        self.ponded_depth_max_cm = torch.max(
+            torch.tensor(
+                cfg.data.ponded_depth_max, dtype=torch.float64, device=self.device
+            )
+        )
 
+        self.use_closed_form_G = cfg.data.use_closed_form_G
+
+        # HARDCODING A 1 SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
+        self.layer_soil_type = np.array(cfg.data.layer_soil_type) - 1
+
+        self.num_soil_types = torch.tensor(
+            cfg.data.max_soil_types, dtype=torch.float64, device=self.device
+        )
+
+        self.wilting_point_psi_cm = torch.tensor(
+            cfg.data.wilting_point_psi, dtype=torch.float64, device=self.device
+        )
+
+        self.giuh_ordinates = torch.tensor(
+            cfg.data.giuh_ordinates, dtype=torch.float64, device=self.device
+        )
+        self.num_giuh_ordinates = torch.tensor(
+            len(cfg.data.giuh_ordinates), dtype=torch.float64, device=self.device
+        )
+
+    def initialize_time_parameters(self, cfg: DictConfig) -> None:
         timestep_unit = cfg.data.units.timestep_h[0]
         _func_ = division_switcher.get(timestep_unit, seconds_to_hours)
         self.timestep_h = _func_(
             torch.tensor(cfg.data.timestep, dtype=torch.float64, device=self.device)
         )
         assert self.timestep_h > 0
-        # is_timestep_set = True
 
         endtime_unit = cfg.data.units.endtime_s[0]
         _func_ = multiplication_switcher.get(endtime_unit, seconds_to_seconds)
@@ -184,7 +272,6 @@ class LGAR:
             torch.tensor(cfg.data.endtime, dtype=torch.float64, device=self.device)
         )
         assert self.endtime_s > 0
-        # is_endtime_set = True
 
         forcing_unit = cfg.data.units.forcing_resolution_h[0]
         _func_ = division_switcher.get(forcing_unit, seconds_to_hours)
@@ -194,116 +281,8 @@ class LGAR:
             )
         )
         assert self.forcing_resolution_h > 0
-        # is_forcing_resolution_set = True
 
-        self.ponded_depth_max_cm = torch.max(
-            torch.tensor(
-                cfg.data.ponded_depth_max, dtype=torch.float64, device=self.device
-            )
-        )
-        # is_ponded_depth_max_cm_set = True
-
-        self.use_closed_form_G = cfg.data.use_closed_form_G
-
-        # HARDCODING A 1 SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
-        self.layer_soil_type = np.array(cfg.data.layer_soil_type) - 1
-        # is_layer_soil_type_set = True
-
-        self.num_soil_types = torch.tensor(
-            cfg.data.max_soil_types, dtype=torch.float64, device=self.device
-        )
-        # is_max_soil_types_set = True
-
-        self.wilting_point_psi_cm = torch.tensor(
-            cfg.data.wilting_point_psi, dtype=torch.float64, device=self.device
-        )
-        # is_wilting_point_psi_cm_set = True
-
-        self.giuh_ordinates = torch.tensor(
-            cfg.data.giuh_ordinates, dtype=torch.float64, device=self.device
-        )
-        self.num_giuh_ordinates = torch.tensor(
-            len(cfg.data.giuh_ordinates), dtype=torch.float64, device=self.device
-        )
-
-        # Read in soils information
-        self.soils_df = read_soils_file(cfg)
-
-        self.soil_temperature = torch.tensor(0, dtype=torch.float64, device=self.device)
-        self.soil_temperature_z = torch.tensor(
-            0, dtype=torch.float64, device=self.device
-        )
-        self.num_cells_z = torch.tensor(1, dtype=torch.float64, device=self.device)
-
-        # add 1.0e-08 to prevent truncation error
-        # TODO ADD MORE TESTING TO THIS INTERVAL
-        self.forcing_interval = torch.div(
-            self.forcing_resolution_h, (self.timestep_h + 1.0e-08)
-        )
-
-        self.frozen_factor = torch.ones(
-            int(self.num_layers), dtype=torch.float64, device=self.device
-        )
-
-        num_wetting_vars = 4
-        # Creating a torch matrix that will hold wetting fronts.
-        # Each wetting front is a row. Columns are depth, theta, layer, dzdt_cm_per_h
-        self.wetting_fronts = deque()
-        self.initialize_wetting_front()
-
-        # Running a mass balance check
-        self.calc_mass_balance()
-
-        # initially we start with a dry surface (no surface ponding)
-        self.ponded_depth_cm = torch.tensor(0, dtype=torch.float64, device=self.device)
-        # No. of spatial intervals used in trapezoidal integration to compute G
-        self.nint = 120  # hacked, not needed to be an input option
-        self.num_wetting_fronts = self.num_layers
-        self.time_s = 0.0
-        self.timesteps = 0.0
-
-        # Finish initializing variables
-        self.shape = [self.num_layers, self.num_wetting_fronts]
-        self.num_wetting_fronts = self.num_layers  #TODO Ask about this line? It seems stupid
-        self.soil_depth_wetting_fronts = torch.zeros([self.num_wetting_fronts])
-        self.soil_moisture_wetting_fronts = torch.zeros([self.num_wetting_fronts])
-        for i in range(self.soil_moisture_wetting_fronts.shape[0]):
-            self.soil_moisture_wetting_fronts[i] = self.wetting_fronts[i].theta
-            self.soil_depth_wetting_fronts[i] = (self.wetting_fronts[i].depth_cm * cfg.units.cm_to_m)  # CONVERTING FROM CM TO M
-
-        # Initializing the rest of the input vars
-        self.precipitation_mm_per_h = torch.tensor(-1, dtype=torch.float64, device=self.device)
-        self.PET_mm_per_h = torch.tensor(-1, dtype=torch.float64, device=self.device)
-
-        # Initializing the rest of the mass balance variables to zero
-        self.volprecip_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volin_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volend_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volAET_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volrech_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volrunoff_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volrunoff_giuh_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volQ_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volPET_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volon_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volprecip_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-
-        # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
-        self.volon_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.precip_previous_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-
-        # setting flux from groundwater_reservoir_to_stream to zero, will be non-zero when groundwater reservoir is added/simulated
-        self.volQ_gw_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-
-
-
-
-
-
-
-
-
-    def initialize_wetting_front(self) -> None:
+    def initialize_wetting_front(self, cfg: DictConfig) -> None:
         """
         calculates initial theta (soil moisture content) and hydraulic conductivity
         from the prescribed psi value for each of the soil layers
@@ -317,7 +296,28 @@ class LGAR:
         :parameter soil_properties (df): a dataframe of all of the soils and their properties
         :return: The wetting front per soil layer
         """
+        # Read in soils information
+        self.soils_df = read_soils_file(cfg)
 
+        self.soil_temperature = torch.tensor(0, dtype=torch.float64, device=self.device)
+        self.soil_temperature_z = torch.tensor(
+            0, dtype=torch.float64, device=self.device
+        )
+        self.num_cells_z = torch.tensor(1, dtype=torch.float64, device=self.device)
+
+        # TODO ADD MORE TESTING TO THIS INTERVAL
+        self.forcing_interval = torch.div(
+            self.forcing_resolution_h, (self.timestep_h + 1.0e-08)
+        )
+
+        self.frozen_factor = torch.ones(
+            int(self.num_layers), dtype=torch.float64, device=self.device
+        )
+
+        num_wetting_vars = 4
+        # Creating a torch matrix that will hold wetting fronts.
+        # Each wetting front is a row. Columns are depth, theta, layer, dzdt_cm_per_h
+        self.wetting_fronts = deque()
         for i in range(self.num_layers):
             soil_type = self.layer_soil_type[i]
             soil_properties = self.soils_df.iloc[soil_type]
@@ -385,6 +385,62 @@ class LGAR:
                 sum += current.theta * (current.depth_cm - base_depth)
 
         return sum
+
+    def initialize_starting_parameters(self, cfg: DictConfig) -> None:
+        # initially we start with a dry surface (no surface ponding)
+        self.ponded_depth_cm = torch.tensor(0, dtype=torch.float64, device=self.device)
+        # No. of spatial intervals used in trapezoidal integration to compute G
+        self.nint = 120  # hacked, not needed to be an input option
+        self.num_wetting_fronts = self.num_layers
+        self.time_s = 0.0
+        self.timesteps = 0.0
+
+        # Finish initializing variables
+        self.shape = [self.num_layers, self.num_wetting_fronts]
+        self.num_wetting_fronts = (
+            self.num_layers
+        )  # TODO Ask about this line? It seems stupid
+        self.soil_depth_wetting_fronts = torch.zeros([self.num_wetting_fronts])
+        self.soil_moisture_wetting_fronts = torch.zeros([self.num_wetting_fronts])
+        for i in range(self.soil_moisture_wetting_fronts.shape[0]):
+            self.soil_moisture_wetting_fronts[i] = self.wetting_fronts[i].theta
+            self.soil_depth_wetting_fronts[i] = (
+                self.wetting_fronts[i].depth_cm * cfg.units.cm_to_m
+            )  # CONVERTING FROM CM TO M
+
+        # Initializing the rest of the input vars
+        self.precipitation_mm_per_h = torch.tensor(
+            -1, dtype=torch.float64, device=self.device
+        )
+        self.PET_mm_per_h = torch.tensor(-1, dtype=torch.float64, device=self.device)
+
+        # Initializing the rest of the mass balance variables to zero
+        self.volprecip_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volin_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volend_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volAET_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volrech_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volrunoff_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volrunoff_giuh_cm = torch.tensor(
+            0.0, dtype=torch.float64, device=self.device
+        )
+        self.volQ_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volPET_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volon_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volprecip_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+
+        # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
+        self.volon_timestep_cm = torch.tensor(
+            0.0, dtype=torch.float64, device=self.device
+        )
+        self.precip_previous_timestep_cm = torch.tensor(
+            0.0, dtype=torch.float64, device=self.device
+        )
+
+        # setting flux from groundwater_reservoir_to_stream to zero, will be non-zero when groundwater reservoir is added/simulated
+        self.volQ_gw_timestep_cm = torch.tensor(
+            0.0, dtype=torch.float64, device=self.device
+        )
 
     def frozen_factor_hydraulic_conductivity(self) -> None:
         """
