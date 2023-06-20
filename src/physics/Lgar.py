@@ -599,21 +599,21 @@ class LGAR:
         for i in range(1, len(self.wetting_fronts)):
             log.debug(f"Merge | ********* Wetting Front = {i} *********")
             current = i - 1
-            next = i
+            next_ = i
             next_to_next = i + 1 if i + 1 < len(self.wetting_fronts) else None
 
             # case : wetting front passing another wetting front within a layer
             if (
                 self.wetting_fronts[current].depth_cm
-                > self.wetting_fronts[next].depth_cm
+                > self.wetting_fronts[next_].depth_cm
                 and self.wetting_fronts[current].layer_num
-                == self.wetting_fronts[next].layer_num
-                and not self.wetting_fronts[next].to_bottom
+                == self.wetting_fronts[next_].layer_num
+                and not self.wetting_fronts[next_].to_bottom
             ):
                 current_mass_this_layer = self.wetting_fronts[current].depth_cm * (
-                    self.wetting_fronts[current].theta - self.wetting_fronts[next].theta
-                ) + self.wetting_fronts[next].depth_cm * (
-                    self.wetting_fronts[next].theta
+                    self.wetting_fronts[current].theta - self.wetting_fronts[next_].theta
+                ) + self.wetting_fronts[next_].depth_cm * (
+                    self.wetting_fronts[next_].theta
                     - self.wetting_fronts[next_to_next].theta
                 )
                 self.wetting_fronts[current].depth_cm = current_mass_this_layer / (
@@ -664,11 +664,148 @@ class LGAR:
                 log.debug("Deleting wetting front (after)...")
 
         log.debug("State after merging wetting fronts...")
-        for i in range(len(self.wetting_fronts)):
-            self.wetting_fronts[i].print()
+        for wf in self.wetting_fronts:
+            wf.print()
 
     def wetting_fronts_cross_layer_boundary(self):
-        raise NotImplementedError
+        log.debug("Layer boundary crossing...")
+
+        for i in range(1, len(self.wetting_fronts)):
+            log.debug(f"Boundary Crossing | ******* Wetting Front = {i} ******")
+
+            current = i - 1
+            next_ = i
+            next_to_next = i + 1 if i + 1 < len(self.wetting_fronts) else None
+
+            layer_num = self.wetting_fronts[current].layer_num
+            soil_num = self.layer_soil_type[layer_num]
+            soil_properties = self.soils_df.iloc[soil_num]
+            theta_e = torch.tensor(
+                soil_properties["theta_e"], dtype=torch.float64, device=self.device
+            )
+            theta_r = torch.tensor(
+                soil_properties["theta_r"], dtype=torch.float64, device=self.device
+            )
+            alpha = torch.tensor(
+                soil_properties["alpha(cm^-1)"], dtype=torch.float64, device=self.device
+            )
+            m = torch.tensor(
+                soil_properties["m"], dtype=torch.float64, device=self.device
+            )
+            n = torch.tensor(
+                soil_properties["n"], dtype=torch.float64, device=self.device
+            )
+            _ksat_cm_per_h_ = soil_properties["Ks(cm/h)"] * self.frozen_factor[layer_num]
+            ksat_cm_per_h = torch.tensor(_ksat_cm_per_h_, dtype=torch.float64, device=self.device)
+
+            # TODO VERIFY THAT THIS WORKS!
+            if (
+                self.wetting_fronts[current].depth_cm > self.cum_layer_thickness[layer_num]
+                and (self.wetting_fronts[next_].depth_cm == self.cum_layer_thickness[layer_num])
+                and (layer_num != (self.num_layers - 1))  # 0-based
+            ):
+                current_theta = min(theta_e, self.wetting_fronts[current].theta)
+                overshot_depth = self.wetting_fronts[current].depth_cm - self.wetting_fronts[next_].depth_cm
+                soil_num_next = self.layer_soil_type[layer_num + 1]
+                soil_properties_next = self.soils_df.iloc[soil_num]
+
+                se = calc_se_from_theta(self.wetting_fronts[current].theta, theta_e, theta_r)
+                self.wetting_fronts[current].psi_cm = calc_h_from_se(se, alpha, m, n)
+
+                self.wetting_fronts[current].k_cm_per_h = calc_k_from_se(se, ksat_cm_per_h, m)
+
+                theta_new = calc_theta_from_h(
+                    self.wetting_fronts[current].psi_cm,
+                    soil_properties_next,
+                    self.device
+                )
+
+                mbal_correction = overshot_depth * (current_theta - self.wetting_fronts[next_].theta)
+                mbal_Z_correction = mbal_correction / (
+                    theta_new - self.wetting_fronts[next_to_next].theta
+                )
+
+                depth_new = self.cum_layer_thickness[layer_num] + mbal_Z_correction
+
+                self.wetting_fronts[current].depth_cm = self.cum_layer_thickness[layer_num]
+
+                self.wetting_fronts[next_].theta = theta_new
+                self.wetting_fronts[next_].psi_cm = self.wetting_fronts[current].psi_cm
+                self.wetting_fronts[next_].depth_cm = depth_new
+                self.wetting_fronts[next_].layer_num = layer_num + 1
+                self.wetting_fronts[next_].dzdt_cm_per_h = self.wetting_fronts[current].dzdt_cm_per_h
+                self.wetting_fronts[current].dzdt_cm_per_h = 0
+                self.wetting_fronts[current].to_bottom = True
+                self.wetting_fronts[next_].to_bottom = False
+
+                log.debug("State after wetting fronts cross layer boundary...")
+                for wf in self.wetting_fronts:
+                    wf.print()
+
+    def wetting_front_cross_domain_boundary(self):
+        """
+        the function lets wetting fronts of a sufficient depth interact with the lower boundary;
+        called from self.lgar_move_wetting_fronts().
+        :return:
+        """
+
+        bottom_flux_cm = torch.tensor(0.0, device=self.device)
+
+        log.debug("Domain boundary crossing (bottom flux calc.)")
+
+        for i in range(1, len(self.wetting_fronts)):
+
+            log.debug(f"Domain boundary crossing | ***** Wetting Front = {i} ******")
+
+            bottom_flux_cm_temp = torch.tensor(0.0, device=self.device)
+
+            current = i - 1
+            next_ = i
+            next_to_next = i + 1 if i + 1 < len(self.wetting_fronts) else None
+
+            layer_num = self.wetting_fronts[current].layer_num
+            soil_num = self.layer_soil_type[layer_num]
+
+            if next_to_next is None and self.wetting_fronts[current].depth_cm > self.cum_layer_thickness[layer_num]:
+                bottom_flux_cm_temp = (self.wetting_fronts[current].theta - self.wetting_fronts[next_].theta) * (self.wetting_fronts[current].depth_cm - self.wetting_fronts[next_].depth_cm)
+
+                soil_properties = self.soils_df.iloc[soil_num]
+                theta_e = torch.tensor(
+                    soil_properties["theta_e"], dtype=torch.float64, device=self.device
+                )
+                theta_r = torch.tensor(
+                    soil_properties["theta_r"], dtype=torch.float64, device=self.device
+                )
+                alpha = torch.tensor(
+                    soil_properties["alpha(cm^-1)"], dtype=torch.float64, device=self.device
+                )
+                m = torch.tensor(
+                    soil_properties["m"], dtype=torch.float64, device=self.device
+                )
+                n = torch.tensor(
+                    soil_properties["n"], dtype=torch.float64, device=self.device
+                )
+                _ksat_cm_per_h_ = soil_properties["Ks(cm/h)"] * self.frozen_factor[layer_num]
+                ksat_cm_per_h = torch.tensor(_ksat_cm_per_h_, dtype=torch.float64, device=self.device)
+
+                self.wetting_fronts[next_].theta = self.wetting_fronts[current].theta
+                se_k = calc_se_from_theta(self.wetting_fronts[current].theta, theta_e, theta_r)
+                self.wetting_fronts[next_].psi_cm = calc_h_from_se(se_k, alpha, m, n)
+                self.wetting_fronts[next_].k_cm_per_h = calc_k_from_se(se_k, ksat_cm_per_h, m)
+                self.wetting_fronts.pop(i - 1)
+
+                log.debug("State after lowest wetting front contributes to flux through the bottom boundary...")
+                for wf in self.wetting_fronts:
+                    wf.print()
+
+            bottom_flux_cm = bottom_flux_cm + bottom_flux_cm_temp
+
+            log.debug(f"Bottom boundary flux = {bottom_flux_cm}")
+
+            if bottom_flux_cm_temp != 0:
+                break
+
+        return bottom_flux_cm
 
     def move_wetting_fronts(
         self,
@@ -984,12 +1121,11 @@ class LGAR:
              all wetting fronts, and then a new loop does lower boundary crossing for all wetting fronts. this is a thorough
              way to deal with these scenarios. */
         """
-        # Merge
-        self.merge_wetting_fronts()
 
-        #Cross
-        self.wetting_fronts_cross_layer_boundary()
+        self.merge_wetting_fronts() # Merge
 
-        #Merge
-        self.merge_wetting_fronts()
+        self.wetting_fronts_cross_layer_boundary() # Cross
 
+        self.merge_wetting_fronts() # Merge
+
+        bottom_boundary_flux_cm = bottom_boundary_flux_cm + self.wetting_front_cross_domain_boundary()
