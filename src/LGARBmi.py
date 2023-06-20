@@ -249,15 +249,44 @@ class LGARBmi(Bmi):
             # Calculate AET from PET if PET is non-zero
             if PET_subtimestep_cm_per_h > 0.0:
                 AET_subtimestep = calc_aet(
-                    self.wetting_fronts[0],  #TODO SET THIS VAR
+                    self.wetting_fronts[self._model.current],  # TODO SET THIS VAR
                     PET_subtimestep_cm_per_h,
                     subtimestep_h,
                     wilting_point_psi_cm,
                     self._model.layer_soil_type,
                     self.soils_df,
-                    self.device
+                    self.device,
                 )
 
+            precip_timestep_cm = precip_timestep_cm + precip_subtimestep_cm
+            PET_timestep_cm = PET_timestep_cm + torch.clamp(
+                PET_subtimestep_cm, min=0.0
+            )  # Ensuring non-negative PET
+
+            volstart_subtimestep_cm = self._model.calc_mass_balance()
+
+            soil_num = self._model.layer_soil_type[
+                self._model.wetting_fronts[self._model.current].layer_num
+            ]
+            soil_properties = self._model.soils_df.iloc[soil_num]
+            theta_e = soil_properties["theta_e"]
+            is_top_wf_saturated = (
+                True
+                if self._model.wetting_fronts[self._model.current].theta + 1e-12
+                >= theta_e
+                else False
+            )  # PTL: sometimes a machine precision error would erroneously create a new wetting front during saturated conditions. The + 1E-12 seems to prevent this.
+
+            # Addressed machine precision issues where volon_timestep_error could be for example -1E-17 or 1.E-20 or smaller
+            # volon_timestep_cm = torch.clamp(volon_timestep_cm, min=0.0)
+
+            # Determining if we need to create a superficial front
+            create_surficial_front = precip_previous_subtimestep_cm == 0.0 and precip_subtimestep_cm > 0.0 and volon_timestep_cm == 0
+
+            wf_free_drainage_demand = self._model.wetting_front_free_drainage()  # This is assuming this function is already defined somewhere in your code
+
+            flag = "Yes" if create_surficial_front and not is_top_wf_saturated else "No"
+            log.debug(f"Create superficial wetting front? {flag}")
 
     def get_component_name(self) -> str:
         """Name of the component.

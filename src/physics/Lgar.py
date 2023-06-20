@@ -189,6 +189,9 @@ class LGAR:
 
         self.initialize_starting_parameters(cfg)
 
+        # Creating a pointer to the correct wetting front index
+        self.current = 0
+
     def initialize_config_parameters(self, cfg: DictConfig) -> None:
         """
         Reading variables from the config file specific to each testcase
@@ -368,14 +371,14 @@ class LGAR:
         for i in range(len(self.wetting_fronts)):
             current = self.wetting_fronts[i]
             base_depth = (
-                self.cum_layer_thickness[current.layer - 1]
+                self.cum_layer_thickness[current.layer_num - 1]
                 if i > 0
                 else torch.tensor(0.0, dtype=torch.float64, device=self.device)
             )
             # This is not the last entry in the list
             if i < len(self.wetting_fronts) - 1:
                 next = self.wetting_fronts[i + 1]
-                if next.layer == current.layer:
+                if next.layer_num == current.layer_num:
                     sum = sum + (current.depth_cm - base_depth) * (
                         current.theta - next.theta
                     )
@@ -450,3 +453,28 @@ class LGAR:
         :return: None
         """
         raise NotImplementedError
+
+    def wetting_front_free_drainage(self) -> torch.Tensor:
+        """
+        Following the code of LGAR-C to determine the wetting fronts free of drainage
+        :return:
+        """
+        wf_that_supplies_free_drainage_demand = torch.tensor(1., dtype=torch.float64, device=self.device)
+        max_index = len(self.wetting_fronts)
+        while self.current < max_index:
+            front = self.wetting_fronts[self.current]
+            if (self.current + 1) < max_index:
+                if front.layer_num == self.wetting_fronts[self.current+1].layer_num:
+                    break
+                else:
+                    wf_that_supplies_free_drainage_demand = wf_that_supplies_free_drainage_demand + 1
+            self.current = self.current + 1
+
+        if wf_that_supplies_free_drainage_demand > self.num_wetting_fronts:
+            wf_that_supplies_free_drainage_demand = wf_that_supplies_free_drainage_demand - 1
+
+        self.current = 0  #Reset index
+
+        log.debug(f"wetting_front_free_drainage = {wf_that_supplies_free_drainage_demand}")
+        return wf_that_supplies_free_drainage_demand
+
