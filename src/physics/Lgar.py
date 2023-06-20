@@ -339,7 +339,7 @@ class LGAR:
             wetting_front = WettingFront(
                 depth=self.cum_layer_thickness[i],
                 theta=theta_init,
-                layer=i,
+                layer_num=i,
                 bottom_flag=bottom_flag,
             )
             wetting_front.psi_cm = self.initial_psi

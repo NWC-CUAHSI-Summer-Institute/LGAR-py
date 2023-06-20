@@ -249,14 +249,15 @@ class LGARBmi(Bmi):
             # Calculate AET from PET if PET is non-zero
             if PET_subtimestep_cm_per_h > 0.0:
                 AET_subtimestep = calc_aet(
+                    self.wetting_fronts[0],  #TODO SET THIS VAR
                     PET_subtimestep_cm_per_h,
                     subtimestep_h,
                     wilting_point_psi_cm,
                     self._model.layer_soil_type,
-                    AET_thresh_Theta,
-                    AET_expon,
                     self.soils_df,
+                    self.device
                 )
+
 
     def get_component_name(self) -> str:
         """Name of the component.
