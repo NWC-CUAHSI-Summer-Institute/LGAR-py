@@ -269,11 +269,11 @@ class LGAR:
         self.soil_moisture_wetting_fronts = torch.zeros([self.num_wetting_fronts])
         for i in range(self.soil_moisture_wetting_fronts.shape[0]):
             self.soil_moisture_wetting_fronts[i] = self.wetting_fronts[i].theta
-            self.soil_depth_wetting_fronts[i] = (self.wetting_fronts[i].depth_cm * 0.01)  # CONVERTING FROM CM TO M
+            self.soil_depth_wetting_fronts[i] = (self.wetting_fronts[i].depth_cm * cfg.units.cm_to_m)  # CONVERTING FROM CM TO M
 
         # Initializing the rest of the input vars
-        self.precipitation_mm_per_h = None
-        self.PET_mm_per_h = None
+        self.precipitation_mm_per_h = torch.tensor(-1, dtype=torch.float64, device=self.device)
+        self.PET_mm_per_h = torch.tensor(-1, dtype=torch.float64, device=self.device)
 
         # Initializing the rest of the mass balance variables to zero
         self.volprecip_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)

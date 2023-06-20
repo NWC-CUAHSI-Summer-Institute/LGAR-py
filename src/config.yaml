@@ -18,6 +18,12 @@ variables:
     - 14  # Sandy Loam
     - 15  # Clay
   nsteps: ???
+constants:
+  AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET (fix later!)
+  AET_expon: 1.0
+units:
+  mm_to_cm: 0.1
+  cm_to_m: 0.01
 
 ################## HYDRA CONFIG #######################
 hydra:

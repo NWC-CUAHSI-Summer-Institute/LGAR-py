@@ -18,8 +18,8 @@ class LGARBmi(Bmi):
 
     _name = "LGAR Torch"
     _input_var_names = (
-        "precipitation_rate",
-        "potential_evapotranspiration_rate",
+        "precipitation_mm_per_h",
+        "PET_mm_per_h",
         "soil_moisture_wetting_fronts",
         "soil_depth_wetting_fronts"
     )
@@ -83,16 +83,16 @@ class LGARBmi(Bmi):
         self._model = LGAR(self.cfg)
         self.dates, self.precipitation, self.PET = read_forcing_data(self.cfg)
         self._values = {
-            "precipitation_rate": None,
-            "potential_evapotranspiration_rate": None,
-            "soil_moisture_wetting_fronts": None,
-            "soil_depth_wetting_fronts": None,
+            "precipitation_mm_per_h": self._model.precipitation_mm_per_h,
+            "PET_mm_per_h": self._model.PET_mm_per_h,
+            "soil_moisture_wetting_fronts": self._model.soil_moisture_wetting_fronts,
+            "soil_depth_wetting_fronts": self._model.soil_depth_wetting_fronts,
         }
         self._var_units = {
-            "precipitation_rate": "(mm / h)",
-            "potential_evapotranspiration_rate": "(mm / h)",
-            "soil_moisture_wetting_fronts": None,
-            "soil_depth_wetting_fronts": None,
+            "precipitation_mm_per_h": "(mm / h)",
+            "PET_mm_per_h": "(mm / h)",
+            "soil_moisture_wetting_fronts": "(-)",
+            "soil_depth_wetting_fronts": "m",
         }
 
         self._end_time = self.cfg.data.endtime
@@ -115,17 +115,31 @@ class LGARBmi(Bmi):
         if self._model.sft_coupled:
             self._model.frozen_factor_hydraulic_conductivity()
 
+        subcycles = self._model.forcing_interval
+        num_layers = self._model.num_layers
+
         precip_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
         PET_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
         AET_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
         volend_timestep_cm = self._model.calc_mass_balance()
         volin_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
         volon_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        volrunoff_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volrunoff_timestep_cm = self._model.volon_timestep_cm
         surface_runoff_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
         volrunoff_giuh_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
         volQ_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
         volQ_gw_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+
+        volend_subtimestep_cm = volend_timestep_cm
+        volQ_gw_subtimestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+
+        log.debug(f"Pr [cm/hr] (timestep) = {self.get_value_ptr('precipitation_mm_per_h') * self.cfg.units.mm_to_cm}")
+        log.debug(f"Pr [cm/hr] (timestep) = {self.get_value_ptr('PET_mm_per_h') * self.cfg.units.mm_to_cm}")
+
+        assert self.get_value_ptr('precipitation_mm_per_h') >= 0.0
+        assert self.get_value_ptr('PET_mm_per_h') >= 0.0
+
+
 
 
 
@@ -138,8 +152,8 @@ class LGARBmi(Bmi):
             A model time later than the current model time.
         """
         for i in range(time):
-            self.set_value("precipitation_rate", self.precipitation[time])
-            self.set_value("potential_evapotranspiration_rate", self.PET[time])
+            self.set_value("precipitation_mm_per_h", self.precipitation[time])
+            self.set_value("PET_mm_per_h", self.PET[time])
             self.update()
 
     def finalize(self) -> None:
@@ -434,7 +448,8 @@ class LGARBmi(Bmi):
         ndarray
             The same numpy array that was passed as an input buffer.
         """
-        raise NotImplementedError
+        dest = self.get_value_ptr(name).flatten()
+        return dest
 
     def get_value_ptr(self, name: str) -> torch.Tensor:
         """Get a reference to values of the given variable.
@@ -491,7 +506,11 @@ class LGARBmi(Bmi):
         src : array_like
             The new value for the specified variable.
         """
-
+        val = self.get_value_ptr(name)
+        if val.dim() == 0:  # Check if tensor is a scalar
+            val.data = src
+        else:
+            val[:] = src
 
     def set_value_at_indices(
         self, name: str, inds: torch.Tensor, src: torch.Tensor
