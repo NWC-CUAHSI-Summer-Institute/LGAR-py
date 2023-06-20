@@ -244,6 +244,24 @@ class LGARBmi(Bmi):
             )  # rate x dt = amount (portion of the water on the suface for model's timestep [cm])
             PET_subtimestep_cm = PET_subtimestep_cm_per_h * subtimestep_h
 
+            AET_subtimestep_cm = torch.tensor(
+                0.0, dtype=torch.float64, device=self.device
+            )
+            volstart_subtimestep_cm = torch.tensor(
+                0.0, dtype=torch.float64, device=self.device
+            )
+            volin_subtimestep_cm = torch.tensor(
+                0.0, dtype=torch.float64, device=self.device
+            )
+            volrunoff_subtimestep_cm = torch.tensor(
+                0.0, dtype=torch.float64, device=self.device
+            )
+            volrech_subtimestep_cm = torch.tensor(
+                0.0, dtype=torch.float64, device=self.device
+            )
+            surface_runoff_subtimestep_cm = torch.tensor(
+                0.0, dtype=torch.float64, device=self.device
+            )
             precip_previous_subtimestep_cm = self._model.precip_previous_timestep_cm
 
             # Calculate AET from PET if PET is non-zero
@@ -281,12 +299,66 @@ class LGARBmi(Bmi):
             # volon_timestep_cm = torch.clamp(volon_timestep_cm, min=0.0)
 
             # Determining if we need to create a superficial front
-            create_surficial_front = precip_previous_subtimestep_cm == 0.0 and precip_subtimestep_cm > 0.0 and volon_timestep_cm == 0
+            create_surficial_front = (
+                precip_previous_subtimestep_cm == 0.0
+                and precip_subtimestep_cm > 0.0
+                and volon_timestep_cm == 0
+            ).item()
 
-            wf_free_drainage_demand = self._model.wetting_front_free_drainage()  # This is assuming this function is already defined somewhere in your code
+            wf_free_drainage_demand = (
+                self._model.wetting_front_free_drainage()
+            )  # This is assuming this function is already defined somewhere in your code
 
             flag = "Yes" if create_surficial_front and not is_top_wf_saturated else "No"
             log.debug(f"Create superficial wetting front? {flag}")
+
+            if create_surficial_front and (is_top_wf_saturated is False):
+                # Create a new wetting front if the following is true. Meaning there is no
+                # wetting front in the top layer to accept the water, must create one.
+                raise NotImplementedError
+
+            if ponded_depth_subtimestep_cm > 0 and (create_surficial_front is False):
+                #  infiltrate water based on the infiltration capacity given no new wetting front
+                #  is created and that there is water on the surface (or raining).
+                raise NotImplementedError
+            else:
+                if ponded_depth_subtimestep_cm < ponded_depth_max_cm:
+                    # volrunoff_timestep_cm = volrunoff_timestep_cm + 0
+                    volon_subtimestep_cm = ponded_depth_subtimestep_cm
+                    ponded_depth_subtimestep_cm = torch.tensor(
+                        0.0, dtype=torch.float64, device=self.device
+                    )
+                    volrunoff_subtimestep_cm = torch.tensor(
+                        0.0, dtype=torch.float64, device=self.device
+                    )
+                else:
+                    volrunoff_subtimestep_cm = (
+                        ponded_depth_subtimestep_cm - ponded_depth_max_cm
+                    )
+                    volrunoff_timestep_cm = (
+                        ponded_depth_subtimestep_cm - ponded_depth_max_cm
+                    )
+                    volon_subtimestep_cm = ponded_depth_max_cm
+                    ponded_depth_subtimestep_cm = ponded_depth_max_cm
+            if create_surficial_front is False:
+                # move wetting fronts if no new wetting front is created. Otherwise, movement
+                # of wetting fronts has already happened at the time of creating surficial front,
+                # so no need to move them here. */
+                volin_subtimestep_cm_temp = volin_subtimestep_cm
+
+                self._model.move_wetting_fronts(
+                    subtimestep_h,
+                    volin_subtimestep_cm,
+                    wf_free_drainage_demand,
+                    volend_subtimestep_cm,
+                    num_layers,
+                    AET_subtimestep_cm,
+                )
+
+                volrech_subtimestep_cm = volin_subtimestep_cm
+                volrech_timestep_cm = volrech_timestep_cm + volrech_subtimestep_cm
+
+                volin_subtimestep_cm = volin_subtimestep_cm_temp
 
     def get_component_name(self) -> str:
         """Name of the component.
