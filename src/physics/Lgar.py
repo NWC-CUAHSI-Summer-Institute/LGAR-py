@@ -214,7 +214,7 @@ class LGAR:
         )
         # is_max_soil_types_set = True
 
-        self.wilting_point_psi = torch.tensor(
+        self.wilting_point_psi_cm = torch.tensor(
             cfg.data.wilting_point_psi, dtype=torch.float64, device=self.device
         )
         # is_wilting_point_psi_cm_set = True

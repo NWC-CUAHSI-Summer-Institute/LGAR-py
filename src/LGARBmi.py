@@ -9,6 +9,7 @@ from typing import Tuple
 
 from src.data.read import read_forcing_data
 from src.physics.Lgar import LGAR
+from src.physics.soil_functions import calc_aet
 
 log = logging.getLogger("LGARBmi")
 
@@ -21,7 +22,7 @@ class LGARBmi(Bmi):
         "precipitation_mm_per_h",
         "PET_mm_per_h",
         "soil_moisture_wetting_fronts",
-        "soil_depth_wetting_fronts"
+        "soil_depth_wetting_fronts",
     )
     _output_var_names = (
         "precipitation",  # cumulative amount of precip
@@ -97,9 +98,9 @@ class LGARBmi(Bmi):
 
         self._end_time = self.cfg.data.endtime
         self.timestep = self.cfg.data.timestep
-        self.nsteps = int(self._end_time/self.timestep)
+        self.nsteps = int(self._end_time / self.timestep)
 
-        assert (self.nsteps <= int(self.precipitation.shape[0]))
+        assert self.nsteps <= int(self.precipitation.shape[0])
         log.debug("Variables are written to file: data_variables.csv")
         log.debug("Wetting fronts state is written to file: data_layers.csv")
 
@@ -142,7 +143,9 @@ class LGARBmi(Bmi):
         log.info(
             f"\n---------------------- Simulation Summary  ------------------------ \n"
         )
-        log.info(f"Time (sec)                 = {self._end_time -self._start_time:.6f} \n")
+        log.info(
+            f"Time (sec)                 = {self._end_time -self._start_time:.6f} \n"
+        )
         log.info(f"-------------------------- Mass balance ------------------- \n")
         log.info(f"initial water in soil      = {volstart} cm\n")
         log.info(f"total precipitation input  = {volprecip}cm\n")
@@ -170,8 +173,12 @@ class LGARBmi(Bmi):
         volin_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
         volon_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
         volrunoff_timestep_cm = self._model.volon_timestep_cm
-        surface_runoff_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        volrunoff_giuh_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        surface_runoff_timestep_cm = torch.tensor(
+            0.0, dtype=torch.float64, device=self.device
+        )
+        volrunoff_giuh_timestep_cm = torch.tensor(
+            0.0, dtype=torch.float64, device=self.device
+        )
         volQ_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
         volQ_gw_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
 
@@ -180,22 +187,76 @@ class LGARBmi(Bmi):
         wilting_point_psi_cm = self._model.wilting_point_psi_cm
         use_closed_form_G = self._model.use_closed_form_G
 
-        AET_thresh_Theta = torch.tensor(self.cfg.constants.AET_thresh_Theta, dtype=torch.float64, device=self.device)
-        AET_expon = torch.tensor(self.cfg.constants.AET_expon, dtype=torch.float64, device=self.device)
+        AET_thresh_Theta = torch.tensor(
+            self.cfg.constants.AET_thresh_Theta, dtype=torch.float64, device=self.device
+        )
+        AET_expon = torch.tensor(
+            self.cfg.constants.AET_expon, dtype=torch.float64, device=self.device
+        )
 
         volend_subtimestep_cm = volend_timestep_cm
-        volQ_gw_subtimestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volQ_gw_subtimestep_cm = torch.tensor(
+            0.0, dtype=torch.float64, device=self.device
+        )
 
         ponded_depth_max_cm = self._model.ponded_depth_max_cm
 
-        log.debug(f"Pr [cm/hr] (timestep) = {self.get_value_ptr('precipitation_mm_per_h') * self.cfg.units.mm_to_cm}")
-        log.debug(f"Pr [cm/hr] (timestep) = {self.get_value_ptr('PET_mm_per_h') * self.cfg.units.mm_to_cm}")
+        hourly_precip_cm = (
+            self.get_value_ptr("precipitation_mm_per_h") * self.cfg.units.mm_to_cm
+        )  # rate [cm/hour]
+        hourly_PET_cm = (
+            self.get_value_ptr("PET_mm_per_h") * self.cfg.units.mm_to_cm
+        )  # rate [cm/hour]
+        log.debug(f"Pr [cm/hr] (timestep) = {hourly_precip_cm}")
+        log.debug(f"Pr [cm/hr] (timestep) = {hourly_PET_cm}")
 
-        assert self.get_value_ptr('precipitation_mm_per_h') >= 0.0
-        assert self.get_value_ptr('PET_mm_per_h') >= 0.0
-        #
-        # for i in range(int(subcycles)):
-        #     time_s = sub
+        # Ensure forcings are non-negative
+        assert hourly_precip_cm >= 0.0
+        assert hourly_PET_cm >= 0.0
+
+        time_s = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        timesteps = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        for i in range(int(subcycles)):
+            """
+            /* Note unit conversion:
+            Pr and PET are rates (fluxes) in mm/h
+            Pr [mm/h] * 1h/3600sec = Pr [mm/3600sec]
+            Model timestep (dt) = 300 sec (5 minutes for example)
+            convert rate to amount
+            Pr [mm/3600sec] * dt [300 sec] = Pr[mm] * 300/3600.
+            in the code below, subtimestep_h is this 300/3600 factor (see initialize from config in lgar.cxx)
+            """
+            time_s = time_s + (subtimestep_h * self.cfg.units.hr_to_sec)
+            timesteps = timesteps + 1
+
+            precip_subtimestep_cm_per_h = hourly_precip_cm
+            PET_subtimestep_cm_per_h = hourly_PET_cm
+
+            ponded_depth_subtimestep_cm = (
+                precip_subtimestep_cm_per_h * subtimestep_h
+            )  # the amount of water on the surface before any infiltration and runoff
+            ponded_depth_subtimestep_cm = (
+                ponded_depth_subtimestep_cm + volon_timestep_cm
+            )  # add volume of water on the surface (from the last timestep) to ponded depth as well
+
+            precip_subtimestep_cm = (
+                precip_subtimestep_cm_per_h * subtimestep_h
+            )  # rate x dt = amount (portion of the water on the suface for model's timestep [cm])
+            PET_subtimestep_cm = PET_subtimestep_cm_per_h * subtimestep_h
+
+            precip_previous_subtimestep_cm = self._model.precip_previous_timestep_cm
+
+            # Calculate AET from PET if PET is non-zero
+            if PET_subtimestep_cm_per_h > 0.0:
+                AET_subtimestep = calc_aet(
+                    PET_subtimestep_cm_per_h,
+                    subtimestep_h,
+                    wilting_point_psi_cm,
+                    self._model.layer_soil_type,
+                    AET_thresh_Theta,
+                    AET_expon,
+                    self.soils_df,
+                )
 
     def get_component_name(self) -> str:
         """Name of the component.

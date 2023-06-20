@@ -52,3 +52,25 @@ def calc_k_from_se(
         * torch.sqrt(se)
         * torch.pow(1.0 - torch.pow(1.0 - torch.pow(se, 1.0 / m), m), 2.0)
     )
+
+
+def calc_aet(
+    PET_subtimestep_cm_per_h,
+    subtimestep_h,
+    wilting_point_psi_cm,
+    layer_soil_type,
+    AET_thresh_Theta,
+    AET_expon,
+    soils_df,
+):
+    """
+    /* authors : Fred Ogden and Ahmad Jan
+    Translated by Tadd Bindas to Python
+    year    : 2022
+    the code computes actual evapotranspiration given PET.
+    It uses an S-shaped function used in HYDRUS-1D (Simunek & Sejna, 2018).
+    AET = PET * 1/(1 + (h/h_50) )^3
+    h is the capillary head at the surface and
+    h_50 is the capillary head at which AET = 0.5 * PET. */
+    """
+    raise NotImplementedError

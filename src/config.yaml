@@ -22,8 +22,10 @@ constants:
   AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET (fix later!)
   AET_expon: 1.0
 units:
+  cm_to_mm: 10.0
   mm_to_cm: 0.1
   cm_to_m: 0.01
+  hr_to_sec: 3600.0
 
 ################## HYDRA CONFIG #######################
 hydra:
