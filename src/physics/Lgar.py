@@ -460,7 +460,7 @@ class LGAR:
         Following the code of LGAR-C to determine the wetting fronts free of drainage
         :return:
         """
-        wf_that_supplies_free_drainage_demand = torch.tensor(1., dtype=torch.float64, device=self.device)
+        wf_that_supplies_free_drainage_demand = 0
         max_index = len(self.wetting_fronts)
         while self.current < max_index:
             front = self.wetting_fronts[self.current]
@@ -562,9 +562,58 @@ class LGAR:
                 break
 
             delta_mass_prev = delta_mass
-
         return theta
 
+    def merge_wetting_fronts(self):
+        """
+        the function merges wetting fronts; called from self.move_wetting_fronts()
+        :return:
+        """
+        log.debug(f"Merging wetting fronts...")
+        for i in range(1, len(self.wetting_fronts)):
+            log.debug(f"Merge | ********* Wetting Front = {i} *********")
+            current = self.wetting_fronts[i - 1]
+            next_ = self.wetting_fronts[i]
+            next_to_next = self.wetting_fronts[i + 1] if i + 1 < len(self.wetting_fronts) else None
+
+            # case : wetting front passing another wetting front within a layer
+            if self.wetting_fronts[current].depth_cm > next_['depth_cm'] and self.wetting_fronts[current].layer_num == next_['layer_num'] and not next_[
+                'to_bottom']:
+
+                current_mass_this_layer = current['depth_cm'] * (current['theta'] - next_['theta']) + next_[
+                    'depth_cm'] * (next_['theta'] - next_to_next['theta'])
+                current['depth_cm'] = current_mass_this_layer / (current['theta'] - next_to_next['theta'])
+
+                layer_num = self.wetting_fronts[current].layer_num
+                soil_num = self.layer_soil_type[layer_num]
+                soil_properties = self.soils_df.iloc[soil_num]
+                theta_e = torch.tensor(soil_properties['theta_e'], dtype=torch.float64, device=self.device)
+                theta_r = torch.tensor(soil_properties['theta_r'], dtype=torch.float64, device=self.device)
+                alpha = torch.tensor(soil_properties['alpha(cm^-1)'], dtype=torch.float64, device=self.device)
+                m = torch.tensor(soil_properties['m'], dtype=torch.float64, device=self.device)
+                n = torch.tensor(soil_properties['n'], dtype=torch.float64, device=self.device)
+                se = calc_se_from_theta(self.wetting_fronts[current].theta, theta_e, theta_r)
+
+                ksat_cm_per_h = soil_properties['Ksat_cm_per_h'] * self.frozen_factor[self.wetting_fronts[current].layer_num]
+
+                self.wetting_fronts[current].psi_cm = calc_h_from_se(se, alpha, m, n)
+                self.wetting_fronts[current].k_cm_per_h = calc_k_from_se(se, ksat_cm_per_h, m)
+
+                log.debug("Deleting wetting front (before)...")
+
+                self.wetting_fronts.pop(i)  # equivalent to listDeleteFront(next['front_num'])
+
+                if self.verbosity == "high":
+                    print("Deleting wetting front (after)...")
+                    self.listPrint()
+
+        if self.verbosity == "high":
+            print("State after merging wetting fronts...")
+            self.listPrint()
+
+
+    def wetting_fronts_cross_layer_boundary(self):
+        raise NotImplementedError
 
     def move_wetting_fronts(self,
                             timestep_h,
@@ -605,9 +654,9 @@ class LGAR:
         for i in reversed(range(len(self.wetting_fronts))):
             """
             /* ************************************************************ */
-  //        main loop advancing all wetting fronts and doing the mass balance
-  //        loop goes over deepest to top most wetting front
-  //        wf denotes wetting front
+            // main loop advancing all wetting fronts and doing the mass balance
+            // loop goes over deepest to top most wetting front
+            // wf denotes wetting front
             """
             if i == 0 and number_of_wetting_fronts > 0:
                 current = i
@@ -733,11 +782,71 @@ class LGAR:
                 self.wetting_fronts[current].theta = torch.minimum(theta_new, theta_e)
                 se = calc_se_from_theta(self.wetting_fronts[current].theta, theta_e, theta_r)
                 self.wetting_fronts[current].psi_cm = calc_h_from_se(se, alpha, m, n)
+            if i < last_wetting_front_index and layer_num == layer_num_below:
+                raise NotImplementedError
+            if i == 0:
+                """
+                // if f_p (predicted infiltration) causes theta > theta_e, mass correction is needed.
+                // depth of the wetting front is increased to close the mass balance when theta > theta_e.
+                // l == 0 is the last iteration (top most wetting front), so do a check on the mass balance)
+                // this part should be moved out of here to a subroutine; add a call to that subroutine
+                """
+                soil_num_k1 = self.layer_soil_type[wf_free_drainage_demand]
+                theta_e_k1 = self.soils_df.iloc[soil_num_k1]['theta_e']
+
+                wf_free_drainage = self.wetting_fronts[wf_free_drainage_demand]
+                mass_timestep = (old_mass + precip_mass_to_add) - (actual_ET_demand + free_drainage_demand)
+
+                # Making sure that the mass is correct
+                assert old_mass > 0.0
+
+                if torch.abs(wf_free_drainage.theta - theta_e_k1) < 1e-15:
+
+                    current_mass = self.calc_mass_balance(self.cum_layer_thickness)
+
+                    mass_balance_error = torch.abs(current_mass - mass_timestep)  # mass error
+
+                    factor = torch.tensor(1.0, device=self.device)
+                    switched = False
+                    tolerance = 1e-12
+
+                    # check if the difference is less than the tolerance
+                    if mass_balance_error <= tolerance:
+                        pass
+                        # return current_mass
+
+                    depth_new = wf_free_drainage.depth_cm
+
+                    # loop to adjust the depth for mass balance
+                    while torch.abs(mass_balance_error - tolerance) > 1e-12:
+
+                        if current_mass < mass_timestep:
+                            depth_new = depth_new + torch.tensor(0.01, device=self.device) * factor
+                            switched = False
+                        else:
+                            if not switched:
+                                switched = True
+                                factor = factor * torch.tensor(0.001, device=self.device)
+                            depth_new = depth_new - (torch.tensor(0.01, device=self.device) * factor)
+
+                        wf_free_drainage.depth_cm = depth_new
+
+                        current_mass = self.calc_mass_balance(self.cum_layer_thickness)
+                        mass_balance_error = torch.abs(current_mass - mass_timestep)
 
 
-
-
-
-
-
-
+        """
+          // **************************** MERGING WETTING FRONT ********************************
+  
+          /* In the python version of LGAR, wetting front merging, layer boundary crossing, and lower boundary crossing
+             all occur in a loop that happens after wetting fronts have been moved. This prevents the model from crashing,
+             as there are rare but possible cases where multiple merging / layer boundary crossing events will happen in
+             the same time step. For example, if two wetting fronts cross a layer boundary in the same time step, it will
+             be necessary for merging to occur before layer boundary crossing. So, LGAR-C now approaches merging in the
+             same way as in LGAR-Py, where wetting fronts are moved, then a new loop does merging for all wetting fronts,
+             then a new loop does layer boundary corssing for all wetting fronts, then a new loop does merging again for
+             all wetting fronts, and then a new loop does lower boundary crossing for all wetting fronts. this is a thorough
+             way to deal with these scenarios. */
+        """
+        # Merge
+        self.merge_wetting_fronts()

@@ -305,6 +305,7 @@ class LGARBmi(Bmi):
                 and volon_timestep_cm == 0
             ).item()
 
+            # Note, we're in python so everything is 0-based
             wf_free_drainage_demand = (
                 self._model.wetting_front_free_drainage()
             )  # This is assuming this function is already defined somewhere in your code
@@ -354,6 +355,7 @@ class LGARBmi(Bmi):
                     num_layers,
                     AET_subtimestep_cm,
                 )
+
 
                 volrech_subtimestep_cm = volin_subtimestep_cm
                 volrech_timestep_cm = volrech_timestep_cm + volrech_subtimestep_cm
