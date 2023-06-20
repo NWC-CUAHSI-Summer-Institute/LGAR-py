@@ -115,33 +115,7 @@ class LGARBmi(Bmi):
         if self._model.sft_coupled:
             self._model.frozen_factor_hydraulic_conductivity()
 
-        subcycles = self._model.forcing_interval
-        num_layers = self._model.num_layers
-
-        precip_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        PET_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        AET_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        volend_timestep_cm = self._model.calc_mass_balance()
-        volin_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        volon_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        volrunoff_timestep_cm = self._model.volon_timestep_cm
-        surface_runoff_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        volrunoff_giuh_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        volQ_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        volQ_gw_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-
-        volend_subtimestep_cm = volend_timestep_cm
-        volQ_gw_subtimestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-
-        log.debug(f"Pr [cm/hr] (timestep) = {self.get_value_ptr('precipitation_mm_per_h') * self.cfg.units.mm_to_cm}")
-        log.debug(f"Pr [cm/hr] (timestep) = {self.get_value_ptr('PET_mm_per_h') * self.cfg.units.mm_to_cm}")
-
-        assert self.get_value_ptr('precipitation_mm_per_h') >= 0.0
-        assert self.get_value_ptr('PET_mm_per_h') >= 0.0
-
-
-
-
+        self.run_cycle()
 
     def update_until(self, time: float) -> None:
         """Advance model state until the given time.
@@ -180,6 +154,48 @@ class LGARBmi(Bmi):
         log.info(f"total AET                  = {volAET} cm\n")
         log.info(f"total PET                  = {volPET} cm\n")
         log.info(f"global balance             = {global_error_cm} cm\n")
+
+    def run_cycle(self):
+        """
+        A function to run the model's subcycling timestep loop
+        :return:
+        """
+        subcycles = self._model.forcing_interval
+        num_layers = self._model.num_layers
+
+        precip_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        PET_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        AET_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volend_timestep_cm = self._model.calc_mass_balance()
+        volin_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volon_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volrunoff_timestep_cm = self._model.volon_timestep_cm
+        surface_runoff_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volrunoff_giuh_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volQ_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volQ_gw_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+
+        subtimestep_h = self._model.timestep_h
+        nint = self._model.nint
+        wilting_point_psi_cm = self._model.wilting_point_psi_cm
+        use_closed_form_G = self._model.use_closed_form_G
+
+        AET_thresh_Theta = torch.tensor(self.cfg.constants.AET_thresh_Theta, dtype=torch.float64, device=self.device)
+        AET_expon = torch.tensor(self.cfg.constants.AET_expon, dtype=torch.float64, device=self.device)
+
+        volend_subtimestep_cm = volend_timestep_cm
+        volQ_gw_subtimestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+
+        ponded_depth_max_cm = self._model.ponded_depth_max_cm
+
+        log.debug(f"Pr [cm/hr] (timestep) = {self.get_value_ptr('precipitation_mm_per_h') * self.cfg.units.mm_to_cm}")
+        log.debug(f"Pr [cm/hr] (timestep) = {self.get_value_ptr('PET_mm_per_h') * self.cfg.units.mm_to_cm}")
+
+        assert self.get_value_ptr('precipitation_mm_per_h') >= 0.0
+        assert self.get_value_ptr('PET_mm_per_h') >= 0.0
+        #
+        # for i in range(int(subcycles)):
+        #     time_s = sub
 
     def get_component_name(self) -> str:
         """Name of the component.
@@ -430,6 +446,7 @@ class LGARBmi(Bmi):
         raise NotImplementedError
 
     def get_value(self, name: str, dest: torch.Tensor) -> torch.Tensor:
+        # DONT EVER EVER EVER USE THIS!!!!!! IT BREAKS TENSOR CONNECTIVITY
         """Get a copy of values of the given variable.
 
         This is a getter for the model, used to access the model's
@@ -489,7 +506,7 @@ class LGARBmi(Bmi):
         array_like
             Value of the model variable at the given location.
         """
-        raise NotImplementedError
+        return self._values[name][inds]
 
     def set_value(self, name: str, src: torch.Tensor) -> None:
         """Specify a new value for a model variable.
@@ -526,7 +543,8 @@ class LGARBmi(Bmi):
         src : array_like
             The new value for the specified variable.
         """
-        raise NotImplementedError
+        val = self.get_value_ptr(name)
+        val[ind] = src
 
     # Grid information
     def get_grid_rank(self, grid: int) -> int:
