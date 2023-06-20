@@ -50,6 +50,7 @@ class LGARBmi(Bmi):
         self._start_time = 0.0
         self._end_time = None
         self.timestep = None
+        self.nsteps = None
         self._time_units = "s"
 
     def initialize(self, config_file: str) -> None:
@@ -97,9 +98,8 @@ class LGARBmi(Bmi):
         self._end_time = self.cfg.data.endtime
         self.timestep = self.cfg.data.timestep
         self.nsteps = int(self._end_time/self.timestep)
-        self.cfg.variables.nsteps = self.nsteps
 
-        assert (self.nsteps <= int(self.x.shape[0]))
+        assert (self.nsteps <= int(self.precipitation.shape[0]))
         log.debug("Variables are written to file: data_variables.csv")
         log.debug("Wetting fronts state is written to file: data_layers.csv")
 
@@ -114,6 +114,20 @@ class LGARBmi(Bmi):
         """
         if self._model.sft_coupled:
             self._model.frozen_factor_hydraulic_conductivity()
+
+        precip_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        PET_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        AET_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volend_timestep_cm = self._model.calc_mass_balance()
+        volin_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volon_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volrunoff_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        surface_runoff_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volrunoff_giuh_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volQ_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volQ_gw_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+
+
 
     def update_until(self, time: float) -> None:
         """Advance model state until the given time.

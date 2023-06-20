@@ -262,6 +262,47 @@ class LGAR:
         self.time_s = 0.0
         self.timesteps = 0.0
 
+        # Finish initializing variables
+        self.shape = [self.num_layers, self.num_wetting_fronts]
+        self.num_wetting_fronts = self.num_layers  #TODO Ask about this line? It seems stupid
+        self.soil_depth_wetting_fronts = torch.zeros([self.num_wetting_fronts])
+        self.soil_moisture_wetting_fronts = torch.zeros([self.num_wetting_fronts])
+        for i in range(self.soil_moisture_wetting_fronts.shape[0]):
+            self.soil_moisture_wetting_fronts[i] = self.wetting_fronts[i].theta
+            self.soil_depth_wetting_fronts[i] = (self.wetting_fronts[i].depth_cm * 0.01)  # CONVERTING FROM CM TO M
+
+        # Initializing the rest of the input vars
+        self.precipitation_mm_per_h = None
+        self.PET_mm_per_h = None
+
+        # Initializing the rest of the mass balance variables to zero
+        self.volprecip_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volin_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volend_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volAET_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volrech_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volrunoff_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volrunoff_giuh_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volQ_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volPET_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volon_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volprecip_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+
+        # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
+        self.volon_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.precip_previous_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+
+        # setting flux from groundwater_reservoir_to_stream to zero, will be non-zero when groundwater reservoir is added/simulated
+        self.volQ_gw_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+
+
+
+
+
+
+
+
+
     def initialize_wetting_front(self) -> None:
         """
         calculates initial theta (soil moisture content) and hydraulic conductivity
@@ -315,7 +356,7 @@ class LGAR:
 
     def calc_mass_balance(self):
         """
-        Calculates a mass balance from your variables
+        Calculates a mass balance from your variables (Known as lgar_calc_mass_bal() in the C code)
         :return:
         """
         sum = torch.tensor(0, dtype=torch.float64)
