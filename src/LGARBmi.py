@@ -116,8 +116,6 @@ class LGARBmi(Bmi):
 
         self.local_mass_balance = None
 
-        self.precipitation = torch.zeros([self.nsteps])
-        self.PET_mm_per_h = torch.zeros([self.nsteps])
         self.soil_moisture_fronts = torch.zeros(
             [self._model.num_layers, self.nsteps], device=self.device
         )
@@ -166,7 +164,7 @@ class LGARBmi(Bmi):
             log.debug(f"Real Time: {self.dates[i]}")
             self.set_value("precipitation_mm_per_h", self.precipitation[i])
             self.set_value("PET_mm_per_h", self.PET[i])
-            self.update() # CALLING UPDATE
+            self.update()  # CALLING UPDATE
             self.set_value("soil_moisture_wetting_fronts", self._model.soil_moisture_wetting_fronts,)
             self.set_value("soil_depth_wetting_fronts", self._model.soil_depth_wetting_fronts,)
             # self.precipitation[i] = self.precipitation[i]
@@ -238,7 +236,7 @@ class LGARBmi(Bmi):
         A function to run the model's subcycling timestep loop
         :return:
         """
-        subcycles = self._model.forcing_interval
+        subcycles = torch.round(self._model.forcing_interval)  # ROUNDING SINCE MACHINE PRECISION SHORTENS BY 1
         num_layers = self._model.num_layers
 
         precip_timestep_cm = torch.tensor(0.0, device=self.device)
@@ -277,7 +275,7 @@ class LGARBmi(Bmi):
         )  # rate [cm/hour]
         log.debug("*** LASAM BMI Update... *** ")
         log.debug(f"Pr [cm/hr] (timestep) = {hourly_precip_cm}")
-        log.debug(f"Pr [cm/hr] (timestep) = {hourly_PET_cm}")
+        log.debug(f"PET [cm/hr] (timestep) = {hourly_PET_cm}")
 
         # Ensure forcings are non-negative
         assert hourly_precip_cm >= 0.0
@@ -325,12 +323,12 @@ class LGARBmi(Bmi):
             # Calculate AET from PET if PET is non-zero
             if PET_subtimestep_cm_per_h > 0.0:
                 AET_subtimestep_cm = calc_aet(
-                    self.wetting_fronts[self._model.current],  # TODO SET THIS VAR
+                    self._model.wetting_fronts,
                     PET_subtimestep_cm_per_h,
                     subtimestep_h,
                     wilting_point_psi_cm,
                     self._model.layer_soil_type,
-                    self.soils_df,
+                    self._model.soils_df,
                     self.device,
                 )
             else:
@@ -517,10 +515,7 @@ class LGARBmi(Bmi):
         for i in range(self._model.num_wetting_fronts):
             self._model.soil_moisture_wetting_fronts[i] = self._model.wetting_fronts[i].theta
             self._model.soil_depth_wetting_fronts[i] = self._model.wetting_fronts[i].depth_cm * self.cfg.units.cm_to_m
-
-        log.debug("Wetting fronts:")
-        for wf in self._model.wetting_fronts:
-            wf.print()
+            log.debug(f"Wetting fronts (bmi outputs) (depth in meters, theta)= {self._model.soil_depth_wetting_fronts[i]}, {self._model.soil_moisture_wetting_fronts[i]}")
 
         # self._model.volprecip_timestep_cm = precip_timestep_cm
         #         # self.volin_timestep_cm = volin_timestep_cm

@@ -91,7 +91,8 @@ def calc_aet(
     )
 
     # Starting at the first index
-    layer_num = wetting_fronts.layer_num
+    current = wetting_fronts[0]  # USING THE HEAD LAYER (LAYER 0)
+    layer_num = current.layer_num
     soil_num = layer_soil_type[layer_num]
     soil_properties = soils_df.iloc[soil_num]
     theta_e = torch.tensor(
@@ -103,18 +104,18 @@ def calc_aet(
     alpha = torch.tensor(
         soil_properties["alpha(cm^-1)"], device=device
     )
-    n = torch.tensor(soil_properties["m"], device=device)
-    m = torch.tensor(soil_properties["n"], device=device)
+    m = torch.tensor(soil_properties["m"], device=device)
+    n = torch.tensor(soil_properties["n"], device=device)
 
     theta_fc = (theta_e - theta_r) * relative_moisture_at_which_PET_equals_AET + theta_r
     wp_head_theta = calc_theta_from_h(
-        wilting_point_psi_cm, alpha, m, n, theta_e, theta_r
+        wilting_point_psi_cm, soil_properties, device
     )
     theta_wp = (theta_fc - wp_head_theta) * 0.5 + wp_head_theta  # theta_50 in python
-    Se = calc_se_from_theta(theta_wp, theta_e, theta_r)
-    psi_wp_cm = calc_h_from_se(Se, alpha, m, n)
+    se = calc_se_from_theta(theta_wp, theta_e, theta_r)
+    psi_wp_cm = calc_h_from_se(se, alpha, m, n)
 
-    h_ratio = 1.0 + torch.pow((wetting_fronts.psi_cm / psi_wp_cm), 3.0)
+    h_ratio = 1.0 + torch.pow((current.psi_cm / psi_wp_cm), 3.0)
     actual_ET_demand = PET_subtimestep_cm_per_h * (1 / h_ratio) * subtimestep_h
 
     if actual_ET_demand < 0:
