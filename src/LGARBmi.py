@@ -8,6 +8,7 @@ from tqdm import tqdm
 from typing import Tuple
 
 from src.data.read import read_forcing_data
+from src.physics.giuh import giuh_convolution_integral
 from src.physics.Lgar import LGAR
 from src.physics.soil_functions import calc_aet
 
@@ -41,6 +42,7 @@ class LGARBmi(Bmi):
 
     def __init__(self):
         super().__init__()
+        torch.manual_seed(0)
         self._model = None
         self.device = None
         self._values = {}
@@ -105,6 +107,13 @@ class LGARBmi(Bmi):
         log.debug("Variables are written to file: data_variables.csv")
         log.debug("Wetting fronts state is written to file: data_layers.csv")
 
+        self.num_giuh_ordinates = self._model.num_giuh_ordinates
+        self.giuh_runoff_queue = torch.zeros(
+            [self.num_giuh_ordinates], device=self.device
+        )
+
+        self.local_mass_balance = None
+
     def update(self) -> None:
         """Advance model state by one time step.
 
@@ -140,6 +149,15 @@ class LGARBmi(Bmi):
         printing reports.
         """
         self._end_time = time.perf_counter()
+        global_error_cm = (
+            self._model.volstart_cm
+            + self._model.volprecip_cm
+            - self._model.volrunoff_cm
+            - self._model.volAET_cm
+            - self._model.volon_cm
+            - self._model.volrech_cm
+            - self._model.volend_cm
+        )
 
         log.info(
             f"\n---------------------- Simulation Summary  ------------------------ \n"
@@ -148,15 +166,15 @@ class LGARBmi(Bmi):
             f"Time (sec)                 = {self._end_time -self._start_time:.6f} \n"
         )
         log.info(f"-------------------------- Mass balance ------------------- \n")
-        log.info(f"initial water in soil      = {volstart} cm\n")
-        log.info(f"total precipitation input  = {volprecip}cm\n")
-        log.info(f"total infiltration         = {volin} cm\n")
-        log.info(f"final water in soil        = {volend} cm\n")
-        log.info(f"water remaining on surface = {volon} cm\n")
-        log.info(f"surface runoff             = {volrunoff} cm\n")
-        log.info(f"total percolation          = {volrech} cm\n")
-        log.info(f"total AET                  = {volAET} cm\n")
-        log.info(f"total PET                  = {volPET} cm\n")
+        log.info(f"initial water in soil      = {self._model.volstart_cm} cm\n")
+        log.info(f"total precipitation input  = {self._model.volprecip_cm}cm\n")
+        log.info(f"total infiltration         = {self._model.volin_cm} cm\n")
+        log.info(f"final water in soil        = {self._model.volend_cm} cm\n")
+        log.info(f"water remaining on surface = {self._model.volon_cm} cm\n")
+        log.info(f"surface runoff             = {self._model.volrunoff_cm} cm\n")
+        log.info(f"total percolation          = {self._model.volrech_cm} cm\n")
+        log.info(f"total AET                  = {self._model.volAET_cm} cm\n")
+        log.info(f"total PET                  = {self._model.volPET_cm} cm\n")
         log.info(f"global balance             = {global_error_cm} cm\n")
 
     def run_cycle(self):
@@ -369,7 +387,61 @@ class LGARBmi(Bmi):
 
                 # /*----------------------------------------------------------------------*/
                 # // compute giuh runoff for the subtimestep
-                raise NotImplementedError
+                surface_runoff_subtimestep_cm = volrunoff_subtimestep_cm
+                (
+                    self.giuh_runoff_queue,
+                    volrunoff_giuh_subtimestep_cm,
+                ) = giuh_convolution_integral(
+                    volrunoff_subtimestep_cm,
+                    self._model.num_giuh_ordinates,
+                    self._model.giuh_ordinates,
+                    self.giuh_runoff_queue,
+                )
+
+                surface_runoff_timestep_cm = (
+                    surface_runoff_timestep_cm + surface_runoff_subtimestep_cm
+                )
+                volrunoff_giuh_timestep_cm = (
+                    volrunoff_giuh_timestep_cm + volrunoff_giuh_subtimestep_cm
+                )
+
+                # total mass of water leaving the system, at this time it is the giuh-only, but later will add groundwater component as well.
+                volQ_timestep_cm = volQ_timestep_cm + volrunoff_giuh_subtimestep_cm
+
+                # adding groundwater flux to stream channel (note: this will be updated/corrected after adding the groundwater reservoir)
+                volQ_gw_timestep_cm = volQ_gw_timestep_cm + volQ_gw_subtimestep_cm
+                log.debug(f"Printing wetting fronts at this subtimestep...")
+                for wf in self._model.wetting_fronts:
+                    wf.print()
+
+                unexpected_error = True if torch.abs(local_mb) > 1e-6 else False
+                log.debug(
+                    f"\nLocal mass balance at this timestep... \n"
+                    f"Error         = {local_mb.item():14.10f} \n"
+                    f"Initial water = {volstart_subtimestep_cm.item():14.10f} \n"
+                    f"Water added   = {precip_subtimestep_cm.item():14.10f} \n"
+                    f"Ponded water  = {volon_subtimestep_cm.item():14.10f} \n"
+                    f"Infiltration  = {volin_subtimestep_cm.item():14.10f} \n"
+                    f"Runoff        = {volrunoff_subtimestep_cm.item():14.10f} \n"
+                    f"AET           = {AET_subtimestep_cm.item():14.10f} \n"
+                    f"Percolation   = {volrech_subtimestep_cm.item():14.10f} \n"
+                    f"Final water   = {volend_subtimestep_cm.item():14.10f} \n"
+                )
+
+                if unexpected_error:
+                    log.error(
+                        f"Local mass balance (in this timestep) is {local_mb.item():14.10f}, larger than expected, needs some debugging..."
+                    )
+                    raise RuntimeError("Unexpected local error!")
+
+            self._model.local_mass_balance = local_mb
+
+            assert (
+                self._model.wetting_fronts[0].depth_cm > 0.0
+            )  # check on negative layer depth --> move this to somewhere else AJ (later)
+            # TODO ASK ABOUT LASAM STANDALONE
+
+        self._model.initialize_starting_parameters(self.cfg)
 
     def get_component_name(self) -> str:
         """Name of the component.

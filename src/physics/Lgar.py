@@ -189,6 +189,14 @@ class LGAR:
         # Running a mass balance check
         self.calc_mass_balance()
 
+        # Initializing initial states:
+        # initially we start with a dry surface (no surface ponding)
+        self.ponded_depth_cm = torch.tensor(0, device=self.device)
+        # No. of spatial intervals used in trapezoidal integration to compute G
+        self.nint = 120  # hacked, not needed to be an input option
+        self.num_wetting_fronts = self.num_layers
+        self.time_s = 0.0
+        self.timesteps = 0.0
         self.initialize_starting_parameters(cfg)
 
         # Creating a pointer to the correct wetting front index
@@ -251,9 +259,7 @@ class LGAR:
         )
 
         self.giuh_ordinates = torch.tensor(cfg.data.giuh_ordinates, device=self.device)
-        self.num_giuh_ordinates = torch.tensor(
-            len(cfg.data.giuh_ordinates), device=self.device
-        )
+        self.num_giuh_ordinates = len(cfg.data.giuh_ordinates)
 
     def initialize_time_parameters(self, cfg: DictConfig) -> None:
         timestep_unit = cfg.data.units.timestep_h[0]
@@ -374,14 +380,6 @@ class LGAR:
         return sum
 
     def initialize_starting_parameters(self, cfg: DictConfig) -> None:
-        # initially we start with a dry surface (no surface ponding)
-        self.ponded_depth_cm = torch.tensor(0, device=self.device)
-        # No. of spatial intervals used in trapezoidal integration to compute G
-        self.nint = 120  # hacked, not needed to be an input option
-        self.num_wetting_fronts = self.num_layers
-        self.time_s = 0.0
-        self.timesteps = 0.0
-
         # Finish initializing variables
         self.shape = [self.num_layers, self.num_wetting_fronts]
         self.num_wetting_fronts = (
@@ -410,7 +408,6 @@ class LGAR:
         self.volQ_cm = torch.tensor(0.0, device=self.device)
         self.volPET_cm = torch.tensor(0.0, device=self.device)
         self.volon_cm = torch.tensor(0.0, device=self.device)
-        self.volprecip_cm = torch.tensor(0.0, device=self.device)
 
         # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
         self.volon_timestep_cm = torch.tensor(0.0, device=self.device)
