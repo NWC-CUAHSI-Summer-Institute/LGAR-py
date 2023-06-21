@@ -4,6 +4,7 @@ import pandas as pd
 import torch
 
 log = logging.getLogger("physics.soil_functions")
+torch.set_default_dtype(torch.float64)
 
 
 def calc_theta_from_h(
@@ -86,7 +87,7 @@ def calc_aet(
     h_50 is the capillary head at which AET = 0.5 * PET. */
     """
     relative_moisture_at_which_PET_equals_AET = torch.tensor(
-        0.75, dtype=torch.float64, device=device
+        0.75, device=device
     )
 
     # Starting at the first index
@@ -94,16 +95,16 @@ def calc_aet(
     soil_num = layer_soil_type[layer_num]
     soil_properties = soils_df.iloc[soil_num]
     theta_e = torch.tensor(
-        soil_properties["theta_e"], dtype=torch.float64, device=device
+        soil_properties["theta_e"], device=device
     )
     theta_r = torch.tensor(
-        soil_properties["theta_r"], dtype=torch.float64, device=device
+        soil_properties["theta_r"], device=device
     )
     alpha = torch.tensor(
-        soil_properties["alpha(cm^-1)"], dtype=torch.float64, device=device
+        soil_properties["alpha(cm^-1)"], device=device
     )
-    n = torch.tensor(soil_properties["m"], dtype=torch.float64, device=device)
-    m = torch.tensor(soil_properties["n"], dtype=torch.float64, device=device)
+    n = torch.tensor(soil_properties["m"], device=device)
+    m = torch.tensor(soil_properties["n"], device=device)
 
     theta_fc = (theta_e - theta_r) * relative_moisture_at_which_PET_equals_AET + theta_r
     wp_head_theta = calc_theta_from_h(
@@ -117,7 +118,7 @@ def calc_aet(
     actual_ET_demand = PET_subtimestep_cm_per_h * (1 / h_ratio) * subtimestep_h
 
     if actual_ET_demand < 0:
-        actual_ET_demand = torch.tensor(0.0, dtype=torch.float64, device=device)
+        actual_ET_demand = torch.tensor(0.0, device=device)
     elif actual_ET_demand > (PET_subtimestep_cm_per_h * subtimestep_h):
         actual_ET_demand = PET_subtimestep_cm_per_h * subtimestep_h
 

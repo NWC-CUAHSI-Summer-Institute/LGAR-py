@@ -68,6 +68,7 @@ from src.physics.soil_functions import (
 from src.physics.WettingFront import WettingFront
 
 log = logging.getLogger("physics.Lgar")
+torch.set_default_dtype(torch.float64)
 
 
 def seconds_to_hours(x):
@@ -214,10 +215,10 @@ class LGAR:
         - num_giuh_ordinates
         """
         self.layer_thickness_cm = torch.tensor(
-            cfg.data.layer_thickness, dtype=torch.float64, device=self.device
+            cfg.data.layer_thickness, device=self.device
         )
         self.cum_layer_thickness = torch.zeros(
-            [len(cfg.data.layer_thickness)], dtype=torch.float64, device=self.device
+            [len(cfg.data.layer_thickness)], device=self.device
         )
         self.cum_layer_thickness[0] = self.layer_thickness_cm[0]
         for i in range(1, self.cum_layer_thickness.shape[0]):
@@ -233,13 +234,9 @@ class LGAR:
             for x in self.cum_layer_thickness
         ]
 
-        self.initial_psi = torch.tensor(
-            cfg.data.initial_psi, dtype=torch.float64, device=self.device
-        )
+        self.initial_psi = torch.tensor(cfg.data.initial_psi, device=self.device)
         self.ponded_depth_max_cm = torch.max(
-            torch.tensor(
-                cfg.data.ponded_depth_max, dtype=torch.float64, device=self.device
-            )
+            torch.tensor(cfg.data.ponded_depth_max, device=self.device)
         )
 
         self.use_closed_form_G = cfg.data.use_closed_form_G
@@ -247,42 +244,32 @@ class LGAR:
         # HARDCODING A 1 SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
         self.layer_soil_type = np.array(cfg.data.layer_soil_type) - 1
 
-        self.num_soil_types = torch.tensor(
-            cfg.data.max_soil_types, dtype=torch.float64, device=self.device
-        )
+        self.num_soil_types = torch.tensor(cfg.data.max_soil_types, device=self.device)
 
         self.wilting_point_psi_cm = torch.tensor(
-            cfg.data.wilting_point_psi, dtype=torch.float64, device=self.device
+            cfg.data.wilting_point_psi, device=self.device
         )
 
-        self.giuh_ordinates = torch.tensor(
-            cfg.data.giuh_ordinates, dtype=torch.float64, device=self.device
-        )
+        self.giuh_ordinates = torch.tensor(cfg.data.giuh_ordinates, device=self.device)
         self.num_giuh_ordinates = torch.tensor(
-            len(cfg.data.giuh_ordinates), dtype=torch.float64, device=self.device
+            len(cfg.data.giuh_ordinates), device=self.device
         )
 
     def initialize_time_parameters(self, cfg: DictConfig) -> None:
         timestep_unit = cfg.data.units.timestep_h[0]
         _func_ = division_switcher.get(timestep_unit, seconds_to_hours)
-        self.timestep_h = _func_(
-            torch.tensor(cfg.data.timestep, dtype=torch.float64, device=self.device)
-        )
+        self.timestep_h = _func_(torch.tensor(cfg.data.timestep, device=self.device))
         assert self.timestep_h > 0
 
         endtime_unit = cfg.data.units.endtime_s[0]
         _func_ = multiplication_switcher.get(endtime_unit, seconds_to_seconds)
-        self.endtime_s = _func_(
-            torch.tensor(cfg.data.endtime, dtype=torch.float64, device=self.device)
-        )
+        self.endtime_s = _func_(torch.tensor(cfg.data.endtime, device=self.device))
         assert self.endtime_s > 0
 
         forcing_unit = cfg.data.units.forcing_resolution_h[0]
         _func_ = division_switcher.get(forcing_unit, seconds_to_hours)
         self.forcing_resolution_h = _func_(
-            torch.tensor(
-                cfg.data.forcing_resolution, dtype=torch.float64, device=self.device
-            )
+            torch.tensor(cfg.data.forcing_resolution, device=self.device)
         )
         assert self.forcing_resolution_h > 0
 
@@ -301,22 +288,18 @@ class LGAR:
         :return: The wetting front per soil layer
         """
         # Read in soils information
-        self.soils_df = read_soils_file(cfg)
+        self.soils_df = read_soils_file(cfg, self.wilting_point_psi_cm)
 
-        self.soil_temperature = torch.tensor(0, dtype=torch.float64, device=self.device)
-        self.soil_temperature_z = torch.tensor(
-            0, dtype=torch.float64, device=self.device
-        )
-        self.num_cells_z = torch.tensor(1, dtype=torch.float64, device=self.device)
+        self.soil_temperature = torch.tensor(0, device=self.device)
+        self.soil_temperature_z = torch.tensor(0, device=self.device)
+        self.num_cells_z = torch.tensor(1, device=self.device)
 
         # TODO ADD MORE TESTING TO THIS INTERVAL
         self.forcing_interval = torch.div(
             self.forcing_resolution_h, (self.timestep_h + 1.0e-08)
         )
 
-        self.frozen_factor = torch.ones(
-            int(self.num_layers), dtype=torch.float64, device=self.device
-        )
+        self.frozen_factor = torch.ones(int(self.num_layers), device=self.device)
 
         num_wetting_vars = 4
         # Creating a torch matrix that will hold wetting fronts.
@@ -374,7 +357,7 @@ class LGAR:
             base_depth = (
                 self.cum_layer_thickness[current.layer_num - 1]
                 if i > 0
-                else torch.tensor(0.0, dtype=torch.float64, device=self.device)
+                else torch.tensor(0.0, device=self.device)
             )
             # This is not the last entry in the list
             if i < len(self.wetting_fronts) - 1:
@@ -392,7 +375,7 @@ class LGAR:
 
     def initialize_starting_parameters(self, cfg: DictConfig) -> None:
         # initially we start with a dry surface (no surface ponding)
-        self.ponded_depth_cm = torch.tensor(0, dtype=torch.float64, device=self.device)
+        self.ponded_depth_cm = torch.tensor(0, device=self.device)
         # No. of spatial intervals used in trapezoidal integration to compute G
         self.nint = 120  # hacked, not needed to be an input option
         self.num_wetting_fronts = self.num_layers
@@ -413,38 +396,28 @@ class LGAR:
             )  # CONVERTING FROM CM TO M
 
         # Initializing the rest of the input vars
-        self.precipitation_mm_per_h = torch.tensor(
-            -1, dtype=torch.float64, device=self.device
-        )
-        self.PET_mm_per_h = torch.tensor(-1, dtype=torch.float64, device=self.device)
+        self.precipitation_mm_per_h = torch.tensor(-1, device=self.device)
+        self.PET_mm_per_h = torch.tensor(-1, device=self.device)
 
         # Initializing the rest of the mass balance variables to zero
-        self.volprecip_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volin_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volend_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volAET_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volrech_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volrunoff_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volrunoff_giuh_cm = torch.tensor(
-            0.0, dtype=torch.float64, device=self.device
-        )
-        self.volQ_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volPET_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volon_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        self.volprecip_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        self.volprecip_cm = torch.tensor(0.0, device=self.device)
+        self.volin_cm = torch.tensor(0.0, device=self.device)
+        self.volend_cm = torch.tensor(0.0, device=self.device)
+        self.volAET_cm = torch.tensor(0.0, device=self.device)
+        self.volrech_cm = torch.tensor(0.0, device=self.device)
+        self.volrunoff_cm = torch.tensor(0.0, device=self.device)
+        self.volrunoff_giuh_cm = torch.tensor(0.0, device=self.device)
+        self.volQ_cm = torch.tensor(0.0, device=self.device)
+        self.volPET_cm = torch.tensor(0.0, device=self.device)
+        self.volon_cm = torch.tensor(0.0, device=self.device)
+        self.volprecip_cm = torch.tensor(0.0, device=self.device)
 
         # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
-        self.volon_timestep_cm = torch.tensor(
-            0.0, dtype=torch.float64, device=self.device
-        )
-        self.precip_previous_timestep_cm = torch.tensor(
-            0.0, dtype=torch.float64, device=self.device
-        )
+        self.volon_timestep_cm = torch.tensor(0.0, device=self.device)
+        self.precip_previous_timestep_cm = torch.tensor(0.0, device=self.device)
 
         # setting flux from groundwater_reservoir_to_stream to zero, will be non-zero when groundwater reservoir is added/simulated
-        self.volQ_gw_timestep_cm = torch.tensor(
-            0.0, dtype=torch.float64, device=self.device
-        )
+        self.volQ_gw_timestep_cm = torch.tensor(0.0, device=self.device)
 
     def frozen_factor_hydraulic_conductivity(self) -> None:
         """
@@ -625,23 +598,15 @@ class LGAR:
                 layer_num = self.wetting_fronts[current].layer_num
                 soil_num = self.layer_soil_type[layer_num]
                 soil_properties = self.soils_df.iloc[soil_num]
-                theta_e = torch.tensor(
-                    soil_properties["theta_e"], dtype=torch.float64, device=self.device
-                )
-                theta_r = torch.tensor(
-                    soil_properties["theta_r"], dtype=torch.float64, device=self.device
-                )
+                theta_e = torch.tensor(soil_properties["theta_e"], device=self.device)
+                theta_r = torch.tensor(soil_properties["theta_r"], device=self.device)
                 alpha = torch.tensor(
                     soil_properties["alpha(cm^-1)"],
                     dtype=torch.float64,
                     device=self.device,
                 )
-                m = torch.tensor(
-                    soil_properties["m"], dtype=torch.float64, device=self.device
-                )
-                n = torch.tensor(
-                    soil_properties["n"], dtype=torch.float64, device=self.device
-                )
+                m = torch.tensor(soil_properties["m"], device=self.device)
+                n = torch.tensor(soil_properties["n"], device=self.device)
                 se = calc_se_from_theta(
                     self.wetting_fronts[current].theta, theta_e, theta_r
                 )
@@ -681,23 +646,14 @@ class LGAR:
             layer_num = self.wetting_fronts[current].layer_num
             soil_num = self.layer_soil_type[layer_num]
             soil_properties = self.soils_df.iloc[soil_num]
-            theta_e = torch.tensor(
-                soil_properties["theta_e"], dtype=torch.float64, device=self.device
-            )
-            theta_r = torch.tensor(
-                soil_properties["theta_r"], dtype=torch.float64, device=self.device
-            )
-            alpha = torch.tensor(
-                soil_properties["alpha(cm^-1)"], dtype=torch.float64, device=self.device
-            )
-            m = torch.tensor(
-                soil_properties["m"], dtype=torch.float64, device=self.device
-            )
-            n = torch.tensor(
-                soil_properties["n"], dtype=torch.float64, device=self.device
-            )
+            theta_e = torch.tensor(soil_properties["theta_e"], device=self.device)
+            theta_r = torch.tensor(soil_properties["theta_r"], device=self.device)
+            alpha = torch.tensor(soil_properties["alpha(cm^-1)"], device=self.device)
+            m = torch.tensor(soil_properties["m"], device=self.device)
+            n = torch.tensor(soil_properties["n"], device=self.device)
             ksat_cm_per_h = (
-                torch.tensor(soil_properties["Ks(cm/h)"]) * self.frozen_factor[layer_num]
+                torch.tensor(soil_properties["Ks(cm/h)"])
+                * self.frozen_factor[layer_num]
             )
 
             # TODO VERIFY THAT THIS WORKS!
@@ -798,29 +754,19 @@ class LGAR:
                 )
 
                 soil_properties = self.soils_df.iloc[soil_num]
-                theta_e = torch.tensor(
-                    soil_properties["theta_e"], dtype=torch.float64, device=self.device
-                )
-                theta_r = torch.tensor(
-                    soil_properties["theta_r"], dtype=torch.float64, device=self.device
-                )
+                theta_e = torch.tensor(soil_properties["theta_e"], device=self.device)
+                theta_r = torch.tensor(soil_properties["theta_r"], device=self.device)
                 alpha = torch.tensor(
                     soil_properties["alpha(cm^-1)"],
                     dtype=torch.float64,
                     device=self.device,
                 )
-                m = torch.tensor(
-                    soil_properties["m"], dtype=torch.float64, device=self.device
-                )
-                n = torch.tensor(
-                    soil_properties["n"], dtype=torch.float64, device=self.device
-                )
+                m = torch.tensor(soil_properties["m"], device=self.device)
+                n = torch.tensor(soil_properties["n"], device=self.device)
                 _ksat_cm_per_h_ = (
                     soil_properties["Ks(cm/h)"] * self.frozen_factor[layer_num]
                 )
-                ksat_cm_per_h = torch.tensor(
-                    _ksat_cm_per_h_, dtype=torch.float64, device=self.device
-                )
+                ksat_cm_per_h = torch.tensor(_ksat_cm_per_h_, device=self.device)
 
                 self.wetting_fronts[next_].theta = self.wetting_fronts[current].theta
                 se_k = calc_se_from_theta(
@@ -935,7 +881,9 @@ class LGAR:
                                 se_l, vg_a_k, vg_m_k, vg_n_k
                             )
                             self.wetting_fronts[self.current].theta = calc_theta_from_h(
-                                self.wetting_fronts["current"].psi_cm, soil_properties_k1, self.device
+                                self.wetting_fronts["current"].psi_cm,
+                                soil_properties_k1,
+                                self.device,
                             )
                             self.current = self.current + 1
 
@@ -982,10 +930,10 @@ class LGAR:
 
         precip_mass_to_add = volin_cm  # water to be added to the soil
         bottom_boundary_flux_cm = torch.tensor(
-            0.0, dtype=torch.float64, device=self.device
+            0.0, device=self.device
         )  # water leaving the system through the bottom boundary
         volin_cm = torch.tensor(
-            0.0, dtype=torch.float64, device=self.device
+            0.0, device=self.device
         )  # assuming that all the water can fit in, if not then re-assign the left over water at the end
 
         number_of_wetting_fronts = len(self.wetting_fronts) - 1  # Indexed at 0
@@ -1022,21 +970,11 @@ class LGAR:
             layer_num = self.wetting_fronts[current].layer_num
             soil_num = self.layer_soil_type[layer_num]
             soil_properties = self.soils_df.iloc[soil_num]
-            theta_e = torch.tensor(
-                soil_properties["theta_e"], dtype=torch.float64, device=self.device
-            )
-            theta_r = torch.tensor(
-                soil_properties["theta_r"], dtype=torch.float64, device=self.device
-            )
-            alpha = torch.tensor(
-                soil_properties["alpha(cm^-1)"], dtype=torch.float64, device=self.device
-            )
-            m = torch.tensor(
-                soil_properties["m"], dtype=torch.float64, device=self.device
-            )
-            n = torch.tensor(
-                soil_properties["n"], dtype=torch.float64, device=self.device
-            )
+            theta_e = torch.tensor(soil_properties["theta_e"], device=self.device)
+            theta_r = torch.tensor(soil_properties["theta_r"], device=self.device)
+            alpha = torch.tensor(soil_properties["alpha(cm^-1)"], device=self.device)
+            m = torch.tensor(soil_properties["m"], device=self.device)
+            n = torch.tensor(soil_properties["n"], device=self.device)
 
             layer_num_above = (
                 layer_num if i == 0 else self.wetting_fronts[previous].layer_num
@@ -1050,9 +988,7 @@ class LGAR:
             log.debug(
                 f"Layers (current, above, below) == {layer_num} {layer_num_above} {layer_num_below} \n"
             )
-            free_drainage_demand = torch.tensor(
-                0.0, dtype=torch.float64, device=self.device
-            )
+            free_drainage_demand = torch.tensor(0.0, device=self.device)
             actual_ET_demand = AET_demand_cm
 
             if i < last_wetting_front_index and layer_num_below != layer_num:
@@ -1138,9 +1074,7 @@ class LGAR:
                     theta_old = calc_theta_from_h(
                         psi_cm_old, soil_properties_, self.device
                     )
-                    theta_below_old = torch.tensor(
-                        0.0, dtype=torch.float64, device=self.device
-                    )
+                    theta_below_old = torch.tensor(0.0, device=self.device)
                     local_delta_theta_old = theta_old - theta_below_old
                     if j == 0:
                         layer_thickness = self.cum_layer_thickness[j]
@@ -1279,7 +1213,7 @@ class LGAR:
         self.fix_dry_over_wet_fronts(mass_change)
         log.debug(f"mass change/adjustment (dry_over_wet case) = {mass_change}")
 
-        if torch.abs(mass_change) > 1.0E-7:
+        if torch.abs(mass_change) > 1.0e-7:
             AET_demand_cm = AET_demand_cm - mass_change
 
         """
@@ -1296,7 +1230,9 @@ class LGAR:
             m_k = soil_properties_k["m"]
             n_k = soil_properties_k["n"]
 
-            ksat_cm_per_h_k = self.frozen_factor[front.layer_num] * soil_properties_k["Ks(cm/h)"]
+            ksat_cm_per_h_k = (
+                self.frozen_factor[front.layer_num] * soil_properties_k["Ks(cm/h)"]
+            )
 
             se = calc_se_from_theta(front.theta, theta_e_k, theta_r_k)
             front.psi_cm = calc_h_from_se(se, alpha_k, m_k, n_k)
@@ -1322,11 +1258,24 @@ class LGAR:
 
         dzdt = torch.tensor(0.0, device=self.device)
         for front in self.wetting_fronts:
-            layer_num = front.layer_num # what layer the front is in
-            k_cm_per_h = front.k_cm_per_h #K(theta)
+            layer_num = front.layer_num  # what layer the front is in
+            k_cm_per_h = front.k_cm_per_h  # K(theta)
 
-            if K_cm_per_h <= 0:
-                print(f"K is zero: {layer_num} {K_cm_per_h}")
+            if k_cm_per_h <= 0:
+                log.debug(f"K is zero: layer:{layer_num} {k_cm_per_h}")
                 raise ValueError("K is zero")
 
+            depth_cm = front.depth_cm
+            soil_num = self.layer_soil_type[layer_num]
+            soil_properties = self.soils_df.iloc[soil_num]
+            theta_e = torch.tensor(soil_properties["theta_e"], device=self.device)
+            theta_r = torch.tensor(soil_properties["theta_r"], device=self.device)
+            alpha = torch.tensor(soil_properties["alpha(cm^-1)"], device=self.device)
+            m = torch.tensor(soil_properties["m"], device=self.device)
+            n = torch.tensor(soil_properties["n"], device=self.device)
+            h_min_cm = torch.tensor(soil_properties["h_min_cm"], device=self.device)
+            ksat_cm_per_h = (
+                torch.tensor(soil_properties["Ks(cm/h)"])
+                * self.frozen_factor[layer_num]
+            )
 

@@ -12,7 +12,7 @@ from src.physics.Lgar import LGAR
 from src.physics.soil_functions import calc_aet
 
 log = logging.getLogger("LGARBmi")
-
+torch.set_default_dtype(torch.float64)
 
 class LGARBmi(Bmi):
     """The LGAR BMI class"""
