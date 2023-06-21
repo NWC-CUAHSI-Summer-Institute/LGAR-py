@@ -11,6 +11,7 @@ from typing import Tuple
 from src.data.read import read_forcing_data
 from src.physics.giuh import giuh_convolution_integral
 from src.physics.Lgar import LGAR
+from src.physics.LGAR.dzdt import dzdt_calc
 from src.physics.soil_functions import calc_aet
 from src.physics.WettingFront import move_wetting_fronts
 
@@ -162,17 +163,17 @@ class LGARBmi(Bmi):
         """
         start_time = time.perf_counter()
         for i in range(time_):
-            log.debug(f"Real Time: {time_}")
+            log.debug(f"Real Time: {self.dates[i]}")
             self.set_value("precipitation_mm_per_h", self.precipitation[i])
             self.set_value("PET_mm_per_h", self.PET[i])
-            self.update() #CALLING UPDATE
-            self.set_value("soil_moisture_wetting_fronts", self.soil_moisture_fronts)
-            self.set_value("soil_depth_wetting_fronts", self.soil_thickness_fronts)
-            self.precipitation[i] = self.precipitation[i]
-            self.PET_mm_per_h[i] = self.PET[i]
-            self.soil_moisture_fronts[i] = self.soil_moisture_fronts
-            self.soil_thickness_fronts[i] = self.soil_thickness_fronts
-            self.runoff[i] = self.timestep_runoff
+            self.update() # CALLING UPDATE
+            self.set_value("soil_moisture_wetting_fronts", self._model.soil_moisture_wetting_fronts,)
+            self.set_value("soil_depth_wetting_fronts", self._model.soil_depth_wetting_fronts,)
+            # self.precipitation[i] = self.precipitation[i]
+            # self.PET_mm_per_h[i] = self.PET[i]
+            # self.soil_moisture_fronts[i] = self._model.soil_moisture_wetting_fronts
+            # self.soil_thickness_fronts[i] = self._model.soil_depth_wetting_fronts
+            # self.runoff[i] = self.timestep_runoff
 
         end_time = time.perf_counter()
         log.debug(f"Time Elapsed: {start_time - end_time:.6f} seconds")
@@ -375,7 +376,18 @@ class LGARBmi(Bmi):
             if create_surficial_front and (is_top_wf_saturated is False):
                 # Create a new wetting front if the following is true. Meaning there is no
                 # wetting front in the top layer to accept the water, must create one.
-                raise NotImplementedError
+                temp_pd = torch.tensor(0.0, device=self.device)
+                move_wetting_fronts(
+                    self._model,
+                    subtimestep_h,
+                    temp_pd,
+                    wf_free_drainage_demand,
+                    volend_subtimestep_cm,
+                    num_layers,
+                    AET_subtimestep_cm,
+                )
+
+                # dry_depth =
 
             if ponded_depth_subtimestep_cm > 0 and (create_surficial_front is False):
                 #  infiltrate water based on the infiltration capacity given no new wetting front
@@ -421,8 +433,8 @@ class LGARBmi(Bmi):
 
                 # / *---------------------------------------------------------------------- * /
                 # // calculate derivative(dz / dt) for all wetting fronts
-                self._model.dzdt_calc(
-                    use_closed_form_G, nint, ponded_depth_subtimestep_cm
+                dzdt_calc(
+                    self._model, use_closed_form_G, nint, ponded_depth_subtimestep_cm
                 )
 
                 volend_subtimestep_cm = self._model.calc_mass_balance()

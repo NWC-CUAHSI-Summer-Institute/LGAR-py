@@ -5,7 +5,7 @@ cwd: /Users/taddbindas/projects/LGAR-Torch
 save_name: debugger
 output_dir: ${cwd}/output
 device: cpu
-print_output: True
+print_output: False # Not supported rn
 save_paths:
   precip: ${cwd}/data/save_files/precip.csv
   pet: ${cwd}/data/save_files/PET.csv
