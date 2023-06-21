@@ -611,7 +611,8 @@ class LGAR:
                 and not self.wetting_fronts[next_].to_bottom
             ):
                 current_mass_this_layer = self.wetting_fronts[current].depth_cm * (
-                    self.wetting_fronts[current].theta - self.wetting_fronts[next_].theta
+                    self.wetting_fronts[current].theta
+                    - self.wetting_fronts[next_].theta
                 ) + self.wetting_fronts[next_].depth_cm * (
                     self.wetting_fronts[next_].theta
                     - self.wetting_fronts[next_to_next].theta
@@ -695,45 +696,63 @@ class LGAR:
             n = torch.tensor(
                 soil_properties["n"], dtype=torch.float64, device=self.device
             )
-            _ksat_cm_per_h_ = soil_properties["Ks(cm/h)"] * self.frozen_factor[layer_num]
-            ksat_cm_per_h = torch.tensor(_ksat_cm_per_h_, dtype=torch.float64, device=self.device)
+            ksat_cm_per_h = (
+                torch.tensor(soil_properties["Ks(cm/h)"]) * self.frozen_factor[layer_num]
+            )
 
             # TODO VERIFY THAT THIS WORKS!
             if (
-                self.wetting_fronts[current].depth_cm > self.cum_layer_thickness[layer_num]
-                and (self.wetting_fronts[next_].depth_cm == self.cum_layer_thickness[layer_num])
+                self.wetting_fronts[current].depth_cm
+                > self.cum_layer_thickness[layer_num]
+                and (
+                    self.wetting_fronts[next_].depth_cm
+                    == self.cum_layer_thickness[layer_num]
+                )
                 and (layer_num != (self.num_layers - 1))  # 0-based
             ):
                 current_theta = min(theta_e, self.wetting_fronts[current].theta)
-                overshot_depth = self.wetting_fronts[current].depth_cm - self.wetting_fronts[next_].depth_cm
+                overshot_depth = (
+                    self.wetting_fronts[current].depth_cm
+                    - self.wetting_fronts[next_].depth_cm
+                )
                 soil_num_next = self.layer_soil_type[layer_num + 1]
                 soil_properties_next = self.soils_df.iloc[soil_num]
 
-                se = calc_se_from_theta(self.wetting_fronts[current].theta, theta_e, theta_r)
+                se = calc_se_from_theta(
+                    self.wetting_fronts[current].theta, theta_e, theta_r
+                )
                 self.wetting_fronts[current].psi_cm = calc_h_from_se(se, alpha, m, n)
 
-                self.wetting_fronts[current].k_cm_per_h = calc_k_from_se(se, ksat_cm_per_h, m)
+                self.wetting_fronts[current].k_cm_per_h = calc_k_from_se(
+                    se, ksat_cm_per_h, m
+                )
 
                 theta_new = calc_theta_from_h(
                     self.wetting_fronts[current].psi_cm,
                     soil_properties_next,
-                    self.device
+                    self.device,
                 )
 
-                mbal_correction = overshot_depth * (current_theta - self.wetting_fronts[next_].theta)
+                mbal_correction = overshot_depth * (
+                    current_theta - self.wetting_fronts[next_].theta
+                )
                 mbal_Z_correction = mbal_correction / (
                     theta_new - self.wetting_fronts[next_to_next].theta
                 )
 
                 depth_new = self.cum_layer_thickness[layer_num] + mbal_Z_correction
 
-                self.wetting_fronts[current].depth_cm = self.cum_layer_thickness[layer_num]
+                self.wetting_fronts[current].depth_cm = self.cum_layer_thickness[
+                    layer_num
+                ]
 
                 self.wetting_fronts[next_].theta = theta_new
                 self.wetting_fronts[next_].psi_cm = self.wetting_fronts[current].psi_cm
                 self.wetting_fronts[next_].depth_cm = depth_new
                 self.wetting_fronts[next_].layer_num = layer_num + 1
-                self.wetting_fronts[next_].dzdt_cm_per_h = self.wetting_fronts[current].dzdt_cm_per_h
+                self.wetting_fronts[next_].dzdt_cm_per_h = self.wetting_fronts[
+                    current
+                ].dzdt_cm_per_h
                 self.wetting_fronts[current].dzdt_cm_per_h = 0
                 self.wetting_fronts[current].to_bottom = True
                 self.wetting_fronts[next_].to_bottom = False
@@ -754,7 +773,6 @@ class LGAR:
         log.debug("Domain boundary crossing (bottom flux calc.)")
 
         for i in range(1, len(self.wetting_fronts)):
-
             log.debug(f"Domain boundary crossing | ***** Wetting Front = {i} ******")
 
             bottom_flux_cm_temp = torch.tensor(0.0, device=self.device)
@@ -766,8 +784,18 @@ class LGAR:
             layer_num = self.wetting_fronts[current].layer_num
             soil_num = self.layer_soil_type[layer_num]
 
-            if next_to_next is None and self.wetting_fronts[current].depth_cm > self.cum_layer_thickness[layer_num]:
-                bottom_flux_cm_temp = (self.wetting_fronts[current].theta - self.wetting_fronts[next_].theta) * (self.wetting_fronts[current].depth_cm - self.wetting_fronts[next_].depth_cm)
+            if (
+                next_to_next is None
+                and self.wetting_fronts[current].depth_cm
+                > self.cum_layer_thickness[layer_num]
+            ):
+                bottom_flux_cm_temp = (
+                    self.wetting_fronts[current].theta
+                    - self.wetting_fronts[next_].theta
+                ) * (
+                    self.wetting_fronts[current].depth_cm
+                    - self.wetting_fronts[next_].depth_cm
+                )
 
                 soil_properties = self.soils_df.iloc[soil_num]
                 theta_e = torch.tensor(
@@ -777,7 +805,9 @@ class LGAR:
                     soil_properties["theta_r"], dtype=torch.float64, device=self.device
                 )
                 alpha = torch.tensor(
-                    soil_properties["alpha(cm^-1)"], dtype=torch.float64, device=self.device
+                    soil_properties["alpha(cm^-1)"],
+                    dtype=torch.float64,
+                    device=self.device,
                 )
                 m = torch.tensor(
                     soil_properties["m"], dtype=torch.float64, device=self.device
@@ -785,16 +815,26 @@ class LGAR:
                 n = torch.tensor(
                     soil_properties["n"], dtype=torch.float64, device=self.device
                 )
-                _ksat_cm_per_h_ = soil_properties["Ks(cm/h)"] * self.frozen_factor[layer_num]
-                ksat_cm_per_h = torch.tensor(_ksat_cm_per_h_, dtype=torch.float64, device=self.device)
+                _ksat_cm_per_h_ = (
+                    soil_properties["Ks(cm/h)"] * self.frozen_factor[layer_num]
+                )
+                ksat_cm_per_h = torch.tensor(
+                    _ksat_cm_per_h_, dtype=torch.float64, device=self.device
+                )
 
                 self.wetting_fronts[next_].theta = self.wetting_fronts[current].theta
-                se_k = calc_se_from_theta(self.wetting_fronts[current].theta, theta_e, theta_r)
+                se_k = calc_se_from_theta(
+                    self.wetting_fronts[current].theta, theta_e, theta_r
+                )
                 self.wetting_fronts[next_].psi_cm = calc_h_from_se(se_k, alpha, m, n)
-                self.wetting_fronts[next_].k_cm_per_h = calc_k_from_se(se_k, ksat_cm_per_h, m)
+                self.wetting_fronts[next_].k_cm_per_h = calc_k_from_se(
+                    se_k, ksat_cm_per_h, m
+                )
                 self.wetting_fronts.pop(i - 1)
 
-                log.debug("State after lowest wetting front contributes to flux through the bottom boundary...")
+                log.debug(
+                    "State after lowest wetting front contributes to flux through the bottom boundary..."
+                )
                 for wf in self.wetting_fronts:
                     wf.print()
 
@@ -806,6 +846,108 @@ class LGAR:
                 break
 
         return bottom_flux_cm
+
+    def fix_dry_over_wet_fronts(self, mass_change):
+        """
+        /* The function handles situation of dry over wet wetting fronts
+        mainly happen when AET extracts more water from the upper wetting front
+        and the front gets drier than the lower wetting front */
+        :param mass_change:
+        :return:
+        """
+        log.debug("Fix Dry over Wet Wetting Front...")
+
+        for i in range(len(self.wetting_fronts)):
+            current = i
+            next_ = i + 1 if i + 1 < len(self.wetting_fronts) else None
+
+            if next_ is not None:
+                """
+                // this part fixes case of upper theta less than lower theta due to AET extraction
+                // also handles the case when the current and next wetting fronts have the same theta
+                // and are within the same layer
+                /***************************************************/
+                """
+                #  TODO: TEST THIS!
+                if (
+                    self.wetting_fronts[current].theta
+                    <= self.wetting_fronts[next_].theta
+                    and self.wetting_fronts[current].layer_num
+                    == self.wetting_fronts[next_].layer_num
+                ):
+                    layer_num_k = self.wetting_fronts[current].layer_num
+                    mass_before = self.calc_mass_balance()
+
+                    self.wetting_fronts[i].pop()
+
+                    if layer_num_k > 1:
+                        soil_num_k = self.layer_soil_type[
+                            self.wetting_fronts[current].layer_num
+                        ]
+                        soil_properties_k = self.soils_df.iloc[soil_num_k]
+                        theta_e_k = torch.tensor(
+                            soil_properties_k["theta_e"],
+                            dtype=torch.float64,
+                            device=self.device,
+                        )
+                        theta_r_k = torch.tensor(
+                            soil_properties_k["theta_r"],
+                            dtype=torch.float64,
+                            device=self.device,
+                        )
+                        alpha_k = torch.tensor(
+                            soil_properties_k["alpha(cm^-1)"],
+                            dtype=torch.float64,
+                            device=self.device,
+                        )
+                        m_k = torch.tensor(
+                            soil_properties_k["m"],
+                            dtype=torch.float64,
+                            device=self.device,
+                        )
+                        n_k = torch.tensor(
+                            soil_properties_k["n"],
+                            dtype=torch.float64,
+                            device=self.device,
+                        )
+                        se_k = calc_se_from_theta(
+                            self.wetting_fronts[current].theta, theta_e_k, theta_r_k
+                        )
+
+                        self.wetting_fronts[current].psi_cm = calc_h_from_se(
+                            se_k, alpha_k, m_k, n_k
+                        )
+
+                        while self.wetting_fronts[self.current].layer_num < layer_num_k:
+                            soil_num_k1 = self.layer_soil_type[
+                                self.wetting_fronts[self.current].layer_num
+                            ]
+                            soil_properties_k1 = self.soils_df.iloc[soil_num_k1]
+                            theta_e_k = soil_properties_k1["theta_e"]
+                            theta_r_k = soil_properties_k1["theta_r"]
+                            vg_a_k = soil_properties_k1["alpha(cm^-1)"]
+                            vg_m_k = soil_properties_k1["m"]
+                            vg_n_k = soil_properties_k1["n"]
+                            se_l = calc_se_from_theta(
+                                self.wetting_fronts[current].theta, theta_e_k, theta_r_k
+                            )
+                            self.wetting_fronts[self.current].psi_cm = calc_h_from_se(
+                                se_l, vg_a_k, vg_m_k, vg_n_k
+                            )
+                            self.wetting_fronts[self.current].theta = calc_theta_from_h(
+                                self.wetting_fronts["current"].psi_cm, soil_properties_k1, self.device
+                            )
+                            self.current = self.current + 1
+
+                    """
+                    /* note: mass_before is less when we have wetter front over drier front condition,
+	                 however, lgar_calc_mass_bal returns mass_before > mass_after due to fabs(theta_current - theta_next);
+	                for mass_before the functions compuates more than the actual mass; removing fabs in that function
+	                might be one option, but for now we are adding fabs to mass_change to make sure we added extra water
+	                back to AET after deleting the drier front */
+                    """
+                    mass_after = self.calc_mass_balance()
+                    mass_change = mass_change + torch.abs(mass_after - mass_before)
 
     def move_wetting_fronts(
         self,
@@ -1068,7 +1210,7 @@ class LGAR:
                 assert old_mass > 0.0
 
                 if torch.abs(wf_free_drainage.theta - theta_e_k1) < 1e-15:
-                    current_mass = self.calc_mass_balance(self.cum_layer_thickness)
+                    current_mass = self.calc_mass_balance()
 
                     mass_balance_error = torch.abs(
                         current_mass - mass_timestep
@@ -1105,7 +1247,7 @@ class LGAR:
 
                         wf_free_drainage.depth_cm = depth_new
 
-                        current_mass = self.calc_mass_balance(self.cum_layer_thickness)
+                        current_mass = self.calc_mass_balance()
                         mass_balance_error = torch.abs(current_mass - mass_timestep)
 
         """
@@ -1122,10 +1264,69 @@ class LGAR:
              way to deal with these scenarios. */
         """
 
-        self.merge_wetting_fronts() # Merge
+        self.merge_wetting_fronts()  # Merge
 
-        self.wetting_fronts_cross_layer_boundary() # Cross
+        self.wetting_fronts_cross_layer_boundary()  # Cross
 
-        self.merge_wetting_fronts() # Merge
+        self.merge_wetting_fronts()  # Merge
 
-        bottom_boundary_flux_cm = bottom_boundary_flux_cm + self.wetting_front_cross_domain_boundary()
+        bottom_boundary_flux_cm = (
+            bottom_boundary_flux_cm + self.wetting_front_cross_domain_boundary()
+        )
+
+        volin_cm = bottom_boundary_flux_cm
+        mass_change = torch.tensor(0.0, device=self.device)
+        self.fix_dry_over_wet_fronts(mass_change)
+        log.debug(f"mass change/adjustment (dry_over_wet case) = {mass_change}")
+
+        if torch.abs(mass_change) > 1.0E-7:
+            AET_demand_cm = AET_demand_cm - mass_change
+
+        """
+        /***********************************************/
+        // make sure all psi values are updated
+        """
+
+        for front in self.wetting_fronts:
+            soil_num_k = self.layer_soil_type[front.layer_num]
+            soil_properties_k = self.soils_df.iloc[soil_num_k]
+            theta_e_k = torch.tensor(soil_properties_k["theta_e"], device=self.device)
+            theta_r_k = soil_properties_k["theta_r"]
+            alpha_k = soil_properties_k["alpha(cm^-1)"]
+            m_k = soil_properties_k["m"]
+            n_k = soil_properties_k["n"]
+
+            ksat_cm_per_h_k = self.frozen_factor[front.layer_num] * soil_properties_k["Ks(cm/h)"]
+
+            se = calc_se_from_theta(front.theta, theta_e_k, theta_r_k)
+            front.psi_cm = calc_h_from_se(se, alpha_k, m_k, n_k)
+            front.K_cm_per_h = calc_k_from_se(se, ksat_cm_per_h_k, m_k)
+
+        log.debug(f"Moving/merging wetting fronts done...")
+
+        # Just a check to make sure that, when there is only 1 layer, then the existing wetting front is at the correct depth.
+        if len(self.wetting_fronts) == 1:
+            if self.wetting_fronts[0].depth_cm != self.cum_layer_thickness[0]:
+                self.wetting_fronts[0].depth_cm = self.cum_layer_thickness[0]
+
+    def dzdt_calc(self, use_closed_form_G, nint, ponded_depth_subtimestep_cm):
+        """
+        code to calculate velocity of fronts
+        equations with full description are provided in the lgar paper (currently under review) */
+        :param use_closed_form_G:
+        :param nint:
+        :param ponded_depth_subtimestep_cm:
+        :return:
+        """
+        log.debug(f"Calculating dz/dt")
+
+        dzdt = torch.tensor(0.0, device=self.device)
+        for front in self.wetting_fronts:
+            layer_num = front.layer_num # what layer the front is in
+            k_cm_per_h = front.k_cm_per_h #K(theta)
+
+            if K_cm_per_h <= 0:
+                print(f"K is zero: {layer_num} {K_cm_per_h}")
+                raise ValueError("K is zero")
+
+

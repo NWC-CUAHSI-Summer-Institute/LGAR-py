@@ -171,7 +171,7 @@ class LGARBmi(Bmi):
         AET_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
         volend_timestep_cm = self._model.calc_mass_balance()
         volin_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        volon_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volrech_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
         volrunoff_timestep_cm = self._model.volon_timestep_cm
         surface_runoff_timestep_cm = torch.tensor(
             0.0, dtype=torch.float64, device=self.device
@@ -236,7 +236,7 @@ class LGARBmi(Bmi):
                 precip_subtimestep_cm_per_h * subtimestep_h
             )  # the amount of water on the surface before any infiltration and runoff
             ponded_depth_subtimestep_cm = (
-                ponded_depth_subtimestep_cm + volon_timestep_cm
+                ponded_depth_subtimestep_cm + volin_timestep_cm
             )  # add volume of water on the surface (from the last timestep) to ponded depth as well
 
             precip_subtimestep_cm = (
@@ -356,11 +356,17 @@ class LGARBmi(Bmi):
                     AET_subtimestep_cm,
                 )
 
-
                 volrech_subtimestep_cm = volin_subtimestep_cm
                 volrech_timestep_cm = volrech_timestep_cm + volrech_subtimestep_cm
+                volin_subtimestep_cm = volin_subtimestep_cm_temp #resetting the subtimestep
 
-                volin_subtimestep_cm = volin_subtimestep_cm_temp
+                # / *---------------------------------------------------------------------- * /
+                # // calculate derivative(dz / dt) for all wetting fronts
+                self._model.dzdt_calc(use_closed_form_G, nint, ponded_depth_subtimestep_cm)
+
+                volend_subtimestep_cm = self._model.calc_mass_balance()
+                volend_timestep_cm = volend_subtimestep_cm
+                self._model.precip_previous_timestep_cm = precip_subtimestep_cm
 
     def get_component_name(self) -> str:
         """Name of the component.
@@ -709,7 +715,7 @@ class LGARBmi(Bmi):
             The new value for the specified variable.
         """
         val = self.get_value_ptr(name)
-        val[ind] = src
+        val[inds] = src
 
     # Grid information
     def get_grid_rank(self, grid: int) -> int:
