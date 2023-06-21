@@ -8,7 +8,11 @@ import pandas as pd
 from pathlib import Path
 import torch
 
-from src.physics.soil_functions import calc_theta_from_h
+from src.physics.soil_functions import (
+    calc_theta_from_h,
+    calc_bc_lambda_psib_cm,
+    calc_h_min_cm,
+)
 from src.tests.sanity_checks import DataError
 
 log = logging.getLogger("data.read_forcing")
@@ -77,30 +81,7 @@ def read_soils_file(
         log.error(f"File {soils_file_path} has an invalid type")
         raise DataError
 
-    alpha = torch.tensor(df["alpha(cm^-1)"].to_numpy(), device=device)
-    m = torch.tensor(df["m"].to_numpy(), device=device)
-    n = torch.tensor(df["n"].to_numpy(), device=device)
-    theta_e = torch.tensor(df["theta_e"].to_numpy(), device=device)
-    theta_r = torch.tensor(df["theta_r"].to_numpy(), device=device)
     df["theta_wp"] = calc_theta_from_h(wilting_point_psi_cm, df, device)
-
-    # Given van Genuchten parameters calculate estimates of Brooks & Corey bc_lambda and bc_psib
-    assert not torch.any(n < 1) # van Genuchten parameter n must be greater than 1
-    m_ = 1.0 - (1.0 / n)
-    p_ = 1.0 + (2.0 / m_)
-    df["bc_lambda"] = 2.0 / (p_ - 3.0)
-    df["bc_psib_cm"] = (
-        (p_ + 3.0)
-        * (147.8 + 8.1 * p_ + 0.092 * p_ * p_)
-        / (2.0 * alpha * p_ * (p_ - 1.0) * (55.6 + 7.4 * p_ + p_ * p_))
-    )
-    bc_psib_cm = torch.tensor(df["bc_psib_cm"].to_numpy(), device=device)
-
-    assert torch.any(0.0 < bc_psib_cm)
-
-    # /* this is the effective capillary drive after */
-    # /* Morel-Seytoux et al. (1996) eqn. 13 or 15 */
-    # /* psi should not be less than this value.  */
-    lambda_ = torch.tensor(df["bc_lambda"].to_numpy(), device=device)
-    df["h_min_cm"] = bc_psib_cm * (2.0 + 3.0 / lambda_) / (1.0 + 3.0 / lambda_)
+    df = calc_bc_lambda_psib_cm(df, device)
+    df = calc_h_min_cm(df, device)
     return df

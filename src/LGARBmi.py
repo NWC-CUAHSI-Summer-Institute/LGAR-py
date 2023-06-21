@@ -14,6 +14,7 @@ from src.physics.soil_functions import calc_aet
 log = logging.getLogger("LGARBmi")
 torch.set_default_dtype(torch.float64)
 
+
 class LGARBmi(Bmi):
     """The LGAR BMI class"""
 
@@ -166,21 +167,18 @@ class LGARBmi(Bmi):
         subcycles = self._model.forcing_interval
         num_layers = self._model.num_layers
 
-        precip_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        PET_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        AET_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        precip_timestep_cm = torch.tensor(0.0, device=self.device)
+        PET_timestep_cm = torch.tensor(0.0, device=self.device)
+        AET_timestep_cm = torch.tensor(0.0, device=self.device)
         volend_timestep_cm = self._model.calc_mass_balance()
-        volin_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        volrech_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        volrunoff_timestep_cm = self._model.volon_timestep_cm
-        surface_runoff_timestep_cm = torch.tensor(
-            0.0, dtype=torch.float64, device=self.device
-        )
-        volrunoff_giuh_timestep_cm = torch.tensor(
-            0.0, dtype=torch.float64, device=self.device
-        )
-        volQ_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        volQ_gw_timestep_cm = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        volin_timestep_cm = torch.tensor(0.0, device=self.device)
+        volon_timestep_cm = self._model.volon_timestep_cm
+        volrunoff_timestep_cm = torch.tensor(0.0, device=self.device)
+        volrech_timestep_cm = torch.tensor(0.0, device=self.device)
+        surface_runoff_timestep_cm = torch.tensor(0.0, device=self.device)
+        volrunoff_giuh_timestep_cm = torch.tensor(0.0, device=self.device)
+        volQ_timestep_cm = torch.tensor(0.0, device=self.device)
+        volQ_gw_timestep_cm = torch.tensor(0.0, device=self.device)
 
         subtimestep_h = self._model.timestep_h
         nint = self._model.nint
@@ -188,16 +186,12 @@ class LGARBmi(Bmi):
         use_closed_form_G = self._model.use_closed_form_G
 
         AET_thresh_Theta = torch.tensor(
-            self.cfg.constants.AET_thresh_Theta, dtype=torch.float64, device=self.device
+            self.cfg.constants.AET_thresh_Theta, device=self.device
         )
-        AET_expon = torch.tensor(
-            self.cfg.constants.AET_expon, dtype=torch.float64, device=self.device
-        )
+        AET_expon = torch.tensor(self.cfg.constants.AET_expon, device=self.device)
 
         volend_subtimestep_cm = volend_timestep_cm
-        volQ_gw_subtimestep_cm = torch.tensor(
-            0.0, dtype=torch.float64, device=self.device
-        )
+        volQ_gw_subtimestep_cm = torch.tensor(0.0, device=self.device)
 
         ponded_depth_max_cm = self._model.ponded_depth_max_cm
 
@@ -214,8 +208,8 @@ class LGARBmi(Bmi):
         assert hourly_precip_cm >= 0.0
         assert hourly_PET_cm >= 0.0
 
-        time_s = torch.tensor(0.0, dtype=torch.float64, device=self.device)
-        timesteps = torch.tensor(0.0, dtype=torch.float64, device=self.device)
+        time_s = torch.tensor(0.0, device=self.device)
+        timesteps = torch.tensor(0.0, device=self.device)
         for i in range(int(subcycles)):
             """
             /* Note unit conversion:
@@ -244,24 +238,12 @@ class LGARBmi(Bmi):
             )  # rate x dt = amount (portion of the water on the suface for model's timestep [cm])
             PET_subtimestep_cm = PET_subtimestep_cm_per_h * subtimestep_h
 
-            AET_subtimestep_cm = torch.tensor(
-                0.0, dtype=torch.float64, device=self.device
-            )
-            volstart_subtimestep_cm = torch.tensor(
-                0.0, dtype=torch.float64, device=self.device
-            )
-            volin_subtimestep_cm = torch.tensor(
-                0.0, dtype=torch.float64, device=self.device
-            )
-            volrunoff_subtimestep_cm = torch.tensor(
-                0.0, dtype=torch.float64, device=self.device
-            )
-            volrech_subtimestep_cm = torch.tensor(
-                0.0, dtype=torch.float64, device=self.device
-            )
-            surface_runoff_subtimestep_cm = torch.tensor(
-                0.0, dtype=torch.float64, device=self.device
-            )
+            AET_subtimestep_cm = torch.tensor(0.0, device=self.device)
+            volstart_subtimestep_cm = torch.tensor(0.0, device=self.device)
+            volin_subtimestep_cm = torch.tensor(0.0, device=self.device)
+            volrunoff_subtimestep_cm = torch.tensor(0.0, device=self.device)
+            volrech_subtimestep_cm = torch.tensor(0.0, device=self.device)
+            surface_runoff_subtimestep_cm = torch.tensor(0.0, device=self.device)
             precip_previous_subtimestep_cm = self._model.precip_previous_timestep_cm
 
             # Calculate AET from PET if PET is non-zero
@@ -326,12 +308,8 @@ class LGARBmi(Bmi):
                 if ponded_depth_subtimestep_cm < ponded_depth_max_cm:
                     # volrunoff_timestep_cm = volrunoff_timestep_cm + 0
                     volon_subtimestep_cm = ponded_depth_subtimestep_cm
-                    ponded_depth_subtimestep_cm = torch.tensor(
-                        0.0, dtype=torch.float64, device=self.device
-                    )
-                    volrunoff_subtimestep_cm = torch.tensor(
-                        0.0, dtype=torch.float64, device=self.device
-                    )
+                    ponded_depth_subtimestep_cm = torch.tensor(0.0, device=self.device)
+                    volrunoff_subtimestep_cm = torch.tensor(0.0, device=self.device)
                 else:
                     volrunoff_subtimestep_cm = (
                         ponded_depth_subtimestep_cm - ponded_depth_max_cm
@@ -358,15 +336,40 @@ class LGARBmi(Bmi):
 
                 volrech_subtimestep_cm = volin_subtimestep_cm
                 volrech_timestep_cm = volrech_timestep_cm + volrech_subtimestep_cm
-                volin_subtimestep_cm = volin_subtimestep_cm_temp #resetting the subtimestep
+                volin_subtimestep_cm = (
+                    volin_subtimestep_cm_temp  # resetting the subtimestep
+                )
 
                 # / *---------------------------------------------------------------------- * /
                 # // calculate derivative(dz / dt) for all wetting fronts
-                self._model.dzdt_calc(use_closed_form_G, nint, ponded_depth_subtimestep_cm)
+                self._model.dzdt_calc(
+                    use_closed_form_G, nint, ponded_depth_subtimestep_cm
+                )
 
                 volend_subtimestep_cm = self._model.calc_mass_balance()
                 volend_timestep_cm = volend_subtimestep_cm
                 self._model.precip_previous_timestep_cm = precip_subtimestep_cm
+
+                # /*----------------------------------------------------------------------*/
+                # // mass balance at the subtimestep (local mass balance)
+
+                local_mb = (
+                    volstart_subtimestep_cm
+                    + precip_subtimestep_cm
+                    + volon_timestep_cm
+                    - volrunoff_subtimestep_cm
+                    - AET_subtimestep_cm
+                    - volon_subtimestep_cm
+                    - volrech_subtimestep_cm
+                    - volend_subtimestep_cm
+                )
+
+                AET_timestep_cm = AET_timestep_cm + AET_subtimestep_cm
+                volon_timestep_cm = volon_subtimestep_cm  # surface ponded water at the end of the timestep
+
+                # /*----------------------------------------------------------------------*/
+                # // compute giuh runoff for the subtimestep
+                raise NotImplementedError
 
     def get_component_name(self) -> str:
         """Name of the component.
