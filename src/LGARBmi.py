@@ -165,13 +165,13 @@ class LGARBmi(Bmi):
             log.debug(f"Real Time: {time_}")
             self.set_value("precipitation_mm_per_h", self.precipitation[i])
             self.set_value("PET_mm_per_h", self.PET[i])
-            self.update()
-            sm_wetting_fronts = self.get_value_ptr("soil_moisture_wetting_fronts")
-            thickness_wetting_fronts = self.get_value_ptr("soil_depth_wetting_fronts")
+            self.update() #CALLING UPDATE
+            self.set_value("soil_moisture_wetting_fronts", self.soil_moisture_fronts)
+            self.set_value("soil_depth_wetting_fronts", self.soil_thickness_fronts)
             self.precipitation[i] = self.precipitation[i]
             self.PET_mm_per_h[i] = self.PET[i]
-            self.soil_moisture_fronts[i] = sm_wetting_fronts
-            self.soil_thickness_fronts[i] = thickness_wetting_fronts
+            self.soil_moisture_fronts[i] = self.soil_moisture_fronts
+            self.soil_thickness_fronts[i] = self.soil_thickness_fronts
             self.runoff[i] = self.timestep_runoff
 
         end_time = time.perf_counter()
@@ -318,18 +318,12 @@ class LGARBmi(Bmi):
                 precip_subtimestep_cm_per_h * subtimestep_h
             )  # rate x dt = amount (portion of the water on the suface for model's timestep [cm])
             PET_subtimestep_cm = PET_subtimestep_cm_per_h * subtimestep_h
-
-            AET_subtimestep_cm = torch.tensor(0.0, device=self.device)
-            volstart_subtimestep_cm = torch.tensor(0.0, device=self.device)
             volin_subtimestep_cm = torch.tensor(0.0, device=self.device)
-            volrunoff_subtimestep_cm = torch.tensor(0.0, device=self.device)
-            volrech_subtimestep_cm = torch.tensor(0.0, device=self.device)
-            surface_runoff_subtimestep_cm = torch.tensor(0.0, device=self.device)
             precip_previous_subtimestep_cm = self._model.precip_previous_timestep_cm
 
             # Calculate AET from PET if PET is non-zero
             if PET_subtimestep_cm_per_h > 0.0:
-                AET_subtimestep = calc_aet(
+                AET_subtimestep_cm = calc_aet(
                     self.wetting_fronts[self._model.current],  # TODO SET THIS VAR
                     PET_subtimestep_cm_per_h,
                     subtimestep_h,
@@ -338,6 +332,8 @@ class LGARBmi(Bmi):
                     self.soils_df,
                     self.device,
                 )
+            else:
+                AET_subtimestep_cm = torch.tensor(0.0, device=self.device)
 
             precip_timestep_cm = precip_timestep_cm + precip_subtimestep_cm
             PET_timestep_cm = PET_timestep_cm + torch.clamp(
@@ -505,8 +501,52 @@ class LGARBmi(Bmi):
                 self._model.wetting_fronts[0].depth_cm > 0.0
             )  # check on negative layer depth --> move this to somewhere else AJ (later)
             # TODO ASK ABOUT LASAM STANDALONE
-        total_runoff = self._model.volQ_cm
-        return volrunoff_subtimestep_cm
+
+        for i in range(self._model.num_wetting_fronts):
+            self._model.soil_moisture_wetting_fronts[i] = self._model.wetting_fronts[i].theta
+            self._model.soil_depth_wetting_fronts[i] = self._model.wetting_fronts[i].depth_cm * self.cfg.units.cm_to_m
+
+        log.debug("Wetting fronts:")
+        for wf in self._model.wetting_fronts:
+            wf.print()
+
+        # self._model.volprecip_timestep_cm = precip_timestep_cm
+        #         # self.volin_timestep_cm = volin_timestep_cm
+        #         # self._model.volon_timestep_cm = volon_timestep_cm
+        #         # self._model.volend_timestep_cm = volend_timestep_cm
+        #         # self._model.volAET_timestep_cm = AET_timestep_cm
+        #         # self._model.volrech_timestep_cm = volrech_timestep_cm
+        #         # self._model.volrunoff_timestep_cm = volrunoff_timestep_cm
+        #         # self._model.volQ_timestep_cm = volQ_timestep_cm
+        #         # self._model.volQ_gw_timestep_cm = volQ_gw_timestep_cm
+        #         # self._model.volPET_timestep_cm = PET_timestep_cm
+        #         # self._model.volrunoff_giuh_timestep_cm = volrunoff_giuh_timestep_cm
+
+        self._model.volprecip_cm = self._model.volprecip_cm + precip_timestep_cm
+        self._model.volin_cm = self._model.volin_cm + volin_timestep_cm
+        self._model.volon_cm = volon_timestep_cm
+        self._model.volend_cm = volend_timestep_cm
+        self._model.volAET_cm = self._model.volAET_cm + AET_timestep_cm
+        self._model.volrech_cm = self._model.volrech_cm + volrech_timestep_cm
+        self._model.volrunoff_cm = self._model.volrunoff_cm + volrunoff_timestep_cm
+        self._model.volQ_cm = self._model.volQ_cm + volQ_timestep_cm
+        self._model.volQ_gw_cm = self._model.volQ_gw_cm + volQ_gw_timestep_cm
+        self._model.volPET_cm = self._model.volPET_cm + PET_timestep_cm
+        self._model.volrunoff_giuh_cm = self._model.volrunoff_giuh_cm + volrunoff_giuh_timestep_cm
+
+        # TODO: Probably Never lol XD
+        #  // converted values, a struct local to the BMI and has bmi output variables
+        # bmi_unit_conv.mass_balance_m        = state->lgar_mass_balance.local_mass_balance * state->units.cm_to_m;
+        # bmi_unit_conv.volprecip_timestep_m  = precip_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volin_timestep_m      = volin_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volend_timestep_m     = volend_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volAET_timestep_m     = AET_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volrech_timestep_m    = volrech_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volrunoff_timestep_m  = volrunoff_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volQ_timestep_m       = volQ_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volQ_gw_timestep_m    = volQ_gw_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volPET_timestep_m     = PET_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volrunoff_giuh_timestep_m = volrunoff_giuh_timestep_cm * state->units.cm_to_m;
 
     def get_component_name(self) -> str:
         """Name of the component.
