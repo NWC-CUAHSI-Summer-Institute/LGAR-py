@@ -5,6 +5,12 @@ cwd: /Users/taddbindas/projects/LGAR-Torch
 save_name: debugger
 output_dir: ${cwd}/output
 device: cpu
+print_output: True
+save_paths:
+  precip: ${cwd}/data/save_files/precip.csv
+  pet: ${cwd}/data/save_files/PET.csv
+  soil_moisture: ${cwd}/data/save_files/soil_moisture.csv
+  soil_thickness: ${cwd}/data/save_files/soil_thickness.csv
 variables:
   num_soil_types: 15  # must be less than or equal to MAX_NUM_SOIL_TYPES
   num_soil_layers: 3  # must be less than or equal to MAX_NUM_SOIL_LAYERS

@@ -191,13 +191,6 @@ class LGAR:
         self.calc_mass_balance()
 
         # Initializing initial states:
-        # initially we start with a dry surface (no surface ponding)
-        self.ponded_depth_cm = torch.tensor(0, device=self.device)
-        # No. of spatial intervals used in trapezoidal integration to compute G
-        self.nint = 120  # hacked, not needed to be an input option
-        self.num_wetting_fronts = self.num_layers
-        self.time_s = 0.0
-        self.timesteps = 0.0
         self.initialize_starting_parameters(cfg)
 
         # Creating a pointer to the correct wetting front index
@@ -382,6 +375,13 @@ class LGAR:
 
     def initialize_starting_parameters(self, cfg: DictConfig) -> None:
         # Finish initializing variables
+        # initially we start with a dry surface (no surface ponding)
+        self.ponded_depth_cm = torch.tensor(0, device=self.device)
+        # No. of spatial intervals used in trapezoidal integration to compute G
+        self.nint = 120  # hacked, not needed to be an input option
+        self.num_wetting_fronts = self.num_layers
+        self.time_s = 0.0
+        self.timesteps = 0.0
         self.shape = [self.num_layers, self.num_wetting_fronts]
         self.num_wetting_fronts = (
             self.num_layers

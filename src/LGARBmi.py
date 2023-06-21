@@ -1,4 +1,5 @@
 """a file to define the LGARBMI class"""
+import pandas as pd
 from bmipy import Bmi
 import logging
 from omegaconf import OmegaConf, DictConfig
@@ -58,6 +59,14 @@ class LGARBmi(Bmi):
         self.nsteps = None
         self._time_units = "s"
 
+        # Setting the variables that track output vars
+        self.precipitation = None
+        self.PET_mm_per_h = None
+        self.soil_moisture_fronts = None
+        self.soil_thickness_fronts = None
+        self.runoff = None
+        self.timestep_runoff = None
+
     def initialize(self, config_file: str) -> None:
         """Perform startup tasks for the model.
 
@@ -87,6 +96,35 @@ class LGARBmi(Bmi):
 
         self._model = LGAR(self.cfg)
         self.dates, self.precipitation, self.PET = read_forcing_data(self.cfg)
+
+        self._end_time = self._model.endtime_s.item()
+        self.timestep = (
+            self._model.forcing_resolution_h.item() * self.cfg.units.hr_to_sec
+        )  # Converting from hours to seconds
+        self.nsteps = int(self._end_time / self.timestep)
+
+        assert self.nsteps <= int(self.precipitation.shape[0])
+        if self.cfg.print_output:
+            log.debug("Variables are written to file: data_variables.csv")
+            log.debug("Wetting fronts state is written to file: data_layers.csv")
+
+        self.num_giuh_ordinates = self._model.num_giuh_ordinates
+        self.giuh_runoff_queue = torch.zeros(
+            [self.num_giuh_ordinates], device=self.device
+        )
+
+        self.local_mass_balance = None
+
+        self.precipitation = torch.zeros([self.nsteps])
+        self.PET_mm_per_h = torch.zeros([self.nsteps])
+        self.soil_moisture_fronts = torch.zeros(
+            [self._model.num_layers, self.nsteps], device=self.device
+        )
+        self.soil_thickness_fronts = torch.zeros(
+            [self._model.num_layers, self.nsteps], device=self.device
+        )
+        self.runoff = torch.zeros([self.nsteps])
+
         self._values = {
             "precipitation_mm_per_h": self._model.precipitation_mm_per_h,
             "PET_mm_per_h": self._model.PET_mm_per_h,
@@ -100,21 +138,6 @@ class LGARBmi(Bmi):
             "soil_depth_wetting_fronts": "m",
         }
 
-        self._end_time = self.cfg.data.endtime
-        self.timestep = self.cfg.data.timestep
-        self.nsteps = int(self._end_time / self.timestep)
-
-        assert self.nsteps <= int(self.precipitation.shape[0])
-        log.debug("Variables are written to file: data_variables.csv")
-        log.debug("Wetting fronts state is written to file: data_layers.csv")
-
-        self.num_giuh_ordinates = self._model.num_giuh_ordinates
-        self.giuh_runoff_queue = torch.zeros(
-            [self.num_giuh_ordinates], device=self.device
-        )
-
-        self.local_mass_balance = None
-
     def update(self) -> None:
         """Advance model state by one time step.
 
@@ -127,9 +150,9 @@ class LGARBmi(Bmi):
         if self._model.sft_coupled:
             self._model.frozen_factor_hydraulic_conductivity()
 
-        self.run_cycle()
+        self.timestep_runoff = self.run_cycle()
 
-    def update_until(self, time: float) -> None:
+    def update_until(self, time_: float) -> None:
         """Advance model state until the given time.
 
         Parameters
@@ -137,11 +160,22 @@ class LGARBmi(Bmi):
         time : float
             A model time later than the current model time.
         """
-        for i in range(time):
-            log.debug(f"Real Time: {time}")
-            self.set_value("precipitation_mm_per_h", self.precipitation[time])
-            self.set_value("PET_mm_per_h", self.PET[time])
+        start_time = time.perf_counter()
+        for i in range(time_):
+            log.debug(f"Real Time: {time_}")
+            self.set_value("precipitation_mm_per_h", self.precipitation[i])
+            self.set_value("PET_mm_per_h", self.PET[i])
             self.update()
+            sm_wetting_fronts = self.get_value_ptr("soil_moisture_wetting_fronts")
+            thickness_wetting_fronts = self.get_value_ptr("soil_depth_wetting_fronts")
+            self.precipitation[i] = self.precipitation[i]
+            self.PET_mm_per_h[i] = self.PET[i]
+            self.soil_moisture_fronts[i] = sm_wetting_fronts
+            self.soil_thickness_fronts[i] = thickness_wetting_fronts
+            self.runoff[i] = self.timestep_runoff
+
+        end_time = time.perf_counter()
+        log.debug(f"Time Elapsed: {start_time - end_time:.6f} seconds")
 
     def finalize(self) -> None:
         """Perform tear-down tasks for the model.
@@ -150,7 +184,24 @@ class LGARBmi(Bmi):
         loop. This typically includes deallocating memory, closing files and
         printing reports.
         """
-        self._end_time = time.perf_counter()
+        # Saving results to csv
+        if self.cfg.print_output:
+            df_precip = pd.DataFrame(
+                self.precipitation.detach().numpy(), columns="Precipitation (mm/hr)"
+            )
+            df_pet = pd.DataFrame(
+                self.PET_mm_per_h.detach().numpy(), columns="Precipitation (mm/hr)"
+            )
+            df_moisture = pd.DataFrame(self.soil_moisture_fronts.detach().numpy())
+            df_thickness = pd.DataFrame(self.soil_thickness_fronts.detach().numpy())
+            df_precip.to_csv(self.cfg.save_paths.precip)
+            df_pet.to_csv(self.cfg.save_paths.pet)
+            df_moisture.to_csv(self.cfg.save_paths.soil_moisture)
+            df_thickness.to_csv(self.cfg.save_paths.soil_thickness)
+
+        # Authors were confused about this
+        # volend_giuh_cm = torch.sum(self._model.giuh_runoff_queue_cm)
+
         global_error_cm = (
             self._model.volstart_cm
             + self._model.volprecip_cm
@@ -168,16 +219,18 @@ class LGARBmi(Bmi):
             f"Time (sec)                 = {self._end_time -self._start_time:.6f} \n"
         )
         log.info(f"-------------------------- Mass balance ------------------- \n")
-        log.info(f"initial water in soil      = {self._model.volstart_cm} cm\n")
-        log.info(f"total precipitation input  = {self._model.volprecip_cm}cm\n")
-        log.info(f"total infiltration         = {self._model.volin_cm} cm\n")
-        log.info(f"final water in soil        = {self._model.volend_cm} cm\n")
-        log.info(f"water remaining on surface = {self._model.volon_cm} cm\n")
-        log.info(f"surface runoff             = {self._model.volrunoff_cm} cm\n")
-        log.info(f"total percolation          = {self._model.volrech_cm} cm\n")
-        log.info(f"total AET                  = {self._model.volAET_cm} cm\n")
-        log.info(f"total PET                  = {self._model.volPET_cm} cm\n")
-        log.info(f"global balance             = {global_error_cm} cm\n")
+        log.info(f"Initial water in soil      = {self._model.volstart_cm} cm\n")
+        log.info(f"Total precipitation        = {self._model.volprecip_cm}cm\n")
+        log.info(f"Total Infiltration         = {self._model.volin_cm} cm\n")
+        log.info(f"Final Water in Soil        = {self._model.volend_cm} cm\n")
+        log.info(f"Surface ponded water       = {self._model.volon_cm} cm\n")
+        log.info(f"Surface runoff             = {self._model.volrunoff_cm} cm\n")
+        log.info(f"GIUH runoff                = {self._model.volrunoff_giuh} cm\n")
+        log.info(f"Total percolation          = {self._model.volrech_cm} cm\n")
+        log.info(f"Total AET                  = {self._model.volAET_cm} cm\n")
+        log.info(f"Total PET                  = {self._model.volPET_cm} cm\n")
+        log.info(f"Total discharge (Q)        = {self._model.total_Q_cm} cm\n")
+        log.info(f"Global Balance             = {global_error_cm} cm\n")
 
     def run_cycle(self):
         """
@@ -452,8 +505,8 @@ class LGARBmi(Bmi):
                 self._model.wetting_fronts[0].depth_cm > 0.0
             )  # check on negative layer depth --> move this to somewhere else AJ (later)
             # TODO ASK ABOUT LASAM STANDALONE
-
-        self._model.initialize_starting_parameters(self.cfg)
+        total_runoff = self._model.volQ_cm
+        return volrunoff_subtimestep_cm
 
     def get_component_name(self) -> str:
         """Name of the component.
