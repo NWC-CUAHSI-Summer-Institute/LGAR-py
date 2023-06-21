@@ -11,6 +11,7 @@ from src.data.read import read_forcing_data
 from src.physics.giuh import giuh_convolution_integral
 from src.physics.Lgar import LGAR
 from src.physics.soil_functions import calc_aet
+from src.physics.WettingFront import move_wetting_fronts
 
 log = logging.getLogger("LGARBmi")
 torch.set_default_dtype(torch.float64)
@@ -137,6 +138,7 @@ class LGARBmi(Bmi):
             A model time later than the current model time.
         """
         for i in range(time):
+            log.debug(f"Real Time: {time}")
             self.set_value("precipitation_mm_per_h", self.precipitation[time])
             self.set_value("PET_mm_per_h", self.PET[time])
             self.update()
@@ -219,6 +221,7 @@ class LGARBmi(Bmi):
         hourly_PET_cm = (
             self.get_value_ptr("PET_mm_per_h") * self.cfg.units.mm_to_cm
         )  # rate [cm/hour]
+        log.debug("*** LASAM BMI Update... *** ")
         log.debug(f"Pr [cm/hr] (timestep) = {hourly_precip_cm}")
         log.debug(f"Pr [cm/hr] (timestep) = {hourly_PET_cm}")
 
@@ -240,6 +243,13 @@ class LGARBmi(Bmi):
             """
             time_s = time_s + (subtimestep_h * self.cfg.units.hr_to_sec)
             timesteps = timesteps + 1
+
+            log.debug(
+                f"BMI Update |---------------------------------------------------------------|"
+            )
+            log.debug(
+                f"BMI Update |Timesteps = {timesteps} Time [h] = {(time_s / 3600):.4f} Subcycle = {(i + 1):.4f} of {subcycles:.4f}"
+            )
 
             precip_subtimestep_cm_per_h = hourly_precip_cm
             PET_subtimestep_cm_per_h = hourly_PET_cm
@@ -343,7 +353,9 @@ class LGARBmi(Bmi):
                 # so no need to move them here. */
                 volin_subtimestep_cm_temp = volin_subtimestep_cm
 
-                self._model.move_wetting_fronts(
+                time.sleep(0.1)  # Trying to remove segfaults
+                move_wetting_fronts(
+                    self._model,
                     subtimestep_h,
                     volin_subtimestep_cm,
                     wf_free_drainage_demand,
