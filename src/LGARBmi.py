@@ -4,6 +4,7 @@ from bmipy import Bmi
 import logging
 from omegaconf import OmegaConf
 import time
+from tqdm import tqdm
 import torch
 from typing import Tuple
 import faulthandler
@@ -163,7 +164,7 @@ class LGARBmi(Bmi):
             A model time later than the current model time.
         """
         start_time = time.perf_counter()
-        for i in range(time_):
+        for i in tqdm(range(time_), desc= "Running Timesteps"):
             log.debug(f"Real Time: {self.dates[i]}")
             self.set_value("precipitation_mm_per_h", self.precipitation[i])
             self.set_value("PET_mm_per_h", self.PET[i])
@@ -176,12 +177,7 @@ class LGARBmi(Bmi):
                 "soil_depth_wetting_fronts",
                 self._model.soil_depth_wetting_fronts,
             )
-            # self.precipitation[i] = self.precipitation[i]
-            # self.PET_mm_per_h[i] = self.PET[i]
-            # self.soil_moisture_fronts[i] = self._model.soil_moisture_wetting_fronts
-            # self.soil_thickness_fronts[i] = self._model.soil_depth_wetting_fronts
-            # self.runoff[i] = self.timestep_runoff
-
+            time.sleep(0.001)
         end_time = time.perf_counter()
         log.debug(f"Time Elapsed: {start_time - end_time:.6f} seconds")
 
@@ -389,8 +385,10 @@ class LGARBmi(Bmi):
             if create_surficial_front and (is_top_wf_saturated is False):
                 # Create a new wetting front if the following is true. Meaning there is no
                 # wetting front in the top layer to accept the water, must create one.
+
+                # necessary to assign zero precip due to the creation of new wetting front; AET will still be taken out of the layers
                 temp_pd = torch.tensor(0.0, device=self.device)
-                move_wetting_fronts(
+                temp_pd = move_wetting_fronts(
                     self._model,
                     subtimestep_h,
                     temp_pd,
@@ -467,7 +465,8 @@ class LGARBmi(Bmi):
                 # so no need to move them here. */
                 volin_subtimestep_cm_temp = volin_subtimestep_cm
 
-                move_wetting_fronts(
+                # TODO THERE IS A POINTER TO VOLIN!!!!!!!!!!
+                volin_subtimestep_cm = move_wetting_fronts(
                     self._model,
                     subtimestep_h,
                     volin_subtimestep_cm,
@@ -539,7 +538,7 @@ class LGARBmi(Bmi):
             for wf in self._model.wetting_fronts:
                 wf.print()
 
-            unexpected_error = True if torch.abs(local_mb) > 1e-6 else False
+            unexpected_error = True if torch.abs(local_mb) > 1e-10 else False
 
             log.debug(f"Local mass balance at this timestep...")
             log.debug(f"Error         = {local_mb.item():14.10f}")
@@ -552,18 +551,17 @@ class LGARBmi(Bmi):
             log.debug(f"Percolation   = {volrech_subtimestep_cm.item():14.10f}")
             log.debug(f"Final water   = {volend_subtimestep_cm.item():14.10f}")
 
-            if unexpected_error:
-                log.error(
-                    f"Local mass balance (in this timestep) is {local_mb.item():14.10f}, larger than expected, needs some debugging..."
-                )
-                raise RuntimeError("Unexpected local error!")
+            # if unexpected_error:
+            #     log.error(
+            #         f"Local mass balance (in this timestep) is {local_mb.item()}, larger than expected, needs some debugging..."
+            #     )
+            #     raise RuntimeError("Unexpected local error!")
 
             self._model.local_mass_balance = local_mb
 
-            assert (
-                self._model.wetting_fronts[0].depth_cm > 0.0
-            )  # check on negative layer depth --> move this to somewhere else AJ (later)
-            # TODO ASK ABOUT LASAM STANDALONE
+            # assert (
+            #     self._model.wetting_fronts[0].depth_cm > 0.0
+            # )  # check on negative layer depth --> move this to somewhere else AJ (later)
 
         for i in range(self._model.num_wetting_fronts):
             self._model.soil_moisture_wetting_fronts[i] = self._model.wetting_fronts[

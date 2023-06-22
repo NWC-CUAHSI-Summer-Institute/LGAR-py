@@ -501,6 +501,8 @@ def move_wetting_fronts(
         if lgar.wetting_fronts[0].depth_cm != lgar.cum_layer_thickness[0]:
             lgar.wetting_fronts[0].depth_cm = lgar.cum_layer_thickness[0]
 
+    return volin_cm
+
 
 def deepest_wetting_front(
     lgar, current, next_, soil_properties, layer_num, layer_num_below
