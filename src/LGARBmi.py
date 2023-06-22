@@ -427,6 +427,7 @@ class LGARBmi(Bmi):
                     volin_subtimestep_cm,
                     ponded_depth_subtimestep_cm,
                 ) = insert_water(
+                    self._model,
                     use_closed_form_G,
                     nint,
                     subtimestep_h,

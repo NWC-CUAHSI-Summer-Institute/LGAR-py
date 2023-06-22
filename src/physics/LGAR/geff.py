@@ -59,11 +59,13 @@ def calc_geff(use_closed_form_G, soils_data, theta_1, theta_2, nint, device):
             # commenting out as this is not used in the Python version
             return soils_data["h_min_cm"]
 
+        se_inverse_i = calc_se_from_h(h_i, soils_data['alpha'], soils_data['m'], soils_data['n'])
         log.debug(
-            f"Se_i = {se_i,},  Se_inverse = {calc_se_from_h(h_i, soils_data['alpha'], soils_data['m'], soils_data['n'])}"
+            f"Se_i = {se_i.item()},  Se_inverse = {se_inverse_i.item()}"
         )
+        se_inverse_f = calc_se_from_h(h_f, soils_data['alpha'], soils_data['m'], soils_data['n'])
         log.debug(
-            f"Se_f = {se_f,},  Se_inverse = {calc_se_from_h(h_f, soils_data['alpha'], soils_data['m'], soils_data['n'])}"
+            f"Se_f = {se_f.item()},  Se_inverse = {se_inverse_f.item()}"
         )
 
         # nint = number of "dh" intervals to integrate over using trapezoidal rule
@@ -88,7 +90,7 @@ def calc_geff(use_closed_form_G, soils_data, theta_1, theta_2, nint, device):
         geff = torch.abs(
             geff / soils_data["ksat_cm_per_h"]
         )  # by convention Geff is a positive quantity
-        log.debug(f"Capillary suction (G) = {geff}")
+        log.debug(f"Capillary suction (G) = {geff.item()}")
     else:
         se_f = calc_se_from_theta(
             theta_1, soils_data["theta_e"], soils_data["theta_r"]
