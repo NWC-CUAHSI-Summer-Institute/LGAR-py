@@ -13,7 +13,7 @@ log = logging.getLogger("physics.LGAR.Geff")
 torch.set_default_dtype(torch.float64)
 
 
-def calc_geff(use_closed_form_G, soils_data, theta, nint, device):
+def calc_geff(use_closed_form_G, soils_data, theta_1, theta_2, nint, device):
     """
     /***********************************************************************************************/
     /* This function calculates the unsaturated capillary drive Geff(0i,0o)  (note "0" are thetas) */
@@ -25,11 +25,12 @@ def calc_geff(use_closed_form_G, soils_data, theta, nint, device):
     /***********************************************************************************************/
     :param use_closed_form_G:
     :param soils_data:
-    :param theta:
+    :param theta_1:
+    :param theta_2:
     :param nint:
     :return:
     """
-    # Theta_1 = theta, theta_2 = soils_data["theta_<x>"]
+    # Theta_1 = theta, theta_2 = soils_data["theta_<x>"] in most cases
     if use_closed_form_G is False:
         # note: units of h in cm.  units of K in cm/s
         # double h2;         // the head at the right-hand side of the trapezoid being integrated [m]
@@ -38,10 +39,10 @@ def calc_geff(use_closed_form_G, soils_data, theta, nint, device):
         # double K1,K2;      // the K(h) values on the left and right of the region dh integrated [m]
 
         # scaled initial water content (0-1) [-]
-        se_i = calc_se_from_theta(theta, soils_data["theta_e"], soils_data["theta_r"])
+        se_i = calc_se_from_theta(theta_1, soils_data["theta_e"], soils_data["theta_r"])
         # scaled final water content (0-1) [-]
         se_f = calc_se_from_theta(
-            soils_data["theta_e"], soils_data["theta_e"], soils_data["theta_r"]
+            theta_2, soils_data["theta_e"], soils_data["theta_r"]
         )
 
         # capillary head associated with Se_i [cm]
@@ -54,9 +55,9 @@ def calc_geff(use_closed_form_G, soils_data, theta, nint, device):
         )
 
         # /* if the lower limit of integration is less than h_min FIXME?? */
-        if h_i < soils_data["h_min"]:
+        if h_i < soils_data["h_min_cm"]:
             # commenting out as this is not used in the Python version
-            return soils_data["h_min"]
+            return soils_data["h_min_cm"]
 
         log.debug(
             f"Se_i = {se_i,},  Se_inverse = {calc_se_from_h(h_i, soils_data['alpha'], soils_data['m'], soils_data['n'])}"
@@ -90,10 +91,10 @@ def calc_geff(use_closed_form_G, soils_data, theta, nint, device):
         log.debug(f"Capillary suction (G) = {geff}")
     else:
         se_f = calc_se_from_theta(
-            theta, soils_data["theta_e"], soils_data["theta_r"]
+            theta_1, soils_data["theta_e"], soils_data["theta_r"]
         )  # the scaled moisture content of the wetting front
         se_i = calc_se_from_theta(
-            soils_data["theta_e"], soils_data["theta_e"], soils_data["theta_r"]
+            theta_2, soils_data["theta_e"], soils_data["theta_r"]
         )  # the scaled moisture content below the wetting front
         h_c = (
             soils_data["bc_psib_cm"]

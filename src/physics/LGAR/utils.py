@@ -172,15 +172,7 @@ def calc_h_min_cm(df: pd.DataFrame, device) -> pd.DataFrame:
     return df
 
 
-def read_soils(lgar, wf):
-    """
-    A function to read all attributes from a pandas df
-    :param lgar: the lgar obj
-    :param df: the soils pandas obj (df or series)
-    :return: a dict of tensors belonging to the row
-    """
-    output = {}
-    layer_num = wf.layer_num
+def read_soils_from_layer(output, lgar, layer_num):
     soil_num = lgar.layer_soil_type[layer_num]
     soil_properties = lgar.soils_df.iloc[soil_num]
     output["theta_e"] = torch.tensor(soil_properties["theta_e"], device=lgar.device)
@@ -197,3 +189,15 @@ def read_soils(lgar, wf):
         soil_properties["bc_psib_cm"], device=lgar.device
     )
     return output
+
+
+def read_soils(lgar, wf):
+    """
+    A function to read all attributes from a pandas df
+    :param lgar: the lgar obj
+    :param df: the soils pandas obj (df or series)
+    :return: a dict of tensors belonging to the row
+    """
+    output = {}
+    layer_num = wf.layer_num
+    return read_soils_from_layer(output, lgar, layer_num)

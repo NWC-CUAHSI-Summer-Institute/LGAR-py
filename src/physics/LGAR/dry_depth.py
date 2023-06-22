@@ -29,16 +29,24 @@ def calc_dry_depth(lgar, use_closed_form_G, nint, timestep_h):
     #  these are the limits of integration
     # Theta_1 = current.theta, theta_2 = theta_e
     soils_data = read_soils(lgar, current_front)
-    delta_theta = soils_data["theta_e"] - current_front.theta  # water content of the first (most surficial) existing wetting front
+    delta_theta = (
+        soils_data["theta_e"] - current_front.theta
+    )  # water content of the first (most surficial) existing wetting front
     tau = timestep_h * soils_data["ksat_cm_per_h"] / delta_theta
 
-    geff = calc_geff(use_closed_form_G, soils_data, current_front.theta, nint, lgar.device)
+    geff = calc_geff(
+        use_closed_form_G,
+        soils_data,
+        current_front.theta,
+        soils_data["theta_e"],
+        nint,
+        lgar.device,
+    )
 
     # note that dry depth originally has a factor of 0.5 in front
-    dry_depth = 0.5 * (tau + torch.sqrt(tau * tau + 4.0 *tau * geff))
+    dry_depth = 0.5 * (tau + torch.sqrt(tau * tau + 4.0 * tau * geff))
 
     # when dry depth greater than layer 1 thickness, set dry depth to layer 1 thickness
     dry_depth = torch.min(lgar.cum_layer_thickness[current_front.layer_num], dry_depth)
 
     return dry_depth
-

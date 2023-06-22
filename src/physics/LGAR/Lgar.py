@@ -897,7 +897,7 @@ class LGAR:
                     mass_after = self.calc_mass_balance()
                     mass_change = mass_change + torch.abs(mass_after - mass_before)
 
-    def create_surficial_front_func(self, dry_depth):
+    def create_surficial_front_func(self, ponded_depth_cm, volin, dry_depth):
         """
         // ######################################################################################
         /* This subroutine is called iff there is no surfacial front, it creates a new front and
@@ -915,20 +915,20 @@ class LGAR:
 
         if (
             dry_depth * delta_theta
-        ) > self.ponded_depth_cm:  # all the ponded depth enters the soil
-            volin = self.ponded_depth_cm
+        ) > ponded_depth_cm:  # all the ponded depth enters the soil
+            volin = ponded_depth_cm
             theta_new = torch.min(
-                (top_front.theta + self.ponded_depth_cm / dry_depth), theta_e
+                (top_front.theta + ponded_depth_cm / dry_depth), soils_data["theta_e"]
             )
             surficial_front = WettingFront(dry_depth, theta_new, layer_num, to_bottom)
             self.wetting_fronts.insert(
-                surficial_front, 0
+                0, surficial_front
             )  # inserting the new front in the front layer
-            self.ponded_depth_cm = torch.tensor(0.0, device=self.device)
+            ponded_depth_cm = torch.tensor(0.0, device=self.device)
         else:  # // not all ponded depth fits in
             volin = dry_depth * delta_theta
-            self.ponded_depth_cm = self.ponded_depth_cm - (dry_depth * delta_theta)
-            theta_new = theta_e  # fmin(theta1 + (*ponded_depth_cm) /dry_depth, theta_e)
+            ponded_depth_cm = self.ponded_depth_cm - (dry_depth * delta_theta)
+            theta_new = soils_data["theta_e"]  # fmin(theta1 + (*ponded_depth_cm) /dry_depth, theta_e)
             if (
                 dry_depth < self.cum_layer_thickness[0]
             ):  # checking against the first layer
@@ -939,13 +939,13 @@ class LGAR:
                 surficial_front = WettingFront(
                     dry_depth, soils_data["theta_e"], layer_num, True
                 )
-            self.wetting_fronts.insert(surficial_front, 0)
+            self.wetting_fronts.insert(0, surficial_front)
 
         # These calculations are allowed as we're creating a dry layer of the same soil type
         se = calc_se_from_theta(theta_new, soils_data["theta_e"], soils_data["theta_r"])
         new_front = self.wetting_fronts[0]
         new_front.psi_cm = calc_h_from_se(
-            se, soils_data["theta_e"], soils_data["m"], soils_data["n"]
+            se, soils_data["alpha"], soils_data["m"], soils_data["n"]
         )
 
         new_front.k_cm_per_h = (
@@ -954,7 +954,7 @@ class LGAR:
         )  # // AJ - K_temp in python version for 1st layer
         new_front.dzdt_cm_per_h = 0.0  # for now assign 0 to dzdt as it will be computed/updated in lgar_dzdt_calc function
 
-        return volin
+        return ponded_depth_cm, volin
 
     def insert_water(self, use_closed_form_G, nint, timestep_h, precip_timestep_cm, wf_free_drainage_demand, ponded_depth_cm, volin_this_timestep):
         """
@@ -994,7 +994,7 @@ class LGAR:
             # double theta = current_free_drainage->theta;
             theta_below = current_free_drainage.theta
 
-            geff = calc_geff(use_closed_form_G, soils_data, theta_below, nint, self.device)
+            geff = calc_geff(use_closed_form_G, soils_data, theta_below, soils_data["theta_e"], nint, self.device)
 
         f_p = None # setting this
         # if the free_drainage wetting front is the top most, then the potential infiltration capacity has the following simple form

@@ -2,7 +2,13 @@
 import logging
 import torch
 
-from src.physics.LGAR.utils import calc_se_from_theta, calc_h_from_se, calc_k_from_se, calc_theta_from_h
+from src.physics.LGAR.utils import (
+    calc_se_from_theta,
+    calc_h_from_se,
+    calc_k_from_se,
+    calc_theta_from_h,
+)
+from src.physics.LGAR.utils import read_soils_from_layer
 
 log = logging.getLogger("physics.WettingFront")
 torch.set_default_dtype(torch.float64)
@@ -126,7 +132,9 @@ def move_wetting_fronts(
         actual_ET_demand = AET_demand_cm
 
         if i < last_wetting_front_index and layer_num_below != layer_num:
-            deepest_wetting_front(lgar, current, next_, soil_properties, layer_num, layer_num_below)
+            deepest_wetting_front(
+                lgar, current, next_, soil_properties, layer_num, layer_num_below
+            )
         if (
             i == number_of_wetting_fronts
             and layer_num_below != layer_num
@@ -230,8 +238,152 @@ def move_wetting_fronts(
                 lgar.wetting_fronts[current].theta, theta_e, theta_r
             )
             lgar.wetting_fronts[current].psi_cm = calc_h_from_se(se, alpha, m, n)
+
         if i < last_wetting_front_index and layer_num == layer_num_below:
-            raise NotImplementedError
+            """
+            // case to check if the 'current' wetting front is within the layer and not at the layer's interface
+            // layer_num == layer_num_below means there is another wetting front below the current wetting front
+            // and they both belong to the same layer (in simple words, wetting fronts not at the interface)
+            // l < last_wetting_front_index means that the current wetting front is not the deepest wetting front in the domain
+            /*************************************************************************************/
+            """
+            log.debug(
+                f"case (wetting front within a layer) : layer_num {layer_num} == layer_num_below {layer_num_below}"
+            )
+            current_front = lgar.wetting_fronts[current]
+            current_old_front = lgar.wetting_fronts[current_old]
+            next_front = lgar.wetting_fronts[next_]
+            next_old_front = lgar.wetting_fronts[next_old]
+
+            # if wetting front is the most surficial wetting front
+            if layer_num == 1:
+                free_drainage_demand = 0
+                # prior mass = mass contained in the current old wetting front
+                prior_mass = current_old_front.depth_cm * (
+                    current_old_front.theta - next_old_front.theta
+                )
+
+                if wf_free_drainage_demand == i:
+                    prior_mass = (
+                        prior_mass
+                        + precip_mass_to_add
+                        - (free_drainage_demand + actual_ET_demand)
+                    )
+
+                current_front.depth_cm += current_front.dzdt_cm_per_h * timestep_h
+
+                # / * condition to bound the wetting front depth, if depth of a wf, at this timestep,
+                # gets greater than the domain depth, it will be merge anyway as it is passing
+                # the layer depth * /
+                current_front.depth_cm = torch.min(current_front.depth_cm, column_depth)
+
+                if (
+                    current_front.dzdt_cm_per_h == 0.0
+                ) and current_front.to_bottom is False:  # a new front was just created, so don't update it.
+                    current_front.theta = current_front.theta
+                else:
+                    current_front.theta = torch.min(
+                        theta_e, prior_mass / current_front.depth_cm + next_front.theta
+                    )
+            else:
+                """
+                /*
+                  this note is copied from Python version:
+                  "However, calculation of theta via mass balance is a bit trickier. This is because each wetting front
+                  in deeper layers can be thought of as extending all the way to the surface, in terms of psi values.
+                  For example, a wetting front in layer 2 with a theta value of 0.4 will in reality extend to layer
+                  1 with a theta value that is different (usually smaller) due to different soil hydraulic properties.
+                  But, the theta value of this extended wetting front is not recorded in current or previous states.
+                      So, simply from states, the mass balance of a wetting front that, in terms of psi, extends between
+                  multiple layers cannot be calculated. Therefore, the theta values that the current wetting front *would*
+                  have in above layers is calculated from the psi value of the current wetting front, with the assumption
+                  that the hydraulic head of this wetting front is the same all the way up to the surface.
+
+                  - LGAR paper (currently under review) has a better description, using diagrams, of the mass balance of wetting fronts
+                */
+                """
+
+                current_front.depth_cm += current_front.dzdt_cm_per_h * timestep_h
+
+                delta_thetas = torch.zeros([layer_num], device=lgar.device)
+                delta_thickness = torch.zeros([layer_num], device=lgar.device)
+
+                psi_cm_old = current_old_front.psi_cm
+                psi_cm_below_old = next_old_front.psi_cm
+
+                psi_cm = current_front.psi_cm
+                psi_cm_below = next_front.psi_cm
+
+                # mass = delta(depth) * delta(theta)
+                # = difference in current and next wetting front thetas times depth of the current wetting front
+                prior_mass = (
+                    current_old_front.depth_cm - lgar.cum_layer_thickness[layer_num - 1]
+                ) * (current_old_front.theta - next_old_front.theta)
+                new_mass = (
+                    current_front.depth_cm - lgar.cum_layer_thickness[layer_num - 1]
+                ) * (current_front.theta - next_front.theta)
+
+                # compute mass in the layers above the current wetting front
+                # use the psi of the current wetting front and van Genuchten parameters of
+                # the respective layers to get the total mass above the current wetting front
+                for k in range(1, len(lgar.layer_soil_type)):
+                    soil_num = lgar.layer_soil_type[k]
+                    soil_properties = lgar.soils_df.iloc[soil_num]
+                    theta_old = calc_theta_from_h(
+                        psi_cm_old, soil_properties, lgar.device
+                    )
+                    theta_below_old = calc_theta_from_h(
+                        psi_cm_below_old, soil_properties, lgar.device
+                    )
+                    local_delta_theta_old = theta_old - theta_below_old
+                    layer_thickness = (
+                        lgar.cum_layer_thickness[k] - lgar.cum_layer_thickness[k - 1]
+                    )
+
+                    prior_mass = prior_mass + (layer_thickness * local_delta_theta_old)
+
+                    # // -------------------------------------------
+                    # // do the same for the current state
+                    theta = calc_theta_from_h(psi_cm, soil_properties, lgar.device)
+
+                    theta_below = calc_theta_from_h(
+                        psi_cm_below, soil_properties, lgar.device
+                    )
+
+                    new_mass = new_mass + layer_thickness * (theta - theta_below)
+
+                    delta_thetas[k] = theta_below
+                    delta_thickness[k] = layer_thickness
+
+                delta_thetas[layer_num] = next_front.theta
+                delta_thickness[layer_num] = (
+                    current_front.depth_cm - lgar.cum_layer_thickness[layer_num - 1]
+                )
+
+                free_drainage_demand = 0
+
+                if wf_free_drainage_demand == i:
+                    prior_mass = (
+                        prior_mass
+                        + precip_mass_to_add
+                        - (free_drainage_demand + actual_ET_demand)
+                    )
+                # theta mass balance computes new theta that conserves the mass; new theta is assigned to the current wetting front
+                theta_new = lgar.theta_mass_balance(
+                    layer_num,
+                    soil_num,
+                    psi_cm,
+                    new_mass,
+                    prior_mass,
+                    delta_thetas,
+                    delta_thickness,
+                    soil_properties,
+                )
+                current_front.theta = torch.min(theta_new, theta_e)
+
+                se = calc_se_from_theta(current_front.theta, theta_e, theta_r)
+                current_front.psi_cm = calc_h_from_se(se, alpha, m, n)
+
         if i == 0:
             """
             // if f_p (predicted infiltration) causes theta > theta_e, mass correction is needed.
@@ -350,7 +502,9 @@ def move_wetting_fronts(
             lgar.wetting_fronts[0].depth_cm = lgar.cum_layer_thickness[0]
 
 
-def deepest_wetting_front(lgar, current, next_, soil_properties, layer_num, layer_num_below):
+def deepest_wetting_front(
+    lgar, current, next_, soil_properties, layer_num, layer_num_below
+):
     """// case to check if the wetting front is at the interface, i.e. deepest wetting front within a layer
     // psi of the layer below is already known/updated, so we that psi to compute the theta of the deepest current layer
     // this condition can be replace by current->to_depth = FALSE && l<last_wetting_front_index

@@ -285,7 +285,7 @@ class LGARBmi(Bmi):
         log.debug(f"Pr [cm/hr] (timestep) = {hourly_precip_cm}")
         log.debug(f"PET [cm/hr] (timestep) = {hourly_PET_cm}")
 
-        self._model.prev_wetting_fronts = self._model.wetting_fronts.clone()
+        self._model.prev_wetting_fronts = self._model.wetting_fronts
 
         # Ensure forcings are non-negative
         assert hourly_precip_cm >= 0.0
@@ -378,8 +378,8 @@ class LGARBmi(Bmi):
                 self._model.wetting_front_free_drainage()
             )  # This is assuming this function is already defined somewhere in your code
 
-            flag = "Yes" if create_surficial_front and not is_top_wf_saturated else "No"
-            log.debug(f"Create superficial wetting front? {flag}")
+            # flag = "Yes" if create_surficial_front and not is_top_wf_saturated else "No"
+            # log.debug(f"Create superficial wetting front? {flag}")
 
             if create_surficial_front and (is_top_wf_saturated is False):
                 # Create a new wetting front if the following is true. Meaning there is no
@@ -399,16 +399,18 @@ class LGARBmi(Bmi):
                     self._model, use_closed_form_G, nint, subtimestep_h
                 )
 
-                volin_subtimestep_cm = self._model.create_surficial_front_func(
+                ponded_depth_subtimestep_cm, volin_subtimestep_cm = self._model.create_surficial_front_func(
+                    ponded_depth_subtimestep_cm,
+                    volin_subtimestep_cm,
                     dry_depth
                 )
 
-                self._model.prev_wetting_fronts = self._model.wetting_fronts.clone()
+                self._model.prev_wetting_fronts = self._model.wetting_fronts
 
                 volin_timestep_cm = volin_timestep_cm + volin_subtimestep_cm
 
                 log.debug("New Wetting Front Created")
-                for wf in self._model.wettting_fronts:
+                for wf in self._model.wetting_fronts:
                     wf.print()
 
             if ponded_depth_subtimestep_cm > 0 and (create_surficial_front is False):
@@ -476,81 +478,81 @@ class LGARBmi(Bmi):
                     volin_subtimestep_cm_temp  # resetting the subtimestep
                 )
 
-                # / *---------------------------------------------------------------------- * /
-                # // calculate derivative(dz / dt) for all wetting fronts
-                calc_dzdt(
-                    self._model, use_closed_form_G, nint, ponded_depth_subtimestep_cm
+            # / *---------------------------------------------------------------------- * /
+            # // calculate derivative(dz / dt) for all wetting fronts
+            calc_dzdt(
+                self._model, use_closed_form_G, nint, ponded_depth_subtimestep_cm
+            )
+
+            volend_subtimestep_cm = self._model.calc_mass_balance()
+            volend_timestep_cm = volend_subtimestep_cm
+            self._model.precip_previous_timestep_cm = precip_subtimestep_cm
+
+            # /*----------------------------------------------------------------------*/
+            # // mass balance at the subtimestep (local mass balance)
+
+            local_mb = (
+                volstart_subtimestep_cm
+                + precip_subtimestep_cm
+                + volon_timestep_cm
+                - volrunoff_subtimestep_cm
+                - AET_subtimestep_cm
+                - volon_subtimestep_cm
+                - volrech_subtimestep_cm
+                - volend_subtimestep_cm
+            )
+
+            AET_timestep_cm = AET_timestep_cm + AET_subtimestep_cm
+            volon_timestep_cm = volon_subtimestep_cm  # surface ponded water at the end of the timestep
+
+            # /*----------------------------------------------------------------------*/
+            # // compute giuh runoff for the subtimestep
+            surface_runoff_subtimestep_cm = volrunoff_subtimestep_cm
+            (
+                self.giuh_runoff_queue,
+                volrunoff_giuh_subtimestep_cm,
+            ) = giuh_convolution_integral(
+                volrunoff_subtimestep_cm,
+                self._model.num_giuh_ordinates,
+                self._model.giuh_ordinates,
+                self.giuh_runoff_queue,
+            )
+
+            surface_runoff_timestep_cm = (
+                surface_runoff_timestep_cm + surface_runoff_subtimestep_cm
+            )
+            volrunoff_giuh_timestep_cm = (
+                volrunoff_giuh_timestep_cm + volrunoff_giuh_subtimestep_cm
+            )
+
+            # total mass of water leaving the system, at this time it is the giuh-only, but later will add groundwater component as well.
+            volQ_timestep_cm = volQ_timestep_cm + volrunoff_giuh_subtimestep_cm
+
+            # adding groundwater flux to stream channel (note: this will be updated/corrected after adding the groundwater reservoir)
+            volQ_gw_timestep_cm = volQ_gw_timestep_cm + volQ_gw_subtimestep_cm
+            log.debug(f"Printing wetting fronts at this subtimestep...")
+            for wf in self._model.wetting_fronts:
+                wf.print()
+
+            unexpected_error = True if torch.abs(local_mb) > 1e-6 else False
+            log.debug(
+                f"\nLocal mass balance at this timestep... \n"
+                f"Error         = {local_mb.item():14.10f} \n"
+                f"Initial water = {volstart_subtimestep_cm.item():14.10f} \n"
+                f"Water added   = {precip_subtimestep_cm.item():14.10f} \n"
+                f"Ponded water  = {volon_subtimestep_cm.item():14.10f} \n"
+                f"Infiltration  = {volin_subtimestep_cm.item():14.10f} \n"
+                f"Runoff        = {volrunoff_subtimestep_cm.item():14.10f} \n"
+                f"AET           = {AET_subtimestep_cm.item():14.10f} \n"
+                f"Percolation   = {volrech_subtimestep_cm.item():14.10f} \n"
+                f"Final water   = {volend_subtimestep_cm.item():14.10f} \n"
+            )
+
+            if unexpected_error:
+                log.error(
+                    f"Local mass balance (in this timestep) is {local_mb.item():14.10f}, larger than expected, needs some debugging..."
                 )
-
-                volend_subtimestep_cm = self._model.calc_mass_balance()
-                volend_timestep_cm = volend_subtimestep_cm
-                self._model.precip_previous_timestep_cm = precip_subtimestep_cm
-
-                # /*----------------------------------------------------------------------*/
-                # // mass balance at the subtimestep (local mass balance)
-
-                local_mb = (
-                    volstart_subtimestep_cm
-                    + precip_subtimestep_cm
-                    + volon_timestep_cm
-                    - volrunoff_subtimestep_cm
-                    - AET_subtimestep_cm
-                    - volon_subtimestep_cm
-                    - volrech_subtimestep_cm
-                    - volend_subtimestep_cm
-                )
-
-                AET_timestep_cm = AET_timestep_cm + AET_subtimestep_cm
-                volon_timestep_cm = volon_subtimestep_cm  # surface ponded water at the end of the timestep
-
-                # /*----------------------------------------------------------------------*/
-                # // compute giuh runoff for the subtimestep
-                surface_runoff_subtimestep_cm = volrunoff_subtimestep_cm
-                (
-                    self.giuh_runoff_queue,
-                    volrunoff_giuh_subtimestep_cm,
-                ) = giuh_convolution_integral(
-                    volrunoff_subtimestep_cm,
-                    self._model.num_giuh_ordinates,
-                    self._model.giuh_ordinates,
-                    self.giuh_runoff_queue,
-                )
-
-                surface_runoff_timestep_cm = (
-                    surface_runoff_timestep_cm + surface_runoff_subtimestep_cm
-                )
-                volrunoff_giuh_timestep_cm = (
-                    volrunoff_giuh_timestep_cm + volrunoff_giuh_subtimestep_cm
-                )
-
-                # total mass of water leaving the system, at this time it is the giuh-only, but later will add groundwater component as well.
-                volQ_timestep_cm = volQ_timestep_cm + volrunoff_giuh_subtimestep_cm
-
-                # adding groundwater flux to stream channel (note: this will be updated/corrected after adding the groundwater reservoir)
-                volQ_gw_timestep_cm = volQ_gw_timestep_cm + volQ_gw_subtimestep_cm
-                log.debug(f"Printing wetting fronts at this subtimestep...")
-                for wf in self._model.wetting_fronts:
-                    wf.print()
-
-                unexpected_error = True if torch.abs(local_mb) > 1e-6 else False
-                log.debug(
-                    f"\nLocal mass balance at this timestep... \n"
-                    f"Error         = {local_mb.item():14.10f} \n"
-                    f"Initial water = {volstart_subtimestep_cm.item():14.10f} \n"
-                    f"Water added   = {precip_subtimestep_cm.item():14.10f} \n"
-                    f"Ponded water  = {volon_subtimestep_cm.item():14.10f} \n"
-                    f"Infiltration  = {volin_subtimestep_cm.item():14.10f} \n"
-                    f"Runoff        = {volrunoff_subtimestep_cm.item():14.10f} \n"
-                    f"AET           = {AET_subtimestep_cm.item():14.10f} \n"
-                    f"Percolation   = {volrech_subtimestep_cm.item():14.10f} \n"
-                    f"Final water   = {volend_subtimestep_cm.item():14.10f} \n"
-                )
-
-                if unexpected_error:
-                    log.error(
-                        f"Local mass balance (in this timestep) is {local_mb.item():14.10f}, larger than expected, needs some debugging..."
-                    )
-                    raise RuntimeError("Unexpected local error!")
+                raise RuntimeError("Unexpected local error!")
 
             self._model.local_mass_balance = local_mb
 
