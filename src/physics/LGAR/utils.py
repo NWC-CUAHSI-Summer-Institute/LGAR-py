@@ -67,6 +67,23 @@ def calc_h_from_se(
     return 1.0 / alpha * torch.pow(torch.pow(se, (-1.0 / m)) - 1.0, (1.0 / n))
 
 
+def calc_se_from_h(h, alpha, m, n):
+    """
+    function to calculate Se from h
+    :param h:
+    :param alpha:
+    :param m:
+    :param n:
+    :return:
+    """
+    h_abs = torch.abs(h)
+    if h_abs < 1.0e-01:
+        return torch.tensor(
+            1.0
+        )  # TODO EXPLORE A CLAMP (this function doesn't work well for tiny h)
+    return 1.0 / (torch.pow(1.0 + torch.pow(alpha * h, n), m))
+
+
 def calc_aet(
     wetting_fronts,
     PET_subtimestep_cm_per_h,
@@ -86,31 +103,21 @@ def calc_aet(
     h is the capillary head at the surface and
     h_50 is the capillary head at which AET = 0.5 * PET. */
     """
-    relative_moisture_at_which_PET_equals_AET = torch.tensor(
-        0.75, device=device
-    )
+    relative_moisture_at_which_PET_equals_AET = torch.tensor(0.75, device=device)
 
     # Starting at the first index
     current = wetting_fronts[0]  # USING THE HEAD LAYER (LAYER 0)
     layer_num = current.layer_num
     soil_num = layer_soil_type[layer_num]
     soil_properties = soils_df.iloc[soil_num]
-    theta_e = torch.tensor(
-        soil_properties["theta_e"], device=device
-    )
-    theta_r = torch.tensor(
-        soil_properties["theta_r"], device=device
-    )
-    alpha = torch.tensor(
-        soil_properties["alpha(cm^-1)"], device=device
-    )
+    theta_e = torch.tensor(soil_properties["theta_e"], device=device)
+    theta_r = torch.tensor(soil_properties["theta_r"], device=device)
+    alpha = torch.tensor(soil_properties["alpha(cm^-1)"], device=device)
     m = torch.tensor(soil_properties["m"], device=device)
     n = torch.tensor(soil_properties["n"], device=device)
 
     theta_fc = (theta_e - theta_r) * relative_moisture_at_which_PET_equals_AET + theta_r
-    wp_head_theta = calc_theta_from_h(
-        wilting_point_psi_cm, soil_properties, device
-    )
+    wp_head_theta = calc_theta_from_h(wilting_point_psi_cm, soil_properties, device)
     theta_wp = (theta_fc - wp_head_theta) * 0.5 + wp_head_theta  # theta_50 in python
     se = calc_se_from_theta(theta_wp, theta_e, theta_r)
     psi_wp_cm = calc_h_from_se(se, alpha, m, n)
@@ -159,7 +166,34 @@ def calc_h_min_cm(df: pd.DataFrame, device) -> pd.DataFrame:
     :return:
     """
     bc_psib_cm = torch.tensor(df["bc_psib_cm"].to_numpy(), device=device)
-    assert torch.any(0.0 < bc_psib_cm) # checking parameter constraints
+    assert torch.any(0.0 < bc_psib_cm)  # checking parameter constraints
     lambda_ = torch.tensor(df["bc_lambda"].to_numpy(), device=device)
     df["h_min_cm"] = bc_psib_cm * (2.0 + 3.0 / lambda_) / (1.0 + 3.0 / lambda_)
     return df
+
+
+def read_soils(lgar, wf):
+    """
+    A function to read all attributes from a pandas df
+    :param lgar: the lgar obj
+    :param df: the soils pandas obj (df or series)
+    :return: a dict of tensors belonging to the row
+    """
+    output = {}
+    layer_num = wf.layer_num
+    soil_num = lgar.layer_soil_type[layer_num]
+    soil_properties = lgar.soils_df.iloc[soil_num]
+    output["theta_e"] = torch.tensor(soil_properties["theta_e"], device=lgar.device)
+    output["theta_r"] = torch.tensor(soil_properties["theta_r"], device=lgar.device)
+    output["alpha"] = torch.tensor(soil_properties["alpha(cm^-1)"], device=lgar.device)
+    output["m"] = torch.tensor(soil_properties["m"], device=lgar.device)
+    output["n"] = torch.tensor(soil_properties["n"], device=lgar.device)
+    output["h_min_cm"] = torch.tensor(soil_properties["h_min_cm"], device=lgar.device)
+    output["ksat_cm_per_h"] = (
+        torch.tensor(soil_properties["Ks(cm/h)"]) * lgar.frozen_factor[layer_num]
+    )
+    output["bc_lambda"] = torch.tensor(soil_properties["bc_lambda"], device=lgar.device)
+    output["bc_psib_cm"] = torch.tensor(
+        soil_properties["bc_psib_cm"], device=lgar.device
+    )
+    return output

@@ -1,14 +1,13 @@
 """A file to store the function where we read the input data"""
 import logging
 
-import pandas
 from omegaconf import DictConfig
 import numpy as np
 import pandas as pd
 from pathlib import Path
 import torch
 
-from src.physics.soil_functions import (
+from src.physics.LGAR.utils import (
     calc_theta_from_h,
     calc_bc_lambda_psib_cm,
     calc_h_min_cm,

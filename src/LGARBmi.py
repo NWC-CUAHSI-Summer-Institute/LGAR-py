@@ -2,17 +2,17 @@
 import pandas as pd
 from bmipy import Bmi
 import logging
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import OmegaConf
 import time
 import torch
-from tqdm import tqdm
 from typing import Tuple
 
 from src.data.read import read_forcing_data
 from src.physics.giuh import giuh_convolution_integral
-from src.physics.Lgar import LGAR
-from src.physics.LGAR.dzdt import dzdt_calc
-from src.physics.soil_functions import calc_aet
+from src.physics.LGAR.Lgar import LGAR
+from src.physics.LGAR.dry_depth import calc_dry_depth
+from src.physics.LGAR.dzdt import calc_dzdt
+from src.physics.LGAR.utils import calc_aet
 from src.physics.WettingFront import move_wetting_fronts
 
 log = logging.getLogger("LGARBmi")
@@ -165,8 +165,14 @@ class LGARBmi(Bmi):
             self.set_value("precipitation_mm_per_h", self.precipitation[i])
             self.set_value("PET_mm_per_h", self.PET[i])
             self.update()  # CALLING UPDATE
-            self.set_value("soil_moisture_wetting_fronts", self._model.soil_moisture_wetting_fronts,)
-            self.set_value("soil_depth_wetting_fronts", self._model.soil_depth_wetting_fronts,)
+            self.set_value(
+                "soil_moisture_wetting_fronts",
+                self._model.soil_moisture_wetting_fronts,
+            )
+            self.set_value(
+                "soil_depth_wetting_fronts",
+                self._model.soil_depth_wetting_fronts,
+            )
             # self.precipitation[i] = self.precipitation[i]
             # self.PET_mm_per_h[i] = self.PET[i]
             # self.soil_moisture_fronts[i] = self._model.soil_moisture_wetting_fronts
@@ -236,7 +242,9 @@ class LGARBmi(Bmi):
         A function to run the model's subcycling timestep loop
         :return:
         """
-        subcycles = torch.round(self._model.forcing_interval)  # ROUNDING SINCE MACHINE PRECISION SHORTENS BY 1
+        subcycles = torch.round(
+            self._model.forcing_interval
+        )  # ROUNDING SINCE MACHINE PRECISION SHORTENS BY 1
         num_layers = self._model.num_layers
 
         precip_timestep_cm = torch.tensor(0.0, device=self.device)
@@ -276,6 +284,8 @@ class LGARBmi(Bmi):
         log.debug("*** LASAM BMI Update... *** ")
         log.debug(f"Pr [cm/hr] (timestep) = {hourly_precip_cm}")
         log.debug(f"PET [cm/hr] (timestep) = {hourly_PET_cm}")
+
+        self._model.prev_wetting_fronts = self._model.wetting_fronts.clone()
 
         # Ensure forcings are non-negative
         assert hourly_precip_cm >= 0.0
@@ -385,12 +395,49 @@ class LGARBmi(Bmi):
                     AET_subtimestep_cm,
                 )
 
-                # dry_depth =
+                dry_depth = calc_dry_depth(
+                    self._model, use_closed_form_G, nint, subtimestep_h
+                )
+
+                volin_subtimestep_cm = self._model.create_surficial_front_func(
+                    dry_depth
+                )
+
+                self._model.prev_wetting_fronts = self._model.wetting_fronts.clone()
+
+                volin_timestep_cm = volin_timestep_cm + volin_subtimestep_cm
+
+                log.debug("New Wetting Front Created")
+                for wf in self._model.wettting_fronts:
+                    wf.print()
 
             if ponded_depth_subtimestep_cm > 0 and (create_surficial_front is False):
                 #  infiltrate water based on the infiltration capacity given no new wetting front
                 #  is created and that there is water on the surface (or raining).
-                raise NotImplementedError
+
+                (
+                    volrunoff_subtimestep_cm,
+                    volin_subtimestep_cm,
+                    ponded_depth_subtimestep_cm,
+                ) = self._model.insert_water(
+                    use_closed_form_G,
+                    nint,
+                    subtimestep_h,
+                    precip_timestep_cm,
+                    wf_free_drainage_demand,
+                    ponded_depth_subtimestep_cm,
+                    volin_subtimestep_cm,
+                )
+
+                volin_timestep_cm = volin_timestep_cm + volin_subtimestep_cm
+                volrunoff_timestep_cm = volrunoff_timestep_cm + volrunoff_subtimestep_cm
+                volrech_subtimestep_cm = volin_subtimestep_cm  # this gets updated later, probably not needed here
+
+                volon_subtimestep_cm = ponded_depth_subtimestep_cm
+
+                if volrunoff_subtimestep_cm < 0:
+                    log.error("There is a mass balance problem")
+                    raise ValueError
             else:
                 if ponded_depth_subtimestep_cm < ponded_depth_max_cm:
                     # volrunoff_timestep_cm = volrunoff_timestep_cm + 0
@@ -431,7 +478,7 @@ class LGARBmi(Bmi):
 
                 # / *---------------------------------------------------------------------- * /
                 # // calculate derivative(dz / dt) for all wetting fronts
-                dzdt_calc(
+                calc_dzdt(
                     self._model, use_closed_form_G, nint, ponded_depth_subtimestep_cm
                 )
 
@@ -513,9 +560,15 @@ class LGARBmi(Bmi):
             # TODO ASK ABOUT LASAM STANDALONE
 
         for i in range(self._model.num_wetting_fronts):
-            self._model.soil_moisture_wetting_fronts[i] = self._model.wetting_fronts[i].theta
-            self._model.soil_depth_wetting_fronts[i] = self._model.wetting_fronts[i].depth_cm * self.cfg.units.cm_to_m
-            log.debug(f"Wetting fronts (bmi outputs) (depth in meters, theta)= {self._model.soil_depth_wetting_fronts[i]}, {self._model.soil_moisture_wetting_fronts[i]}")
+            self._model.soil_moisture_wetting_fronts[i] = self._model.wetting_fronts[
+                i
+            ].theta
+            self._model.soil_depth_wetting_fronts[i] = (
+                self._model.wetting_fronts[i].depth_cm * self.cfg.units.cm_to_m
+            )
+            log.debug(
+                f"Wetting fronts (bmi outputs) (depth in meters, theta)= {self._model.soil_depth_wetting_fronts[i]}, {self._model.soil_moisture_wetting_fronts[i]}"
+            )
 
         # self._model.volprecip_timestep_cm = precip_timestep_cm
         #         # self.volin_timestep_cm = volin_timestep_cm
@@ -539,7 +592,9 @@ class LGARBmi(Bmi):
         self._model.volQ_cm = self._model.volQ_cm + volQ_timestep_cm
         self._model.volQ_gw_cm = self._model.volQ_gw_cm + volQ_gw_timestep_cm
         self._model.volPET_cm = self._model.volPET_cm + PET_timestep_cm
-        self._model.volrunoff_giuh_cm = self._model.volrunoff_giuh_cm + volrunoff_giuh_timestep_cm
+        self._model.volrunoff_giuh_cm = (
+            self._model.volrunoff_giuh_cm + volrunoff_giuh_timestep_cm
+        )
 
         # TODO: Probably Never lol XD
         #  // converted values, a struct local to the BMI and has bmi output variables

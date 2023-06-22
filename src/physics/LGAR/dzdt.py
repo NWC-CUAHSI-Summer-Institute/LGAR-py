@@ -6,7 +6,7 @@ log = logging.getLogger("physics.LGAR.dzdt")
 torch.set_default_dtype(torch.float64)
 
 
-def dzdt_calc(lgar, use_closed_form_G, nint, ponded_depth_subtimestep_cm):
+def calc_dzdt(lgar, use_closed_form_G, nint, ponded_depth_subtimestep_cm):
     """
     code to calculate velocity of fronts
     equations with full description are provided in the lgar paper (currently under review) */

@@ -2,7 +2,7 @@
 import logging
 import torch
 
-from src.physics.soil_functions import calc_se_from_theta, calc_h_from_se, calc_k_from_se, calc_theta_from_h
+from src.physics.LGAR.utils import calc_se_from_theta, calc_h_from_se, calc_k_from_se, calc_theta_from_h
 
 log = logging.getLogger("physics.WettingFront")
 torch.set_default_dtype(torch.float64)

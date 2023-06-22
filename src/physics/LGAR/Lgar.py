@@ -56,17 +56,18 @@ from collections import deque
 import logging
 import numpy as np
 from omegaconf import DictConfig
-import time
 import torch
 
 from src.data.read import read_soils_file
-from src.physics.soil_functions import (
+from src.physics.LGAR.utils import (
     calc_theta_from_h,
     calc_se_from_theta,
     calc_h_from_se,
     calc_k_from_se,
 )
 from src.physics.WettingFront import WettingFront
+from src.physics.LGAR.utils import read_soils
+from src.physics.LGAR.geff import calc_geff
 
 log = logging.getLogger("physics.Lgar")
 torch.set_default_dtype(torch.float64)
@@ -152,6 +153,7 @@ class LGAR:
         self.forcing_interval = None
         self.frozen_factor = None
         self.wetting_fronts = None
+        self.prev_wetting_fronts = None
 
         self.ponded_depth_cm = None
         self.nint = None
@@ -894,3 +896,164 @@ class LGAR:
                     """
                     mass_after = self.calc_mass_balance()
                     mass_change = mass_change + torch.abs(mass_after - mass_before)
+
+    def create_surficial_front_func(self, dry_depth):
+        """
+        // ######################################################################################
+        /* This subroutine is called iff there is no surfacial front, it creates a new front and
+           inserts ponded depth, and will return some amount if can't fit all water */
+        // ######################################################################################
+        """
+
+        to_bottom = False
+        top_front = self.wetting_fronts[0]  # Specifically pointing to the first front
+        soils_data = read_soils(self, top_front)
+
+        layer_num = 0
+
+        delta_theta = soils_data["theta_e"] - top_front.theta
+
+        if (
+            dry_depth * delta_theta
+        ) > self.ponded_depth_cm:  # all the ponded depth enters the soil
+            volin = self.ponded_depth_cm
+            theta_new = torch.min(
+                (top_front.theta + self.ponded_depth_cm / dry_depth), theta_e
+            )
+            surficial_front = WettingFront(dry_depth, theta_new, layer_num, to_bottom)
+            self.wetting_fronts.insert(
+                surficial_front, 0
+            )  # inserting the new front in the front layer
+            self.ponded_depth_cm = torch.tensor(0.0, device=self.device)
+        else:  # // not all ponded depth fits in
+            volin = dry_depth * delta_theta
+            self.ponded_depth_cm = self.ponded_depth_cm - (dry_depth * delta_theta)
+            theta_new = theta_e  # fmin(theta1 + (*ponded_depth_cm) /dry_depth, theta_e)
+            if (
+                dry_depth < self.cum_layer_thickness[0]
+            ):  # checking against the first layer
+                surficial_front = WettingFront(
+                    dry_depth, soils_data["theta_e"], layer_num, to_bottom
+                )
+            else:
+                surficial_front = WettingFront(
+                    dry_depth, soils_data["theta_e"], layer_num, True
+                )
+            self.wetting_fronts.insert(surficial_front, 0)
+
+        # These calculations are allowed as we're creating a dry layer of the same soil type
+        se = calc_se_from_theta(theta_new, soils_data["theta_e"], soils_data["theta_r"])
+        new_front = self.wetting_fronts[0]
+        new_front.psi_cm = calc_h_from_se(
+            se, soils_data["theta_e"], soils_data["m"], soils_data["n"]
+        )
+
+        new_front.k_cm_per_h = (
+            calc_k_from_se(se, soils_data["ksat_cm_per_h"], soils_data["m"])
+            * self.frozen_factor[layer_num]
+        )  # // AJ - K_temp in python version for 1st layer
+        new_front.dzdt_cm_per_h = 0.0  # for now assign 0 to dzdt as it will be computed/updated in lgar_dzdt_calc function
+
+        return volin
+
+    def insert_water(self, use_closed_form_G, nint, timestep_h, precip_timestep_cm, wf_free_drainage_demand, ponded_depth_cm, volin_this_timestep):
+        """
+        /* The module computes the potential infiltration capacity, fp (in the lgar manuscript),
+        potential infiltration capacity = the maximum amount of water that can be inserted into
+        the soil depending on the availability of water.
+        this module is called when a new superficial wetting front is not created
+        in the current timestep, that is precipitation in the current and previous
+        timesteps was greater than zero */
+        :param use_closed_form_G:
+        :param nint:
+        :param subtimestep_h:
+        :param ponded_depth_subtimestep_cm:
+        :param volin_subtimestep_cm:
+        :return:
+        """
+        wf_that_supplies_free_drainage_demand = wf_free_drainage_demand
+
+        f_p = torch.tensor(0.0, device=self.device)
+        runoff = torch.tensor(0.0, device=self.device)
+
+        h_p = torch.max(self.ponded_depth_cm - precip_timestep_cm * timestep_h, 0.0)  # water ponded on the surface
+
+        current = self.wetting_fronts[0]
+        current_free_drainage      = wf_that_supplies_free_drainage_demand[0]
+        current_free_drainage_next = wf_that_supplies_free_drainage_demand[1]
+
+        number_of_wetting_fronts = len(self.wetting_fronts[0])
+
+        layer_num_fp = current_free_drainage.layer_num
+        soils_data = read_soils(self, current_free_drainage)
+
+        if number_of_wetting_fronts == self.num_layers:
+            # i.e., case of no capillary suction, dz/dt is also zero for all wetting fronts
+            geff = torch.tensor(0.0, device=self.device)  # i.e., case of no capillary suction, dz/dt is also zero for all wetting fronts
+        else:
+            # double theta = current_free_drainage->theta;
+            theta_below = current_free_drainage.theta
+
+            geff = calc_geff(use_closed_form_G, soils_data, theta_below, nint, self.device)
+
+        f_p = None # setting this
+        # if the free_drainage wetting front is the top most, then the potential infiltration capacity has the following simple form
+        if layer_num_fp == 1:
+            f_p = soils_data["ksat_cm_per_h"] * (1 + (geff + h_p)/current_free_drainage.depth_cm)
+        else:
+            # // point here to the equation in lgar paper once published
+            bottom_sum = (current_free_drainage.depth_cm - self.cum_layer_thickness[layer_num_fp-1])/soils_data["ksat_cm_per_h"]
+
+            for k in reversed(range(len(self.layer_soil_type))):
+                soil_num = self.layer_soil_type[k]
+                soil_properties = self.soils_df.iloc[soil_num]
+                ksat_cm_per_h_k = soil_properties["ksat_cm_per_h"] * self.frozen_factor[layer_num_fp - k]
+
+                bottom_sum = bottom_sum + (self.cum_layer_thickness[layer_num_fp - k] - self.cum_layer_thickness[layer_num_fp - (k+1)])/ soil_properties["ksat_cm_per_h"]
+
+            f_p = (current_free_drainage.depth_cm / bottom_sum) + ((geff + h_p)*soil_properties["ksat_cm_per_h"]/(current_free_drainage.depth_cm))  #Geff + h_p
+
+        soils_data_current = read_soils(self, self.wetting_fronts[0])
+
+        theta_e1 = soils_data_current["theta_e"]  # saturated theta of top layer
+
+        # if free drainge has to be included, which currently we don't, then the following will be set to hydraulic conductivity
+        # of the deeepest layer
+        if (layer_num_fp == self.num_layers) and (current_free_drainage.theta == theta_e1) and (self.num_layers == number_of_wetting_fronts):
+            f_p = torch.tensor(0.0, device=self.device)
+
+        ponded_depth_temp = ponded_depth_cm
+
+        free_drainage_demand = torch.tensor(0.0, device=self.device)
+
+        # 'if' condition is not needed ... AJ
+        if (layer_num_fp==self.num_layers) and (self.num_layers == number_of_wetting_fronts):
+            ponded_depth_temp = ponded_depth_cm - f_p * timestep_h - free_drainage_demand * 0
+        else:
+            ponded_depth_temp = ponded_depth_cm - f_p * timestep_h - free_drainage_demand * 0
+
+        ponded_depth_temp   = torch.max(ponded_depth_temp, torch.tensor(0.0, device=self.device))
+
+        fp_cm = f_p * timestep_h + free_drainage_demand/timestep_h  # infiltration in cm
+
+        if self.ponded_depth_max_cm > 0.0 :
+            if ponded_depth_temp < self.ponded_depth_max_cm:
+                runoff = 0.0
+                volin_this_timestep = torch.min(ponded_depth_cm, fp_cm)  # PTL: does this code account for the case where volin_this_timestep can not all infiltrate?
+                ponded_depth_cm = ponded_depth_cm - volin_this_timestep
+                return runoff, volin_this_timestep, ponded_depth_cm
+            elif ponded_depth_temp > self.ponded_depth_max_cm:
+              runoff = ponded_depth_temp - self.ponded_depth_max_cm
+              ponded_depth_cm = self.ponded_depth_max_cm
+              volin_this_timestep = fp_cm
+
+              return runoff, volin_this_timestep, ponded_depth_cm  # TODO LOOK INTO THE POINTERS
+        else:
+            # if it got to this point, no ponding is allowed, either infiltrate or runoff
+            # order is important here; assign zero to ponded depth once we compute volume in and runoff
+            volin_this_timestep = torch.min(ponded_depth_cm, fp_cm)
+            runoff = torch.tensor(0.0, device=self.device) if ponded_depth_cm < fp_cm else (ponded_depth_cm - volin_this_timestep)
+            ponded_depth_cm = 0.0
+
+        return runoff, volin_this_timestep, ponded_depth_cm
+
