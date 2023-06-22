@@ -65,7 +65,7 @@ from src.physics.LGAR.utils import (
     calc_h_from_se,
     calc_k_from_se,
 )
-from src.physics.WettingFront import WettingFront
+from src.physics.wetting_fronts.WettingFront import WettingFront
 from src.physics.LGAR.utils import read_soils
 from src.physics.LGAR.geff import calc_geff
 

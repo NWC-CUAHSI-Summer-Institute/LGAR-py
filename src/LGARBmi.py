@@ -6,6 +6,8 @@ from omegaconf import OmegaConf
 import time
 import torch
 from typing import Tuple
+import faulthandler
+faulthandler.enable()
 
 from src.data.read import read_forcing_data
 from src.physics.giuh import giuh_convolution_integral
@@ -13,7 +15,8 @@ from src.physics.LGAR.Lgar import LGAR
 from src.physics.LGAR.dry_depth import calc_dry_depth
 from src.physics.LGAR.dzdt import calc_dzdt
 from src.physics.LGAR.utils import calc_aet
-from src.physics.WettingFront import move_wetting_fronts
+from src.physics.wetting_fronts.WettingFront import move_wetting_fronts
+from src.physics.LGAR.water import insert_water
 
 log = logging.getLogger("LGARBmi")
 torch.set_default_dtype(torch.float64)
@@ -282,8 +285,8 @@ class LGARBmi(Bmi):
             self.get_value_ptr("PET_mm_per_h") * self.cfg.units.mm_to_cm
         )  # rate [cm/hour]
         log.debug("*** LASAM BMI Update... *** ")
-        log.debug(f"Pr [cm/hr] (timestep) = {hourly_precip_cm}")
-        log.debug(f"PET [cm/hr] (timestep) = {hourly_PET_cm}")
+        log.debug(f"Pr [cm/hr] (timestep) = {hourly_precip_cm.item()}")
+        log.debug(f"PET [cm/hr] (timestep) = {hourly_PET_cm.item()}")
 
         self._model.prev_wetting_fronts = self._model.wetting_fronts
 
@@ -310,7 +313,7 @@ class LGARBmi(Bmi):
                 f"BMI Update |---------------------------------------------------------------|"
             )
             log.debug(
-                f"BMI Update |Timesteps = {timesteps} Time [h] = {(time_s / 3600):.4f} Subcycle = {(i + 1):.4f} of {subcycles:.4f}"
+                f"BMI Update |Timesteps = {timesteps.item()} Time [h] = {(time_s.item() / 3600):.4f} Subcycle = {(i + 1):.4f} of {subcycles.item():.4f}"
             )
 
             precip_subtimestep_cm_per_h = hourly_precip_cm
@@ -423,7 +426,7 @@ class LGARBmi(Bmi):
                     volrunoff_subtimestep_cm,
                     volin_subtimestep_cm,
                     ponded_depth_subtimestep_cm,
-                ) = self._model.insert_water(
+                ) = insert_water(
                     use_closed_form_G,
                     nint,
                     subtimestep_h,
@@ -537,19 +540,18 @@ class LGARBmi(Bmi):
                 wf.print()
 
             unexpected_error = True if torch.abs(local_mb) > 1e-6 else False
-            log.debug(
-                f"\nLocal mass balance at this timestep... \n"
-                f"Error         = {local_mb.item():14.10f} \n"
-                f"Initial water = {volstart_subtimestep_cm.item():14.10f} \n"
-                f"Water added   = {precip_subtimestep_cm.item():14.10f} \n"
-                f"Ponded water  = {volon_subtimestep_cm.item():14.10f} \n"
-                f"Infiltration  = {volin_subtimestep_cm.item():14.10f} \n"
-                f"Runoff        = {volrunoff_subtimestep_cm.item():14.10f} \n"
-                f"AET           = {AET_subtimestep_cm.item():14.10f} \n"
-                f"Percolation   = {volrech_subtimestep_cm.item():14.10f} \n"
-                f"Final water   = {volend_subtimestep_cm.item():14.10f} \n"
-            )
 
+            log.debug(f"Local mass balance at this timestep...")
+            log.debug(f"Error         = {local_mb.item():14.10f}")
+            log.debug(f"Initial water = {volstart_subtimestep_cm.item():14.10f}")
+            log.debug(f"Water added   = {precip_subtimestep_cm.item():14.10f}")
+            log.debug(f"Water added   = {precip_subtimestep_cm.item():14.10f}")
+            log.debug(f"Ponded water  = {volon_subtimestep_cm.item():14.10f}")
+            log.debug(f"Infiltration  = {volin_subtimestep_cm.item():14.10f}")
+            log.debug(f"Runoff        = {volrunoff_subtimestep_cm.item():14.10f}")
+            log.debug(f"AET           = {AET_subtimestep_cm.item():14.10f}")
+            log.debug(f"Percolation   = {volrech_subtimestep_cm.item():14.10f}")
+            log.debug(f"Final water   = {volend_subtimestep_cm.item():14.10f}")
             if unexpected_error:
                 log.error(
                     f"Local mass balance (in this timestep) is {local_mb.item():14.10f}, larger than expected, needs some debugging..."

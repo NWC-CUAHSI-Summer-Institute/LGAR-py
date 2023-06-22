@@ -21,19 +21,19 @@ class WettingFront:
         self.theta = theta
         self.layer_num = layer_num
         self.to_bottom = bottom_flag
-        self.dzdt_cm_per_h = 0.0
+        self.dzdt_cm_per_h = torch.tensor(0.0)
         self.psi_cm = None
         self.k_cm_per_h = None
 
     def print(self):
         log.debug(
             f"******** Layer {self.layer_num} ********\n"
-            f"(depth_cm: {self.depth_cm:.6f})\n"
-            f"(theta: {self.theta:.6f})\n"
+            f"(depth_cm: {self.depth_cm.item():.6f})\n"
+            f"(theta: {self.theta.item():.6f})\n"
             f"(to_bottom: {self.to_bottom})\n"
-            f"(dzdt_cm_per_h: {self.dzdt_cm_per_h:.6f})\n"
-            f"(K_cm_per_h: {self.k_cm_per_h:.6f})\n"
-            f"(psi_cm: {self.psi_cm:.6f})\n"
+            f"(dzdt_cm_per_h: {self.dzdt_cm_per_h.item():.6f})\n"
+            f"(K_cm_per_h: {self.k_cm_per_h.item():.6f})\n"
+            f"(psi_cm: {self.psi_cm.item():.6f})\n"
         )
 
 
@@ -256,7 +256,7 @@ def move_wetting_fronts(
             next_old_front = lgar.wetting_fronts[next_old]
 
             # if wetting front is the most surficial wetting front
-            if layer_num == 1:
+            if layer_num == 0:
                 free_drainage_demand = 0
                 # prior mass = mass contained in the current old wetting front
                 prior_mass = current_old_front.depth_cm * (
@@ -381,8 +381,8 @@ def move_wetting_fronts(
                 )
                 current_front.theta = torch.min(theta_new, theta_e)
 
-                se = calc_se_from_theta(current_front.theta, theta_e, theta_r)
-                current_front.psi_cm = calc_h_from_se(se, alpha, m, n)
+            se = calc_se_from_theta(current_front.theta, theta_e, theta_r)
+            current_front.psi_cm = calc_h_from_se(se, alpha, m, n)
 
         if i == 0:
             """
