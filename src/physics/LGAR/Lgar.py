@@ -313,17 +313,15 @@ class LGAR:
             theta_init = calc_theta_from_h(
                 self.initial_psi, soil_properties, self.device
             )
-            log.debug(
-                f"Layer: {i}\n"
-                f"Texture: {soil_properties['Texture']}\n"
-                f"Theta_init: {theta_init}\n"
-                f"theta_r: {soil_properties['theta_r']}\n"
-                f"theta_e: {soil_properties['theta_e']}\n"
-                f"alpha(cm^-1) : {soil_properties['alpha(cm^-1)']}\n"
-                f"n: {soil_properties['n']}\n"
-                f"m: {soil_properties['m']}\n"
-                f"Ks(cm/h): {soil_properties['Ks(cm/h)']}\n"
-            )
+            log.debug(f"Layer: {i}")
+            log.debug(f"Texture: {soil_properties['Texture']}")
+            log.debug(f"Theta_init: {theta_init.item()}")
+            log.debug(f"theta_r: {soil_properties['theta_r'].item()}")
+            log.debug(f"theta_e: {soil_properties['theta_e'].item()}")
+            log.debug(f"alpha(cm^-1) : {soil_properties['alpha(cm^-1)'].item()}")
+            log.debug(f"n: {soil_properties['n'].item()}")
+            log.debug(f"m: {soil_properties['m'].item()}")
+            log.debug(f"Ks(cm/h): {soil_properties['Ks(cm/h)'].item()}")
             bottom_flag = True
             wetting_front = WettingFront(
                 depth=self.cum_layer_thickness[i],
@@ -953,7 +951,7 @@ class LGAR:
             calc_k_from_se(se, soils_data["ksat_cm_per_h"], soils_data["m"])
             * self.frozen_factor[layer_num]
         )  # // AJ - K_temp in python version for 1st layer
-        new_front.dzdt_cm_per_h = 0.0  # for now assign 0 to dzdt as it will be computed/updated in lgar_dzdt_calc function
+        new_front.dzdt_cm_per_h = torch.tensor(0.0, device=self.device)  # for now assign 0 to dzdt as it will be computed/updated in lgar_dzdt_calc function
 
         return ponded_depth_cm, volin
 

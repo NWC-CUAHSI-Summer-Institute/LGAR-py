@@ -466,7 +466,6 @@ class LGARBmi(Bmi):
                 # so no need to move them here. */
                 volin_subtimestep_cm_temp = volin_subtimestep_cm
 
-                time.sleep(0.1)  # Trying to remove segfaults
                 move_wetting_fronts(
                     self._model,
                     subtimestep_h,
@@ -545,13 +544,13 @@ class LGARBmi(Bmi):
             log.debug(f"Error         = {local_mb.item():14.10f}")
             log.debug(f"Initial water = {volstart_subtimestep_cm.item():14.10f}")
             log.debug(f"Water added   = {precip_subtimestep_cm.item():14.10f}")
-            log.debug(f"Water added   = {precip_subtimestep_cm.item():14.10f}")
             log.debug(f"Ponded water  = {volon_subtimestep_cm.item():14.10f}")
             log.debug(f"Infiltration  = {volin_subtimestep_cm.item():14.10f}")
             log.debug(f"Runoff        = {volrunoff_subtimestep_cm.item():14.10f}")
             log.debug(f"AET           = {AET_subtimestep_cm.item():14.10f}")
             log.debug(f"Percolation   = {volrech_subtimestep_cm.item():14.10f}")
             log.debug(f"Final water   = {volend_subtimestep_cm.item():14.10f}")
+
             if unexpected_error:
                 log.error(
                     f"Local mass balance (in this timestep) is {local_mb.item():14.10f}, larger than expected, needs some debugging..."

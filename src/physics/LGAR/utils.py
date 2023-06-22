@@ -181,6 +181,7 @@ def read_soils_from_layer(output, lgar, layer_num):
     output["m"] = torch.tensor(soil_properties["m"], device=lgar.device)
     output["n"] = torch.tensor(soil_properties["n"], device=lgar.device)
     output["h_min_cm"] = torch.tensor(soil_properties["h_min_cm"], device=lgar.device)
+    output["Ks(cm/h)"] = torch.tensor(soil_properties["Ks(cm/h)"], device=lgar.device)
     output["ksat_cm_per_h"] = (
         torch.tensor(soil_properties["Ks(cm/h)"]) * lgar.frozen_factor[layer_num]
     )

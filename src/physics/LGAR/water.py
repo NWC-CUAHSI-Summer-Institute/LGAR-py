@@ -9,6 +9,7 @@ from src.physics.LGAR.utils import (
     calc_k_from_se,
 )
 from src.physics.LGAR.utils import read_soils
+from src.physics.LGAR.geff import calc_geff
 
 log = logging.getLogger("physics.LGAR.water")
 torch.set_default_dtype(torch.float64)
