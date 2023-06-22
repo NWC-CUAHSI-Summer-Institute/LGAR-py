@@ -320,7 +320,7 @@ class LGARBmi(Bmi):
                 precip_subtimestep_cm_per_h * subtimestep_h
             )  # the amount of water on the surface before any infiltration and runoff
             ponded_depth_subtimestep_cm = (
-                ponded_depth_subtimestep_cm + volin_timestep_cm
+                ponded_depth_subtimestep_cm + volon_timestep_cm
             )  # add volume of water on the surface (from the last timestep) to ponded depth as well
 
             precip_subtimestep_cm = (
@@ -328,6 +328,8 @@ class LGARBmi(Bmi):
             )  # rate x dt = amount (portion of the water on the suface for model's timestep [cm])
             PET_subtimestep_cm = PET_subtimestep_cm_per_h * subtimestep_h
             volin_subtimestep_cm = torch.tensor(0.0, device=self.device)
+            volrech_subtimestep_cm = torch.tensor(0.0, device=self.device)
+            surface_runoff_subtimestep_cm = torch.tensor(0.0, device=self.device)
             precip_previous_subtimestep_cm = self._model.precip_previous_timestep_cm
 
             # Calculate AET from PET if PET is non-zero
@@ -425,7 +427,7 @@ class LGARBmi(Bmi):
                     use_closed_form_G,
                     nint,
                     subtimestep_h,
-                    precip_timestep_cm,
+                    precip_subtimestep_cm_per_h,  # Passing in the subtimestep, but labeling it differently in the function
                     wf_free_drainage_demand,
                     ponded_depth_subtimestep_cm,
                     volin_subtimestep_cm,

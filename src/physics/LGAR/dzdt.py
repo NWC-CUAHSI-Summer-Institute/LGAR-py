@@ -67,7 +67,7 @@ def calc_dzdt(lgar, use_closed_form_G, nint, h_p):
                         / delta_theta
                         * (
                             soils_data["ksat_cm_per_h"] * (geff + h_p) / current.depth_cm
-                            + current.K_cm_per_h
+                            + current.k_cm_per_h
                         )
                     )
                 else:
