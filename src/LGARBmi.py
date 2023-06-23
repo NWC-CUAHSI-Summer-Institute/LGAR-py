@@ -1,15 +1,26 @@
 """a file to define the LGARBMI class"""
+import pandas as pd
 from bmipy import Bmi
 import logging
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import OmegaConf
 import time
+from tqdm import tqdm
 import torch
 from typing import Tuple
+import faulthandler
+faulthandler.enable()
 
 from src.data.read import read_forcing_data
-from src.physics.Lgar import LGAR
+from src.physics.giuh import giuh_convolution_integral
+from src.physics.LGAR.Lgar import LGAR
+from src.physics.LGAR.dry_depth import calc_dry_depth
+from src.physics.LGAR.dzdt import calc_dzdt
+from src.physics.LGAR.utils import calc_aet
+from src.physics.wetting_fronts.WettingFront import move_wetting_fronts
+from src.physics.LGAR.water import insert_water
 
 log = logging.getLogger("LGARBmi")
+torch.set_default_dtype(torch.float64)
 
 
 class LGARBmi(Bmi):
@@ -17,10 +28,10 @@ class LGARBmi(Bmi):
 
     _name = "LGAR Torch"
     _input_var_names = (
-        "precipitation_rate",
-        "potential_evapotranspiration_rate",
+        "precipitation_mm_per_h",
+        "PET_mm_per_h",
         "soil_moisture_wetting_fronts",
-        "soil_depth_wetting_fronts"
+        "soil_depth_wetting_fronts",
     )
     _output_var_names = (
         "precipitation",  # cumulative amount of precip
@@ -38,6 +49,7 @@ class LGARBmi(Bmi):
 
     def __init__(self):
         super().__init__()
+        torch.manual_seed(0)
         self._model = None
         self.device = None
         self._values = {}
@@ -49,7 +61,16 @@ class LGARBmi(Bmi):
         self._start_time = 0.0
         self._end_time = None
         self.timestep = None
+        self.nsteps = None
         self._time_units = "s"
+
+        # Setting the variables that track output vars
+        self.precipitation = None
+        self.PET_mm_per_h = None
+        self.soil_moisture_fronts = None
+        self.soil_thickness_fronts = None
+        self.runoff = None
+        self.timestep_runoff = None
 
     def initialize(self, config_file: str) -> None:
         """Perform startup tasks for the model.
@@ -73,21 +94,52 @@ class LGARBmi(Bmi):
         with placeholder values is used by the BMI.
         """
         # Convert cfg into a DictConfig obj. We need the cfg in a string format for BMI
-        cfg = OmegaConf.create(eval(config_file))
+        self.cfg = OmegaConf.create(eval(config_file))
 
         self._grid_type = {0: "scalar"}
-        self.device = cfg.device
+        self.device = self.cfg.device
 
-        self._model = LGAR(cfg)
-        self.dates, self.x = read_forcing_data(cfg)
+        self._model = LGAR(self.cfg)
+        self.dates, self.precipitation, self.PET = read_forcing_data(self.cfg)
 
-        self.endtime = cfg.data.endtime
-        self.timestep = cfg.data.timestep
-        self.nsteps = int(self.endtime/self.timestep)
+        self._end_time = self._model.endtime_s.item()
+        self.timestep = (
+            self._model.forcing_resolution_h.item() * self.cfg.units.hr_to_sec
+        )  # Converting from hours to seconds
+        self.nsteps = int(self._end_time / self.timestep)
 
-        assert (self.nsteps <= int(self.x.shape[0]))
-        log.debug("Variables are written to file: data_variables.csv")
-        log.debug("Wetting fronts state is written to file: data_layers.csv")
+        assert self.nsteps <= int(self.precipitation.shape[0])
+        if self.cfg.print_output:
+            log.debug("Variables are written to file: data_variables.csv")
+            log.debug("Wetting fronts state is written to file: data_layers.csv")
+
+        self.num_giuh_ordinates = self._model.num_giuh_ordinates
+        self.giuh_runoff_queue = torch.zeros(
+            [self.num_giuh_ordinates], device=self.device
+        )
+
+        self.local_mass_balance = None
+
+        self.soil_moisture_fronts = torch.zeros(
+            [self._model.num_layers, self.nsteps], device=self.device
+        )
+        self.soil_thickness_fronts = torch.zeros(
+            [self._model.num_layers, self.nsteps], device=self.device
+        )
+        self.runoff = torch.zeros([self.nsteps])
+
+        self._values = {
+            "precipitation_mm_per_h": self._model.precipitation_mm_per_h,
+            "PET_mm_per_h": self._model.PET_mm_per_h,
+            "soil_moisture_wetting_fronts": self._model.soil_moisture_wetting_fronts,
+            "soil_depth_wetting_fronts": self._model.soil_depth_wetting_fronts,
+        }
+        self._var_units = {
+            "precipitation_mm_per_h": "(mm / h)",
+            "PET_mm_per_h": "(mm / h)",
+            "soil_moisture_wetting_fronts": "(-)",
+            "soil_depth_wetting_fronts": "m",
+        }
 
     def update(self) -> None:
         """Advance model state by one time step.
@@ -98,9 +150,12 @@ class LGARBmi(Bmi):
         then they can be computed by the :func:`initialize` method and this
         method can return with no action.
         """
-        raise NotImplementedError
+        if self._model.sft_coupled:
+            self._model.frozen_factor_hydraulic_conductivity()
 
-    def update_until(self, time: float) -> None:
+        self.timestep_runoff = self.run_cycle()
+
+    def update_until(self, time_: float) -> None:
         """Advance model state until the given time.
 
         Parameters
@@ -108,7 +163,23 @@ class LGARBmi(Bmi):
         time : float
             A model time later than the current model time.
         """
-        raise NotImplementedError
+        start_time = time.perf_counter()
+        for i in tqdm(range(time_), desc= "Running Timesteps"):
+            log.debug(f"Real Time: {self.dates[i]}")
+            self.set_value("precipitation_mm_per_h", self.precipitation[i])
+            self.set_value("PET_mm_per_h", self.PET[i])
+            self.update()  # CALLING UPDATE
+            self.set_value(
+                "soil_moisture_wetting_fronts",
+                self._model.soil_moisture_wetting_fronts,
+            )
+            self.set_value(
+                "soil_depth_wetting_fronts",
+                self._model.soil_depth_wetting_fronts,
+            )
+            time.sleep(0.001)
+        end_time = time.perf_counter()
+        log.debug(f"Time Elapsed: {start_time - end_time:.6f} seconds")
 
     def finalize(self) -> None:
         """Perform tear-down tasks for the model.
@@ -117,23 +188,431 @@ class LGARBmi(Bmi):
         loop. This typically includes deallocating memory, closing files and
         printing reports.
         """
-        self._end_time = time.perf_counter()
+        # Saving results to csv
+        if self.cfg.print_output:
+            df_precip = pd.DataFrame(
+                self.precipitation.detach().numpy(), columns="Precipitation (mm/hr)"
+            )
+            df_pet = pd.DataFrame(
+                self.PET_mm_per_h.detach().numpy(), columns="Precipitation (mm/hr)"
+            )
+            df_moisture = pd.DataFrame(self.soil_moisture_fronts.detach().numpy())
+            df_thickness = pd.DataFrame(self.soil_thickness_fronts.detach().numpy())
+            df_precip.to_csv(self.cfg.save_paths.precip)
+            df_pet.to_csv(self.cfg.save_paths.pet)
+            df_moisture.to_csv(self.cfg.save_paths.soil_moisture)
+            df_thickness.to_csv(self.cfg.save_paths.soil_thickness)
+
+        # Authors were confused about this
+        # volend_giuh_cm = torch.sum(self._model.giuh_runoff_queue_cm)
+
+        global_error_cm = (
+            self._model.volstart_cm
+            + self._model.volprecip_cm
+            - self._model.volrunoff_cm
+            - self._model.volAET_cm
+            - self._model.volon_cm
+            - self._model.volrech_cm
+            - self._model.volend_cm
+        )
 
         log.info(
-            f"\n---------------------- Simulation Summary  ------------------------ \n"
+            f"---------------------- Simulation Summary  ------------------------ "
         )
-        log.info(f"Time (sec)                 = {self._end_time -self._start_time:.6f} \n")
-        log.info(f"-------------------------- Mass balance ------------------- \n")
-        log.info(f"initial water in soil      = {volstart} cm\n")
-        log.info(f"total precipitation input  = {volprecip}cm\n")
-        log.info(f"total infiltration         = {volin} cm\n")
-        log.info(f"final water in soil        = {volend} cm\n")
-        log.info(f"water remaining on surface = {volon} cm\n")
-        log.info(f"surface runoff             = {volrunoff} cm\n")
-        log.info(f"total percolation          = {volrech} cm\n")
-        log.info(f"total AET                  = {volAET} cm\n")
-        log.info(f"total PET                  = {volPET} cm\n")
-        log.info(f"global balance             = {global_error_cm} cm\n")
+        log.info(
+            f"Time (sec)                 = {self._end_time -self._start_time:.6f} "
+        )
+        log.info(f"-------------------------- Mass balance ------------------- ")
+        log.info(f"Initial water in soil      = {self._model.volstart_cm.item()} cm")
+        log.info(f"Total precipitation        = {self._model.volprecip_cm.item()}cm")
+        log.info(f"Total Infiltration         = {self._model.volin_cm.item()} cm")
+        log.info(f"Final Water in Soil        = {self._model.volend_cm.item()} cm")
+        log.info(f"Surface ponded water       = {self._model.volon_cm.item()} cm")
+        log.info(f"Surface runoff             = {self._model.volrunoff_cm.item()} cm")
+        # log.info(f"GIUH runoff                = {self._model.volrunoff_giuh.item()} cm")
+        log.info(f"Total percolation          = {self._model.volrech_cm.item()} cm")
+        log.info(f"Total AET                  = {self._model.volAET_cm.item()} cm")
+        log.info(f"Total PET                  = {self._model.volPET_cm.item()} cm")
+        log.info(f"Total discharge (Q)        = {self._model.total_Q_cm.item()} cm")
+        log.info(f"Global Balance             = {global_error_cm.item()} cm")
+
+    def run_cycle(self):
+        """
+        A function to run the model's subcycling timestep loop
+        :return:
+        """
+        subcycles = torch.round(
+            self._model.forcing_interval
+        )  # ROUNDING SINCE MACHINE PRECISION SHORTENS BY 1
+        num_layers = self._model.num_layers
+
+        precip_timestep_cm = torch.tensor(0.0, device=self.device)
+        PET_timestep_cm = torch.tensor(0.0, device=self.device)
+        AET_timestep_cm = torch.tensor(0.0, device=self.device)
+        volend_timestep_cm = self._model.calc_mass_balance()
+        volin_timestep_cm = torch.tensor(0.0, device=self.device)
+        volon_timestep_cm = self._model.volon_timestep_cm
+        volrunoff_timestep_cm = torch.tensor(0.0, device=self.device)
+        volrech_timestep_cm = torch.tensor(0.0, device=self.device)
+        surface_runoff_timestep_cm = torch.tensor(0.0, device=self.device)
+        volrunoff_giuh_timestep_cm = torch.tensor(0.0, device=self.device)
+        volQ_timestep_cm = torch.tensor(0.0, device=self.device)
+        volQ_gw_timestep_cm = torch.tensor(0.0, device=self.device)
+
+        subtimestep_h = self._model.timestep_h
+        nint = self._model.nint
+        wilting_point_psi_cm = self._model.wilting_point_psi_cm
+        use_closed_form_G = self._model.use_closed_form_G
+
+        AET_thresh_Theta = torch.tensor(
+            self.cfg.constants.AET_thresh_Theta, device=self.device
+        )
+        AET_expon = torch.tensor(self.cfg.constants.AET_expon, device=self.device)
+
+        volend_subtimestep_cm = volend_timestep_cm
+        volQ_gw_subtimestep_cm = torch.tensor(0.0, device=self.device)
+
+        ponded_depth_max_cm = self._model.ponded_depth_max_cm
+
+        hourly_precip_cm = (
+            self.get_value_ptr("precipitation_mm_per_h") * self.cfg.units.mm_to_cm
+        )  # rate [cm/hour]
+        hourly_PET_cm = (
+            self.get_value_ptr("PET_mm_per_h") * self.cfg.units.mm_to_cm
+        )  # rate [cm/hour]
+        log.debug("*** LASAM BMI Update... *** ")
+        log.debug(f"Pr [cm/hr] (timestep) = {hourly_precip_cm.item()}")
+        log.debug(f"PET [cm/hr] (timestep) = {hourly_PET_cm.item()}")
+
+        self._model.prev_wetting_fronts = self._model.wetting_fronts
+
+        # Ensure forcings are non-negative
+        assert hourly_precip_cm >= 0.0
+        assert hourly_PET_cm >= 0.0
+
+        time_s = torch.tensor(0.0, device=self.device)
+        timesteps = torch.tensor(0.0, device=self.device)
+        for i in range(int(subcycles)):
+            """
+            /* Note unit conversion:
+            Pr and PET are rates (fluxes) in mm/h
+            Pr [mm/h] * 1h/3600sec = Pr [mm/3600sec]
+            Model timestep (dt) = 300 sec (5 minutes for example)
+            convert rate to amount
+            Pr [mm/3600sec] * dt [300 sec] = Pr[mm] * 300/3600.
+            in the code below, subtimestep_h is this 300/3600 factor (see initialize from config in lgar.cxx)
+            """
+            time_s = time_s + (subtimestep_h * self.cfg.units.hr_to_sec)
+            timesteps = timesteps + 1
+
+            log.debug(
+                f"BMI Update |---------------------------------------------------------------|"
+            )
+            log.debug(
+                f"BMI Update |Timesteps = {timesteps.item()} Time [h] = {(time_s.item() / 3600):.4f} Subcycle = {(i + 1):.4f} of {subcycles.item():.4f}"
+            )
+
+            precip_subtimestep_cm_per_h = hourly_precip_cm
+            PET_subtimestep_cm_per_h = hourly_PET_cm
+
+            ponded_depth_subtimestep_cm = (
+                precip_subtimestep_cm_per_h * subtimestep_h
+            )  # the amount of water on the surface before any infiltration and runoff
+            ponded_depth_subtimestep_cm = (
+                ponded_depth_subtimestep_cm + volon_timestep_cm
+            )  # add volume of water on the surface (from the last timestep) to ponded depth as well
+
+            precip_subtimestep_cm = (
+                precip_subtimestep_cm_per_h * subtimestep_h
+            )  # rate x dt = amount (portion of the water on the suface for model's timestep [cm])
+            PET_subtimestep_cm = PET_subtimestep_cm_per_h * subtimestep_h
+            volin_subtimestep_cm = torch.tensor(0.0, device=self.device)
+            volrech_subtimestep_cm = torch.tensor(0.0, device=self.device)
+            surface_runoff_subtimestep_cm = torch.tensor(0.0, device=self.device)
+            precip_previous_subtimestep_cm = self._model.precip_previous_timestep_cm
+
+            # Calculate AET from PET if PET is non-zero
+            if PET_subtimestep_cm_per_h > 0.0:
+                AET_subtimestep_cm = calc_aet(
+                    self._model.wetting_fronts,
+                    PET_subtimestep_cm_per_h,
+                    subtimestep_h,
+                    wilting_point_psi_cm,
+                    self._model.layer_soil_type,
+                    self._model.soils_df,
+                    self.device,
+                )
+            else:
+                AET_subtimestep_cm = torch.tensor(0.0, device=self.device)
+
+            precip_timestep_cm = precip_timestep_cm + precip_subtimestep_cm
+            PET_timestep_cm = PET_timestep_cm + torch.clamp(
+                PET_subtimestep_cm, min=0.0
+            )  # Ensuring non-negative PET
+
+            volstart_subtimestep_cm = self._model.calc_mass_balance()
+
+            soil_num = self._model.layer_soil_type[
+                self._model.wetting_fronts[self._model.current].layer_num
+            ]
+            soil_properties = self._model.soils_df.iloc[soil_num]
+            theta_e = soil_properties["theta_e"]
+            is_top_wf_saturated = (
+                True
+                if self._model.wetting_fronts[self._model.current].theta + 1e-12
+                >= theta_e
+                else False
+            )  # PTL: sometimes a machine precision error would erroneously create a new wetting front during saturated conditions. The + 1E-12 seems to prevent this.
+
+            # Addressed machine precision issues where volon_timestep_error could be for example -1E-17 or 1.E-20 or smaller
+            # volon_timestep_cm = torch.clamp(volon_timestep_cm, min=0.0)
+
+            # Determining if we need to create a superficial front
+            create_surficial_front = (
+                precip_previous_subtimestep_cm == 0.0
+                and precip_subtimestep_cm > 0.0
+                and volon_timestep_cm == 0
+            ).item()
+
+            # Note, we're in python so everything is 0-based
+            wf_free_drainage_demand = (
+                self._model.wetting_front_free_drainage()
+            )  # This is assuming this function is already defined somewhere in your code
+
+            # flag = "Yes" if create_surficial_front and not is_top_wf_saturated else "No"
+            # log.debug(f"Create superficial wetting front? {flag}")
+
+            if create_surficial_front and (is_top_wf_saturated is False):
+                # Create a new wetting front if the following is true. Meaning there is no
+                # wetting front in the top layer to accept the water, must create one.
+
+                # necessary to assign zero precip due to the creation of new wetting front; AET will still be taken out of the layers
+                temp_pd = torch.tensor(0.0, device=self.device)
+                temp_pd = move_wetting_fronts(
+                    self._model,
+                    subtimestep_h,
+                    temp_pd,
+                    wf_free_drainage_demand,
+                    volend_subtimestep_cm,
+                    num_layers,
+                    AET_subtimestep_cm,
+                )
+
+                dry_depth = calc_dry_depth(
+                    self._model, use_closed_form_G, nint, subtimestep_h
+                )
+
+                ponded_depth_subtimestep_cm, volin_subtimestep_cm = self._model.create_surficial_front_func(
+                    ponded_depth_subtimestep_cm,
+                    volin_subtimestep_cm,
+                    dry_depth
+                )
+
+                self._model.prev_wetting_fronts = self._model.wetting_fronts
+
+                volin_timestep_cm = volin_timestep_cm + volin_subtimestep_cm
+
+                log.debug("New Wetting Front Created")
+                for wf in self._model.wetting_fronts:
+                    wf.print()
+
+            if ponded_depth_subtimestep_cm > 0 and (create_surficial_front is False):
+                #  infiltrate water based on the infiltration capacity given no new wetting front
+                #  is created and that there is water on the surface (or raining).
+
+                (
+                    volrunoff_subtimestep_cm,
+                    volin_subtimestep_cm,
+                    ponded_depth_subtimestep_cm,
+                ) = insert_water(
+                    self._model,
+                    use_closed_form_G,
+                    nint,
+                    subtimestep_h,
+                    precip_subtimestep_cm_per_h,  # Passing in the subtimestep, but labeling it differently in the function
+                    wf_free_drainage_demand,
+                    ponded_depth_subtimestep_cm,
+                    volin_subtimestep_cm,
+                )
+
+                volin_timestep_cm = volin_timestep_cm + volin_subtimestep_cm
+                volrunoff_timestep_cm = volrunoff_timestep_cm + volrunoff_subtimestep_cm
+                volrech_subtimestep_cm = volin_subtimestep_cm  # this gets updated later, probably not needed here
+
+                volon_subtimestep_cm = ponded_depth_subtimestep_cm
+
+                if volrunoff_subtimestep_cm < 0:
+                    log.error("There is a mass balance problem")
+                    raise ValueError
+            else:
+                if ponded_depth_subtimestep_cm < ponded_depth_max_cm:
+                    # volrunoff_timestep_cm = volrunoff_timestep_cm + 0
+                    volon_subtimestep_cm = ponded_depth_subtimestep_cm
+                    ponded_depth_subtimestep_cm = torch.tensor(0.0, device=self.device)
+                    volrunoff_subtimestep_cm = torch.tensor(0.0, device=self.device)
+                else:
+                    volrunoff_subtimestep_cm = (
+                        ponded_depth_subtimestep_cm - ponded_depth_max_cm
+                    )
+                    volrunoff_timestep_cm = (
+                        ponded_depth_subtimestep_cm - ponded_depth_max_cm
+                    )
+                    volon_subtimestep_cm = ponded_depth_max_cm
+                    ponded_depth_subtimestep_cm = ponded_depth_max_cm
+            if create_surficial_front is False:
+                # move wetting fronts if no new wetting front is created. Otherwise, movement
+                # of wetting fronts has already happened at the time of creating surficial front,
+                # so no need to move them here. */
+                volin_subtimestep_cm_temp = volin_subtimestep_cm
+
+                # TODO THERE IS A POINTER TO VOLIN!!!!!!!!!!
+                volin_subtimestep_cm = move_wetting_fronts(
+                    self._model,
+                    subtimestep_h,
+                    volin_subtimestep_cm,
+                    wf_free_drainage_demand,
+                    volend_subtimestep_cm,
+                    num_layers,
+                    AET_subtimestep_cm,
+                )
+
+                volrech_subtimestep_cm = volin_subtimestep_cm
+                volrech_timestep_cm = volrech_timestep_cm + volrech_subtimestep_cm
+                volin_subtimestep_cm = (
+                    volin_subtimestep_cm_temp  # resetting the subtimestep
+                )
+
+            # / *---------------------------------------------------------------------- * /
+            # // calculate derivative(dz / dt) for all wetting fronts
+            calc_dzdt(
+                self._model, use_closed_form_G, nint, ponded_depth_subtimestep_cm
+            )
+
+            volend_subtimestep_cm = self._model.calc_mass_balance()
+            volend_timestep_cm = volend_subtimestep_cm
+            self._model.precip_previous_timestep_cm = precip_subtimestep_cm
+
+            # /*----------------------------------------------------------------------*/
+            # // mass balance at the subtimestep (local mass balance)
+
+            local_mb = (
+                volstart_subtimestep_cm
+                + precip_subtimestep_cm
+                + volon_timestep_cm
+                - volrunoff_subtimestep_cm
+                - AET_subtimestep_cm
+                - volon_subtimestep_cm
+                - volrech_subtimestep_cm
+                - volend_subtimestep_cm
+            )
+
+            AET_timestep_cm = AET_timestep_cm + AET_subtimestep_cm
+            volon_timestep_cm = volon_subtimestep_cm  # surface ponded water at the end of the timestep
+
+            # /*----------------------------------------------------------------------*/
+            # // compute giuh runoff for the subtimestep
+            surface_runoff_subtimestep_cm = volrunoff_subtimestep_cm
+            (
+                self.giuh_runoff_queue,
+                volrunoff_giuh_subtimestep_cm,
+            ) = giuh_convolution_integral(
+                volrunoff_subtimestep_cm,
+                self._model.num_giuh_ordinates,
+                self._model.giuh_ordinates,
+                self.giuh_runoff_queue,
+            )
+
+            surface_runoff_timestep_cm = (
+                surface_runoff_timestep_cm + surface_runoff_subtimestep_cm
+            )
+            volrunoff_giuh_timestep_cm = (
+                volrunoff_giuh_timestep_cm + volrunoff_giuh_subtimestep_cm
+            )
+
+            # total mass of water leaving the system, at this time it is the giuh-only, but later will add groundwater component as well.
+            volQ_timestep_cm = volQ_timestep_cm + volrunoff_giuh_subtimestep_cm
+
+            # adding groundwater flux to stream channel (note: this will be updated/corrected after adding the groundwater reservoir)
+            volQ_gw_timestep_cm = volQ_gw_timestep_cm + volQ_gw_subtimestep_cm
+            log.debug(f"Printing wetting fronts at this subtimestep...")
+            for wf in self._model.wetting_fronts:
+                wf.print()
+
+            unexpected_error = True if torch.abs(local_mb) > 1e-10 else False
+
+            log.debug(f"Local mass balance at this timestep...")
+            log.debug(f"Error         = {local_mb.item():14.10f}")
+            log.debug(f"Initial water = {volstart_subtimestep_cm.item():14.10f}")
+            log.debug(f"Water added   = {precip_subtimestep_cm.item():14.10f}")
+            log.debug(f"Ponded water  = {volon_subtimestep_cm.item():14.10f}")
+            log.debug(f"Infiltration  = {volin_subtimestep_cm.item():14.10f}")
+            log.debug(f"Runoff        = {volrunoff_subtimestep_cm.item():14.10f}")
+            log.debug(f"AET           = {AET_subtimestep_cm.item():14.10f}")
+            log.debug(f"Percolation   = {volrech_subtimestep_cm.item():14.10f}")
+            log.debug(f"Final water   = {volend_subtimestep_cm.item():14.10f}")
+
+            # if unexpected_error:
+            #     log.error(
+            #         f"Local mass balance (in this timestep) is {local_mb.item()}, larger than expected, needs some debugging..."
+            #     )
+            #     raise RuntimeError("Unexpected local error!")
+
+            self._model.local_mass_balance = local_mb
+
+            # assert (
+            #     self._model.wetting_fronts[0].depth_cm > 0.0
+            # )  # check on negative layer depth --> move this to somewhere else AJ (later)
+
+        for i in range(self._model.num_wetting_fronts):
+            self._model.soil_moisture_wetting_fronts[i] = self._model.wetting_fronts[
+                i
+            ].theta
+            self._model.soil_depth_wetting_fronts[i] = (
+                self._model.wetting_fronts[i].depth_cm * self.cfg.units.cm_to_m
+            )
+            log.debug(
+                f"Wetting fronts (bmi outputs) (depth in meters, theta)= {self._model.soil_depth_wetting_fronts[i]}, {self._model.soil_moisture_wetting_fronts[i]}"
+            )
+
+        # self._model.volprecip_timestep_cm = precip_timestep_cm
+        #         # self.volin_timestep_cm = volin_timestep_cm
+        #         # self._model.volon_timestep_cm = volon_timestep_cm
+        #         # self._model.volend_timestep_cm = volend_timestep_cm
+        #         # self._model.volAET_timestep_cm = AET_timestep_cm
+        #         # self._model.volrech_timestep_cm = volrech_timestep_cm
+        #         # self._model.volrunoff_timestep_cm = volrunoff_timestep_cm
+        #         # self._model.volQ_timestep_cm = volQ_timestep_cm
+        #         # self._model.volQ_gw_timestep_cm = volQ_gw_timestep_cm
+        #         # self._model.volPET_timestep_cm = PET_timestep_cm
+        #         # self._model.volrunoff_giuh_timestep_cm = volrunoff_giuh_timestep_cm
+
+        self._model.volprecip_cm = self._model.volprecip_cm + precip_timestep_cm
+        self._model.volin_cm = self._model.volin_cm + volin_timestep_cm
+        self._model.volon_cm = volon_timestep_cm
+        self._model.volend_cm = volend_timestep_cm
+        self._model.volAET_cm = self._model.volAET_cm + AET_timestep_cm
+        self._model.volrech_cm = self._model.volrech_cm + volrech_timestep_cm
+        self._model.volrunoff_cm = self._model.volrunoff_cm + volrunoff_timestep_cm
+        self._model.volQ_cm = self._model.volQ_cm + volQ_timestep_cm
+        self._model.volQ_gw_cm = self._model.volQ_gw_cm + volQ_gw_timestep_cm
+        self._model.volPET_cm = self._model.volPET_cm + PET_timestep_cm
+        self._model.volrunoff_giuh_cm = (
+            self._model.volrunoff_giuh_cm + volrunoff_giuh_timestep_cm
+        )
+
+        # TODO: Probably Never lol XD
+        #  // converted values, a struct local to the BMI and has bmi output variables
+        # bmi_unit_conv.mass_balance_m        = state->lgar_mass_balance.local_mass_balance * state->units.cm_to_m;
+        # bmi_unit_conv.volprecip_timestep_m  = precip_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volin_timestep_m      = volin_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volend_timestep_m     = volend_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volAET_timestep_m     = AET_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volrech_timestep_m    = volrech_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volrunoff_timestep_m  = volrunoff_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volQ_timestep_m       = volQ_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volQ_gw_timestep_m    = volQ_gw_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volPET_timestep_m     = PET_timestep_cm * state->units.cm_to_m;
+        # bmi_unit_conv.volrunoff_giuh_timestep_m = volrunoff_giuh_timestep_cm * state->units.cm_to_m;
 
     def get_component_name(self) -> str:
         """Name of the component.
@@ -384,6 +863,7 @@ class LGARBmi(Bmi):
         raise NotImplementedError
 
     def get_value(self, name: str, dest: torch.Tensor) -> torch.Tensor:
+        # DONT EVER EVER EVER USE THIS!!!!!! IT BREAKS TENSOR CONNECTIVITY
         """Get a copy of values of the given variable.
 
         This is a getter for the model, used to access the model's
@@ -402,7 +882,8 @@ class LGARBmi(Bmi):
         ndarray
             The same numpy array that was passed as an input buffer.
         """
-        raise NotImplementedError
+        dest = self.get_value_ptr(name).flatten()
+        return dest
 
     def get_value_ptr(self, name: str) -> torch.Tensor:
         """Get a reference to values of the given variable.
@@ -421,7 +902,7 @@ class LGARBmi(Bmi):
         array_like
             A reference to a model variable.
         """
-        raise NotImplementedError
+        return self._values[name]
 
     def get_value_at_indices(
         self, name: str, dest: torch.Tensor, inds: torch.Tensor
@@ -442,7 +923,7 @@ class LGARBmi(Bmi):
         array_like
             Value of the model variable at the given location.
         """
-        raise NotImplementedError
+        return self._values[name][inds]
 
     def set_value(self, name: str, src: torch.Tensor) -> None:
         """Specify a new value for a model variable.
@@ -459,7 +940,11 @@ class LGARBmi(Bmi):
         src : array_like
             The new value for the specified variable.
         """
-        raise NotImplementedError
+        val = self.get_value_ptr(name)
+        if val.dim() == 0:  # Check if tensor is a scalar
+            val.data = src
+        else:
+            val[:] = src
 
     def set_value_at_indices(
         self, name: str, inds: torch.Tensor, src: torch.Tensor
@@ -475,7 +960,8 @@ class LGARBmi(Bmi):
         src : array_like
             The new value for the specified variable.
         """
-        raise NotImplementedError
+        val = self.get_value_ptr(name)
+        val[inds] = src
 
     # Grid information
     def get_grid_rank(self, grid: int) -> int:

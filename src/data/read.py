@@ -1,16 +1,21 @@
 """A file to store the function where we read the input data"""
 import logging
 
-import pandas
 from omegaconf import DictConfig
 import numpy as np
 import pandas as pd
 from pathlib import Path
 import torch
 
+from src.physics.LGAR.utils import (
+    calc_theta_from_h,
+    calc_bc_lambda_psib_cm,
+    calc_h_min_cm,
+)
 from src.tests.sanity_checks import DataError
 
 log = logging.getLogger("data.read_forcing")
+torch.set_default_dtype(torch.float64)
 
 
 def read_forcing_data(cfg: DictConfig) -> (np.ndarray, torch.Tensor, torch.Tensor):
@@ -36,16 +41,16 @@ def read_forcing_data(cfg: DictConfig) -> (np.ndarray, torch.Tensor, torch.Tenso
     precip = torch.tensor(df["P(mm/h)"].values, dtype=torch.float64, device=device)
     pet = torch.tensor(df["PET(mm/h)"].values, dtype=torch.float64, device=device)
 
-    forcings = torch.stack([precip, pet])
-    x = torch.transpose(forcings, 0, 1)
-
-    return time, x
+    return time, precip, pet
 
 
-def read_soils_file(cfg: DictConfig) -> pd.DataFrame:
+def read_soils_file(
+    cfg: DictConfig, wilting_point_psi_cm: torch.Tensor
+) -> pd.DataFrame:
     """
     Reading the soils dataframe
     :param cfg: the config file
+    :param wilting_point_psi_cm wilting point (the amount of water not available for plants or not accessible by plants)
 
     Below are the variables used inside of the soils dataframe:
     Texture: The soil classification
@@ -58,6 +63,7 @@ def read_soils_file(cfg: DictConfig) -> pd.DataFrame:
 
     :return:
     """
+    device = cfg.device
     soils_file_path = Path(cfg.data.soil_params_file)
 
     # Check if forcing file exists
@@ -66,12 +72,15 @@ def read_soils_file(cfg: DictConfig) -> pd.DataFrame:
         raise DataError
 
     # Checking the file extension so we correctly read the file
-    if soils_file_path.suffix == '.csv':
+    if soils_file_path.suffix == ".csv":
         df = pd.read_csv(soils_file_path)
-    elif soils_file_path.suffix == '.dat':
-        df = pd.read_csv(soils_file_path, delimiter=r'\s+', engine='python')
+    elif soils_file_path.suffix == ".dat":
+        df = pd.read_csv(soils_file_path, delimiter=r"\s+", engine="python")
     else:
         log.error(f"File {soils_file_path} has an invalid type")
-        df = None
-    return df
+        raise DataError
 
+    df["theta_wp"] = calc_theta_from_h(wilting_point_psi_cm, df, device)
+    df = calc_bc_lambda_psib_cm(df, device)
+    df = calc_h_min_cm(df, device)
+    return df

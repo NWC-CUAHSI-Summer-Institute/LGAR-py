@@ -11,9 +11,11 @@ log = logging.getLogger(__name__)
 def main(cfg: DictConfig) -> None:
     if sanity_checks.soil_types(cfg):
         raise sanity_checks.DataError
+
     lgar_bmi = LGARBmi()
     lgar_bmi.initialize(str(cfg))
-    lgar_bmi.update()
+    # TODO SET VARS
+    lgar_bmi.update_until(lgar_bmi.nsteps)
     lgar_bmi.finalize()
 
 

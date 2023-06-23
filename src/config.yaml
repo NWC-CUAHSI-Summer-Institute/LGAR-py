@@ -1,10 +1,17 @@
 defaults:
   - _self_
   - data: config/Phillipsburg
-cwd: /Users/taddbindas/projects/LGAR-Torch
+cwd: /mnt/sdb1/tkb5476/LGAR-Torch/
+#cwd: /Users/taddbindas/projects/LGAR-Torch
 save_name: debugger
 output_dir: ${cwd}/output
 device: cpu
+print_output: False # Not supported rn
+save_paths:
+  precip: ${cwd}/data/save_files/precip.csv
+  pet: ${cwd}/data/save_files/PET.csv
+  soil_moisture: ${cwd}/data/save_files/soil_moisture.csv
+  soil_thickness: ${cwd}/data/save_files/soil_thickness.csv
 variables:
   num_soil_types: 15  # must be less than or equal to MAX_NUM_SOIL_TYPES
   num_soil_layers: 3  # must be less than or equal to MAX_NUM_SOIL_LAYERS
@@ -17,6 +24,15 @@ variables:
     - 13  # Sand
     - 14  # Sandy Loam
     - 15  # Clay
+  nsteps: ???
+constants:
+  AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET (fix later!)
+  AET_expon: 1.0
+units:
+  cm_to_mm: 10.0
+  mm_to_cm: 0.1
+  cm_to_m: 0.01
+  hr_to_sec: 3600.0
 
 ################## HYDRA CONFIG #######################
 hydra:
