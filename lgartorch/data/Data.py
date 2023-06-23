@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import torch
+from torch import Tensor
 from torch.utils.data import Dataset
 from typing import (
     Generic,
@@ -16,25 +17,25 @@ from typing import (
     Sequence,
     Tuple,
     TypeVar,
-    Union
+    Union,
 )
 
-from src.physics.LGAR.utils import (
+from lgartorch.models.physics.utils import (
     calc_theta_from_h,
-    calc_bc_lambda_psib_cm,
+    calc_bc_lambda,
+    calc_bc_psib,
     calc_h_min_cm,
 )
 
 log = logging.getLogger("data.Data")
-T_co = TypeVar('T_co', covariant=True)
-T = TypeVar('T')
+T_co = TypeVar("T_co", covariant=True)
+T = TypeVar("T")
 
 
 class Data(Dataset):
     def __init__(self, cfg: DictConfig) -> None:
         super().__init__()
 
-        self.cfg = cfg
         device = cfg.device
 
         self.forcing_df = self.read_df(cfg.data.forcing_file)
@@ -42,22 +43,32 @@ class Data(Dataset):
         # Convert pandas dataframe to PyTorch tensors
         # TODO ADD TIMEINTERVAL SELECTION
         # Creating an index for the array (ASSUMES A TIME COLUMN)
-        time_values = self.forcing_df['Time'].values
-        self.time_dict = {time: idx for idx, time in enumerate(time_values)}
-        self.forcing_df['Timestep'] = self.forcing_df['Time'].map(self.time_dict)
+        time_values = self.forcing_df["Time"].values
+        self.timestep_map = {time: idx for idx, time in enumerate(time_values)}
+        # self.forcing_df["Timestep"] = self.forcing_df["Time"].map(self.timestep_map)
         precip = torch.tensor(self.forcing_df["P(mm/h)"].values, device=device)
         pet = torch.tensor(self.forcing_df["PET(mm/h)"].values, device=device)
-        self.x = torch.zeros([2, precip.shape[0]], device=device)  # Index 0: Precip, index 1: PET
-        self.x[0] = precip
-        self.x[1] = pet
-
+        self.x = torch.stack([precip, pet])  # Index 0: Precip, index 1: PET
 
         # Convert soils dataframe to PyTorch tensors
         self.soils_df = self.read_df(cfg.data.soil_params_file)
         texture_values = self.soils_df["Texture"].values
-        texture_mapping = {texture: idx for idx, texture in enumerate(texture_values)}
-        soils_data = self.generate_soil_metrics()  # Getting all columns but the Texture column
-        self.c = torch.tensor(soils_data, device=device)
+        self.texture_map = {texture: idx for idx, texture in enumerate(texture_values)}
+        self.c = self.generate_soil_metrics(cfg)
+        self.column_map = {
+            "theta_e": 0,
+            "theta_r": 1,
+            "theta_wp": 2,
+            "alpha": 3,
+            "n": 4,
+            "m": 5,
+            "k_sat": 6,
+            "ksat_cm_per_h": 7,
+            "bc_lambda": 8,
+            "bc_psib_cm": 9,
+            "h_min_cm": 10,
+        }
+
 
     def __getitem__(self, index) -> T_co:
         """
@@ -93,7 +104,7 @@ class Data(Dataset):
             raise ValueError
         return df
 
-    def generate_soil_metrics(self) -> np.ndarray:
+    def generate_soil_metrics(self, cfg: DictConfig) -> Tensor:
         """
         Reading the soils dataframe
         :param cfg: the config file
@@ -110,19 +121,35 @@ class Data(Dataset):
 
         :return:
         """
-        device = self.cfg.device
-        h = torch.tensor(self.cfg.data.wilting_point_psi, device=device)  # Wilting point in cm
+        device = cfg.device
+        h = torch.tensor(
+            cfg.data.wilting_point_psi, device=device
+        )  # Wilting point in cm
         alpha = torch.tensor(self.soils_df["alpha(cm^-1)"], device=device)
         n = torch.tensor(self.soils_df["n"], device=device)
         m = torch.tensor(self.soils_df["m"], device=device)
         theta_e = torch.tensor(self.soils_df["theta_e"], device=device)
         theta_r = torch.tensor(self.soils_df["theta_r"], device=device)
-        self.soils_df["theta_wp"] = calc_theta_from_h(h, alpha, n, m, theta_e, theta_r)
-        self.soils_df["bc_lambda"], self.soils_df["bc_psib_cm"] = calc_bc_lambda_psib_cm(alpha, n)
-        bc_psib_cm = torch.tensor(self.soils_df["bc_psib_cm"].to_numpy(), device=device)
-        lambda_ = torch.tensor(self.soils_df["bc_lambda"].to_numpy(), device=device)
-        self.soils_df["h_min_cm"] = calc_h_min_cm(df, device)
+        k_sat = torch.tensor(self.soils_df["Ks(cm/h)"], device=device)
+        ksat_cm_per_h = k_sat * cfg.constants.frozen_factor
+        theta_wp = calc_theta_from_h(h, alpha, n, m, theta_e, theta_r)
+        bc_lambda = calc_bc_lambda(n)
+        bc_psib_cm = calc_bc_psib(alpha, n)
+        h_min_cm = calc_h_min_cm(bc_lambda, bc_psib_cm)
 
-        soils_data = self.soils_df.to_numpy()[:, 1:].astype(np.float64)  # Getting all columns but the Texture column
-
+        soils_data = torch.stack(
+            [
+                theta_e,
+                theta_r,
+                theta_wp,
+                alpha,
+                n,
+                m,
+                k_sat,
+                ksat_cm_per_h,
+                bc_lambda,
+                bc_psib_cm,
+                h_min_cm,
+            ]
+        )  # Putting all numeric columns in a tensor other than the Texture column
         return soils_data

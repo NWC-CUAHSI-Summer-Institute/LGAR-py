@@ -1,7 +1,8 @@
 import logging
 from omegaconf import DictConfig
-import torch
 import time
+import torch
+from torch.utils.data import DataLoader
 
 from lgartorch.agents.base import BaseAgent
 from data.Data import Data
@@ -24,10 +25,18 @@ class DifferentiableLGAR(BaseAgent):
         torch.manual_seed(0)
         torch.set_default_dtype(torch.float64)
 
+        self.cfg.models.endtime_s = self.cfg.models.endtime * self.cfg.conversions.hr_to_sec
+        self.cfg.models.forcing_resolution_h = self.cfg.models.forcing_resolution / self.cfg.conversions.hr_to_sec
+        self.cfg.models.time_per_step = self.cfg.models.forcing_resolution_h * self.cfg.conversions.hr_to_sec
+        self.cfg.models.nsteps = int(self.cfg.models.endtime_s / self.cfg.models.time_per_step)
+
         self.data = Data(cfg)
+        self.data_loader = DataLoader(
+            self.data, batch_size=self.cfg.models.nsteps, shuffle=False
+        )
 
         self.criterion = torch.nn.MSELoss()
-        optimizer = torch.optim.Adam(self.model.parameters(), lr = cfg)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=cfg)
 
     def run(self):
         """

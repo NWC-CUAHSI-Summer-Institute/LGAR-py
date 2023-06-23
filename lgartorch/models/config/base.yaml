@@ -1,0 +1,16 @@
+units:
+  endtime_s: [hr]
+  forcing_resolution_h: [ sec ]
+  timestep_h: [s]
+subcycle_length: 300 #[sec]
+num_time_step: 90000  # total simulation time is this number times the time_step_s
+endtime: 7500.0 #[hr]
+endtime_s: ???
+forcing_resolution_h: ???
+time_per_step: ???
+nsteps: ???
+forcing_resolution: 3600 # [sec]
+hyperparameters:
+  epochs: 50
+  learning_rate: 0.01
+

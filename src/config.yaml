@@ -19,7 +19,7 @@ variables:
   root_zone_bottom_layer: 2  # example, if set to 2, then the root zone is in layer 1 and 2
   AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET
   ET_expon: 1.0  # exponent that allows curvature of the rising portion of the Budyko curve
-  wilting_point_psi_cm: 154950/10.  # AJ-correction
+  wilting_point_psi_cm: 154950.0  # AJ-correction
   soil_type_by_layer:
     - 13  # Sand
     - 14  # Sandy Loam

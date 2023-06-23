@@ -1,6 +1,7 @@
 defaults:
   - _self_
   - data: config/Phillipsburg
+  - models: config/base
 #cwd: /mnt/sdb1/tkb5476/LGAR-Torch/
 cwd: /Users/taddbindas/projects/LGAR-Torch
 save_name: debugger
@@ -12,23 +13,11 @@ save_paths:
   pet: ${cwd}/data/save_files/PET.csv
   soil_moisture: ${cwd}/data/save_files/soil_moisture.csv
   soil_thickness: ${cwd}/data/save_files/soil_thickness.csv
-variables:
-  num_soil_types: 15  # must be less than or equal to MAX_NUM_SOIL_TYPES
-  num_soil_layers: 3  # must be less than or equal to MAX_NUM_SOIL_LAYERS
-  num_fronts: 0  # must be less than MAX_NUM_FRONTS
-  root_zone_bottom_layer: 2  # example, if set to 2, then the root zone is in layer 1 and 2
-  AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET
-  ET_expon: 1.0  # exponent that allows curvature of the rising portion of the Budyko curve
-  wilting_point_psi_cm: 154950/10.  # AJ-correction
-  soil_type_by_layer:
-    - 13  # Sand
-    - 14  # Sandy Loam
-    - 15  # Clay
-  nsteps: ???
 constants:
+  frozen_factor: 1
   AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET (fix later!)
   AET_expon: 1.0
-units:
+conversions:
   cm_to_mm: 10.0
   mm_to_cm: 0.1
   cm_to_m: 0.01
