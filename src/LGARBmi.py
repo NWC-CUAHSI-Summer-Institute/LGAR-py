@@ -217,24 +217,24 @@ class LGARBmi(Bmi):
         )
 
         log.info(
-            f"\n---------------------- Simulation Summary  ------------------------ \n"
+            f"---------------------- Simulation Summary  ------------------------ "
         )
         log.info(
-            f"Time (sec)                 = {self._end_time -self._start_time:.6f} \n"
+            f"Time (sec)                 = {self._end_time -self._start_time:.6f} "
         )
-        log.info(f"-------------------------- Mass balance ------------------- \n")
-        log.info(f"Initial water in soil      = {self._model.volstart_cm} cm\n")
-        log.info(f"Total precipitation        = {self._model.volprecip_cm}cm\n")
-        log.info(f"Total Infiltration         = {self._model.volin_cm} cm\n")
-        log.info(f"Final Water in Soil        = {self._model.volend_cm} cm\n")
-        log.info(f"Surface ponded water       = {self._model.volon_cm} cm\n")
-        log.info(f"Surface runoff             = {self._model.volrunoff_cm} cm\n")
-        log.info(f"GIUH runoff                = {self._model.volrunoff_giuh} cm\n")
-        log.info(f"Total percolation          = {self._model.volrech_cm} cm\n")
-        log.info(f"Total AET                  = {self._model.volAET_cm} cm\n")
-        log.info(f"Total PET                  = {self._model.volPET_cm} cm\n")
-        log.info(f"Total discharge (Q)        = {self._model.total_Q_cm} cm\n")
-        log.info(f"Global Balance             = {global_error_cm} cm\n")
+        log.info(f"-------------------------- Mass balance ------------------- ")
+        log.info(f"Initial water in soil      = {self._model.volstart_cm.item()} cm")
+        log.info(f"Total precipitation        = {self._model.volprecip_cm.item()}cm")
+        log.info(f"Total Infiltration         = {self._model.volin_cm.item()} cm")
+        log.info(f"Final Water in Soil        = {self._model.volend_cm.item()} cm")
+        log.info(f"Surface ponded water       = {self._model.volon_cm.item()} cm")
+        log.info(f"Surface runoff             = {self._model.volrunoff_cm.item()} cm")
+        # log.info(f"GIUH runoff                = {self._model.volrunoff_giuh.item()} cm")
+        log.info(f"Total percolation          = {self._model.volrech_cm.item()} cm")
+        log.info(f"Total AET                  = {self._model.volAET_cm.item()} cm")
+        log.info(f"Total PET                  = {self._model.volPET_cm.item()} cm")
+        log.info(f"Total discharge (Q)        = {self._model.total_Q_cm.item()} cm")
+        log.info(f"Global Balance             = {global_error_cm.item()} cm")
 
     def run_cycle(self):
         """
