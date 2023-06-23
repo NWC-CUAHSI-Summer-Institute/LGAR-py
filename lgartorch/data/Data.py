@@ -9,15 +9,7 @@ import torch
 from torch import Tensor
 from torch.utils.data import Dataset
 from typing import (
-    Generic,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
     TypeVar,
-    Union,
 )
 
 from lgartorch.models.physics.utils import (
@@ -25,6 +17,7 @@ from lgartorch.models.physics.utils import (
     calc_bc_lambda,
     calc_bc_psib,
     calc_h_min_cm,
+    calc_m,
 )
 
 log = logging.getLogger("data.Data")
@@ -33,7 +26,13 @@ T = TypeVar("T")
 
 
 class Data(Dataset):
-    def __init__(self, cfg: DictConfig) -> None:
+    def __init__(
+        self,
+        cfg: DictConfig,
+        alpha: torch.nn.ParameterList,
+        n: torch.nn.ParameterList,
+        ksat: torch.nn.ParameterList,
+    ) -> None:
         super().__init__()
 
         device = cfg.device
@@ -54,7 +53,7 @@ class Data(Dataset):
         self.soils_df = self.read_df(cfg.data.soil_params_file)
         texture_values = self.soils_df["Texture"].values
         self.texture_map = {texture: idx for idx, texture in enumerate(texture_values)}
-        self.c = self.generate_soil_metrics(cfg)
+        self.c = self.generate_soil_metrics(cfg, alpha, n, ksat)
         self.column_map = {
             "theta_e": 0,
             "theta_r": 1,
@@ -62,13 +61,11 @@ class Data(Dataset):
             "alpha": 3,
             "n": 4,
             "m": 5,
-            "k_sat": 6,
-            "ksat_cm_per_h": 7,
-            "bc_lambda": 8,
-            "bc_psib_cm": 9,
-            "h_min_cm": 10,
+            "ksat_cm_per_h": 6,
+            "bc_lambda": 7,
+            "bc_psib_cm": 8,
+            "h_min_cm": 9,
         }
-
 
     def __getitem__(self, index) -> T_co:
         """
@@ -104,7 +101,13 @@ class Data(Dataset):
             raise ValueError
         return df
 
-    def generate_soil_metrics(self, cfg: DictConfig) -> Tensor:
+    def generate_soil_metrics(
+        self,
+        cfg: DictConfig,
+        alpha: torch.nn.ParameterList,
+        n: torch.nn.ParameterList,
+        ksat_cm_per_h: torch.nn.ParameterList,
+    ) -> Tensor:
         """
         Reading the soils dataframe
         :param cfg: the config file
@@ -125,13 +128,14 @@ class Data(Dataset):
         h = torch.tensor(
             cfg.data.wilting_point_psi, device=device
         )  # Wilting point in cm
-        alpha = torch.tensor(self.soils_df["alpha(cm^-1)"], device=device)
-        n = torch.tensor(self.soils_df["n"], device=device)
-        m = torch.tensor(self.soils_df["m"], device=device)
+        # alpha = torch.tensor(self.soils_df["alpha(cm^-1)"], device=device)  # this is a nn.param
+        # n = torch.tensor(self.soils_df["n"], device=device)
+        m = calc_m(n)
+        # m = torch.tensor(self.soils_df["m"], device=device) We're calculating this through n
         theta_e = torch.tensor(self.soils_df["theta_e"], device=device)
         theta_r = torch.tensor(self.soils_df["theta_r"], device=device)
-        k_sat = torch.tensor(self.soils_df["Ks(cm/h)"], device=device)
-        ksat_cm_per_h = k_sat * cfg.constants.frozen_factor
+        # k_sat = torch.tensor(self.soils_df["Ks(cm/h)"], device=device)
+        # ksat_cm_per_h = k_sat * cfg.constants.frozen_factor
         theta_wp = calc_theta_from_h(h, alpha, n, m, theta_e, theta_r)
         bc_lambda = calc_bc_lambda(n)
         bc_psib_cm = calc_bc_psib(alpha, n)
@@ -145,7 +149,6 @@ class Data(Dataset):
                 alpha,
                 n,
                 m,
-                k_sat,
                 ksat_cm_per_h,
                 bc_lambda,
                 bc_psib_cm,

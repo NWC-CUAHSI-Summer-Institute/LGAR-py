@@ -12,5 +12,5 @@ nsteps: ???
 forcing_resolution: 3600 # [sec]
 hyperparameters:
   epochs: 50
-  learning_rate: 0.01
+  learning_rate: 0.001
 
