@@ -52,7 +52,6 @@ depth
 				   output to other models (e.g. soil freeze-thaw)
 ############################################################################################
 """
-from collections import deque
 import logging
 import numpy as np
 from omegaconf import DictConfig
@@ -309,7 +308,7 @@ class LGAR:
         num_wetting_vars = 4
         # Creating a torch matrix that will hold wetting fronts.
         # Each wetting front is a row. Columns are depth, theta, layer, dzdt_cm_per_h
-        self.wetting_fronts = deque()
+        self.wetting_fronts = []
         for i in range(self.num_layers):
             soil_type = self.layer_soil_type[i]
             soil_properties = self.soils_df.iloc[soil_type]
@@ -571,20 +570,18 @@ class LGAR:
         :return:
         """
         # log.debug(f"Merging wetting fronts...")
-        for i in range(1, len(self.wetting_fronts)):
+        for i in range(1, len(self.wetting_fronts) - 1):
             # log.debug(f"Merge | ********* Wetting Front = {i} *********")
             current = i - 1
             next_ = i
             next_to_next = i + 1 if i + 1 < len(self.wetting_fronts) else None
 
             # case : wetting front passing another wetting front within a layer
-            if (
-                self.wetting_fronts[current].depth_cm
-                > self.wetting_fronts[next_].depth_cm
-                and self.wetting_fronts[current].layer_num
-                == self.wetting_fronts[next_].layer_num
-                and not self.wetting_fronts[next_].to_bottom
-            ):
+            try:
+                bool_ = self.wetting_fronts[current].depth_cm > self.wetting_fronts[next_].depth_cm and self.wetting_fronts[current].layer_num == self.wetting_fronts[next_].layer_num and not self.wetting_fronts[next_].to_bottom
+            except IndexError:
+                log.error("here")
+            if bool_:
                 current_mass_this_layer = self.wetting_fronts[current].depth_cm * (
                     self.wetting_fronts[current].theta
                     - self.wetting_fronts[next_].theta
@@ -704,7 +701,7 @@ class LGAR:
                 self.wetting_fronts[next_].dzdt_cm_per_h = self.wetting_fronts[
                     current
                 ].dzdt_cm_per_h
-                self.wetting_fronts[current].dzdt_cm_per_h = 0
+                self.wetting_fronts[current].dzdt_cm_per_h = torch.tensor(0.0, device=self.device)
                 self.wetting_fronts[current].to_bottom = True
                 self.wetting_fronts[next_].to_bottom = False
 
@@ -819,7 +816,7 @@ class LGAR:
                     layer_num_k = self.wetting_fronts[current].layer_num
                     mass_before = self.calc_mass_balance()
 
-                    self.wetting_fronts[i].pop()
+                    self.wetting_fronts.pop(i)
 
                     if layer_num_k > 1:
                         soil_num_k = self.layer_soil_type[

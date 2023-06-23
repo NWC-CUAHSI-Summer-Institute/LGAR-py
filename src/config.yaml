@@ -1,7 +1,8 @@
 defaults:
   - _self_
   - data: config/Phillipsburg
-cwd: /Users/taddbindas/projects/LGAR-Torch
+cwd: /mnt/sdb1/tkb5476/LGAR-Torch/
+#cwd: /Users/taddbindas/projects/LGAR-Torch
 save_name: debugger
 output_dir: ${cwd}/output
 device: cpu

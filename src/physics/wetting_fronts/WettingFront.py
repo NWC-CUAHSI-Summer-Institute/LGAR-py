@@ -26,15 +26,14 @@ class WettingFront:
         self.k_cm_per_h = None
 
     def print(self):
-        log.debug(
-            f"******** Layer {self.layer_num} ********\n"
-            f"(depth_cm: {self.depth_cm.item():.6f})\n"
-            f"(theta: {self.theta.item():.6f})\n"
-            f"(to_bottom: {self.to_bottom})\n"
-            f"(dzdt_cm_per_h: {self.dzdt_cm_per_h.item():.6f})\n"
-            f"(K_cm_per_h: {self.k_cm_per_h.item():.6f})\n"
-            f"(psi_cm: {self.psi_cm.item():.6f})\n"
-        )
+        log.debug(f"******** Layer {self.layer_num} ********")
+        log.debug(f"depth_cm: {self.depth_cm.item():.6f}")
+        log.debug(f"theta: {self.theta.item():.6f}")
+        log.debug(f"to_bottom: {self.to_bottom}")
+        log.debug(f"dzdt_cm_per_h: {self.dzdt_cm_per_h.item():.6f}")
+        log.debug(f"K_cm_per_h: {self.k_cm_per_h.item():.6f}")
+        log.debug(f"psi_cm: {self.psi_cm.item():.6f}")
+
 
 
 def move_wetting_fronts(
@@ -305,8 +304,8 @@ def move_wetting_fronts(
 
                 current_front.depth_cm += current_front.dzdt_cm_per_h * timestep_h
 
-                delta_thetas = torch.zeros([layer_num], device=lgar.device)
-                delta_thickness = torch.zeros([layer_num], device=lgar.device)
+                delta_thetas = torch.zeros([len(lgar.layer_soil_type)], device=lgar.device)
+                delta_thickness = torch.zeros([len(lgar.layer_soil_type)], device=lgar.device)
 
                 psi_cm_old = current_old_front.psi_cm
                 psi_cm_below_old = next_old_front.psi_cm
