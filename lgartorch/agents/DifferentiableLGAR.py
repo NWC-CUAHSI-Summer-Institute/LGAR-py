@@ -3,7 +3,8 @@ from omegaconf import DictConfig
 import torch
 import time
 
-from agents.base import BaseAgent
+from lgartorch.agents.base import BaseAgent
+from data.Data import Data
 
 log = logging.getLogger("agents.DifferentiableLGAR")
 
@@ -18,12 +19,15 @@ class DifferentiableLGAR(BaseAgent):
         """
         super().__init__()
 
+        # Setting the cfg object and manual seed for reproducibility
         self.cfg = cfg
         torch.manual_seed(0)
+        torch.set_default_dtype(torch.float64)
+
+        self.data = Data(cfg)
 
         self.criterion = torch.nn.MSELoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr = cfg)
-        pass
+        optimizer = torch.optim.Adam(self.model.parameters(), lr = cfg)
 
     def run(self):
         """

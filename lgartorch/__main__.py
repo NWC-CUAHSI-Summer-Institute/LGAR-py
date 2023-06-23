@@ -3,6 +3,8 @@ import logging
 from omegaconf import DictConfig
 import time
 
+from lgartorch.agents.DifferentiableLGAR import DifferentiableLGAR
+
 log = logging.getLogger(__name__)
 
 
