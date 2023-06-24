@@ -41,10 +41,10 @@ class DifferentiableLGAR(BaseAgent):
             self.cfg.models.endtime_s / self.cfg.models.time_per_step
         )
 
-        self.model = dpLGAR(self.cfg)
-
-        self.data = Data(cfg, self.model.alpha, self.model.n, self.model.ksat)
+        self.data = Data(self.cfg)
         self.data_loader = DataLoader(self.data, batch_size=1, shuffle=False)
+
+        self.model = dpLGAR(self.cfg)
 
         self.criterion = torch.nn.MSELoss()
         self.optimizer = torch.optim.Adam(
@@ -81,7 +81,7 @@ class DifferentiableLGAR(BaseAgent):
         i = 0
         for x, y_t in self.data_loader:
             self.optimizer.zero_grad()
-            y_hat = self.model(x, self.data.c)
+            y_hat = self.model(x)
             self.validate(y_hat, y_t)
             i += 1
 
