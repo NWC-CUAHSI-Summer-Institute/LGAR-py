@@ -35,8 +35,6 @@ class Data(Dataset):
     ) -> None:
         super().__init__()
 
-        device = cfg.device
-
         self.forcing_df = self.read_df(cfg.data.forcing_file)
 
         # Convert pandas dataframe to PyTorch tensors
@@ -45,8 +43,8 @@ class Data(Dataset):
         time_values = self.forcing_df["Time"].values
         self.timestep_map = {time: idx for idx, time in enumerate(time_values)}
         # self.forcing_df["Timestep"] = self.forcing_df["Time"].map(self.timestep_map)
-        precip = torch.tensor(self.forcing_df["P(mm/h)"].values, device=device)
-        pet = torch.tensor(self.forcing_df["PET(mm/h)"].values, device=device)
+        precip = torch.tensor(self.forcing_df["P(mm/h)"].values, device=cfg.device)
+        pet = torch.tensor(self.forcing_df["PET(mm/h)"].values, device=cfg.device)
         self.x = torch.stack([precip, pet])  # Index 0: Precip, index 1: PET
 
         # Convert soils dataframe to PyTorch tensors
@@ -58,13 +56,10 @@ class Data(Dataset):
             "theta_e": 0,
             "theta_r": 1,
             "theta_wp": 2,
-            "alpha": 3,
-            "n": 4,
-            "m": 5,
-            "ksat_cm_per_h": 6,
-            "bc_lambda": 7,
-            "bc_psib_cm": 8,
-            "h_min_cm": 9,
+            "m": 3,
+            "bc_lambda": 4,
+            "bc_psib_cm": 5,
+            "h_min_cm": 6,
         }
 
     def __getitem__(self, index) -> T_co:
@@ -124,32 +119,38 @@ class Data(Dataset):
 
         :return:
         """
-        device = cfg.device
         h = torch.tensor(
-            cfg.data.wilting_point_psi, device=device
+            cfg.data.wilting_point_psi, device=cfg.device
         )  # Wilting point in cm
-        # alpha = torch.tensor(self.soils_df["alpha(cm^-1)"], device=device)  # this is a nn.param
-        # n = torch.tensor(self.soils_df["n"], device=device)
-        m = calc_m(n)
-        # m = torch.tensor(self.soils_df["m"], device=device) We're calculating this through n
-        theta_e = torch.tensor(self.soils_df["theta_e"], device=device)
-        theta_r = torch.tensor(self.soils_df["theta_r"], device=device)
-        # k_sat = torch.tensor(self.soils_df["Ks(cm/h)"], device=device)
+        # alpha = torch.tensor(self.soils_df["alpha(cm^-1)"], device=cfg.device) this is a nn.param. Commenting out to not pull from the .dat file
+        # n = torch.tensor(self.soils_df["n"], device=cfg.device) this is a nn.param. Commenting out to not pull from the .dat file
+        # m = torch.tensor(self.soils_df["m"], device=cfg.device)  # TODO We're calculating this through n
+        theta_e = torch.tensor(self.soils_df["theta_e"], device=cfg.device)
+        theta_r = torch.tensor(self.soils_df["theta_r"], device=cfg.device)
+        # k_sat = torch.tensor(self.soils_df["Ks(cm/h)"] device=cfg.device) this is a nn.param. Commenting out to not pull from the .dat file
         # ksat_cm_per_h = k_sat * cfg.constants.frozen_factor
-        theta_wp = calc_theta_from_h(h, alpha, n, m, theta_e, theta_r)
-        bc_lambda = calc_bc_lambda(n)
-        bc_psib_cm = calc_bc_psib(alpha, n)
-        h_min_cm = calc_h_min_cm(bc_lambda, bc_psib_cm)
+        m = torch.zeros(len(alpha), device=cfg.device)
+        theta_wp = torch.zeros(len(alpha), device=cfg.device)
+        bc_lambda = torch.zeros(len(alpha), device=cfg.device)
+        bc_psib_cm = torch.zeros(len(alpha), device=cfg.device)
+        h_min_cm = torch.zeros(len(alpha), device=cfg.device)
+        for i in range(len(alpha)):
+            single_alpha = alpha[i]
+            single_n = n[i]
+            m[i] = calc_m(single_n)  # Commenting out temporarily so that our test cases match
+            theta_wp[i] = calc_theta_from_h(
+                h, single_alpha, single_n, m[i], theta_e[i], theta_r[i]
+            )
+            bc_lambda[i] = calc_bc_lambda(m[i])
+            bc_psib_cm[i] = calc_bc_psib(single_alpha, m[i])
+            h_min_cm[i] = calc_h_min_cm(bc_lambda[i], bc_psib_cm[i])
 
         soils_data = torch.stack(
             [
                 theta_e,
                 theta_r,
                 theta_wp,
-                alpha,
-                n,
                 m,
-                ksat_cm_per_h,
                 bc_lambda,
                 bc_psib_cm,
                 h_min_cm,

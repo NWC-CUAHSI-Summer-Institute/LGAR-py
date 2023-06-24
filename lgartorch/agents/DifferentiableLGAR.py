@@ -38,24 +38,30 @@ class DifferentiableLGAR(BaseAgent):
             self.data, batch_size=self.cfg.models.nsteps, shuffle=False
         )
 
-
-
         self.criterion = torch.nn.MSELoss()
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=cfg.models.hyperparameters.learning_rate)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=cfg.models.hyperparameters.learning_rate)
+
+        self.current_epoch = 0
 
     def run(self):
         """
         The main operator
         :return:
         """
-        raise NotImplementedError
+        try:
+            self.train()
+        except KeyboardInterrupt:
+            log.info("You have entered CTRL+C.. Wait to finalize")
 
     def train(self):
         """
         Main training loop
         :return:
         """
-        raise NotImplementedError
+        self.model.train()
+        for epoch in range(1, self.cfg.models.hyperparameters.epochs + 1):
+            self.train_one_epoch()
+            self.current_epoch += 1
 
     def train_one_epoch(self):
         """

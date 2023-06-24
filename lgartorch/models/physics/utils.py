@@ -18,22 +18,9 @@ def calc_theta_from_h(
     :parameter device: the device that we're using
     :return thickness of individual layers
     """
-    theta_h_list = []
-    for i in range(n.shape[0]):
-        (
-            theta_h_list.append(
-                1.0
-                / (torch.pow(1.0 + torch.pow(alpha[i] * h[i], n[i]), m[i]))
-                * (theta_e[i] - theta_r[i])
-            )
-            + theta_r
-        )
-
-    return torch.tensor(theta_h_list)
-
-    # (
-    #         1.0 / (torch.pow(1.0 + torch.pow(alpha * h, n), m)) * (theta_e - theta_r)
-    # ) + theta_r
+    return (
+        1.0 / (torch.pow(1.0 + torch.pow(alpha * h, n), m)) * (theta_e - theta_r)
+    ) + theta_r
 
 
 def calc_bc_lambda(m: Tensor) -> Tensor:
@@ -50,12 +37,8 @@ def calc_bc_lambda(m: Tensor) -> Tensor:
 
 
 def calc_m(n):
-    m_list = []  # TODO MAKE THIS A TENSOR AND NOT A LIST!!!!
-    for param in n:
-        m = 1.0 - (1.0 / param)
-        m_list.append(m)
-    return torch.tensor(m_list)
-
+    m = 1.0 - (1.0 / n)
+    return m
 
 def calc_h_min_cm(bc_lambda, bc_psib_cm) -> pd.DataFrame:
     """
@@ -69,7 +52,7 @@ def calc_h_min_cm(bc_lambda, bc_psib_cm) -> pd.DataFrame:
     return h_min_cm
 
 
-def calc_bc_psib(alpha: Tensor, n: Tensor) -> Tensor:
+def calc_bc_psib(alpha: Tensor, m: Tensor) -> Tensor:
     """
     Given van Genuchten parameters calculate estimates of
     Brooks & Corey bc_psib
@@ -77,14 +60,11 @@ def calc_bc_psib(alpha: Tensor, n: Tensor) -> Tensor:
     :param n:
     :return:
     """
-    bc_psib_list = []
-    for i in range(alpha.shape[0]):
-        m_ = 1.0 - (1.0 / n[i])
-        p_ = 1.0 + (2.0 / m_)
-        bc_psib = (
-            (p_ + 3.0)
-            * (147.8 + 8.1 * p_ + 0.092 * p_ * p_)
-            / (2.0 * alpha[i] * p_ * (p_ - 1.0) * (55.6 + 7.4 * p_ + p_ * p_))
-        )
-        bc_psib_list.append(bc_psib)
-    return bc_psib_list
+    # m_ = 1.0 - (1.0 / n)
+    p_ = 1.0 + (2.0 / m)
+    bc_psib = (
+        (p_ + 3.0)
+        * (147.8 + 8.1 * p_ + 0.092 * p_ * p_)
+        / (2.0 * alpha * p_ * (p_ - 1.0) * (55.6 + 7.4 * p_ + p_ * p_))
+    )
+    return bc_psib
