@@ -35,17 +35,17 @@ class Data(Dataset):
     ) -> None:
         super().__init__()
 
-        self.forcing_df = self.read_df(cfg.data.forcing_file)
+        df = self.read_df(cfg.data.forcing_file)
+        self.forcing_df = df.iloc[:cfg.models.nsteps]  # cutting off at the end of nsteps
 
         # Convert pandas dataframe to PyTorch tensors
-        # TODO ADD TIMEINTERVAL SELECTION
-        # Creating an index for the array (ASSUMES A TIME COLUMN)
-        time_values = self.forcing_df["Time"].values
-        self.timestep_map = {time: idx for idx, time in enumerate(time_values)}
-        # self.forcing_df["Timestep"] = self.forcing_df["Time"].map(self.timestep_map)
         precip = torch.tensor(self.forcing_df["P(mm/h)"].values, device=cfg.device)
         pet = torch.tensor(self.forcing_df["PET(mm/h)"].values, device=cfg.device)
-        self.x = torch.stack([precip, pet])  # Index 0: Precip, index 1: PET
+        x_ = torch.stack([precip, pet])  # Index 0: Precip, index 1: PET
+        self.x = x_.transpose(0, 1)
+        # Creating a time interval
+        time_values = self.forcing_df["Time"].values
+        self.timestep_map = {time: idx for idx, time in enumerate(time_values)}
 
         # Convert soils dataframe to PyTorch tensors
         self.soils_df = self.read_df(cfg.data.soil_params_file)
@@ -62,19 +62,22 @@ class Data(Dataset):
             "h_min_cm": 6,
         }
 
+        # TODO FIND OBSERVATION DATA TO TRAIN AGAINST
+        self.y = torch.zeros([self.x.shape[0]], device=cfg.device).unsqueeze(1)
+
     def __getitem__(self, index) -> T_co:
         """
         Method from the torch.Dataset parent class
         :param index: the date you're iterating on
         :return: the forcing and observed data for a particular index
         """
-        return self.x[index, :], self.y[index, :]
+        return self.x[index], self.y[index]
 
     def __len__(self):
         """
         Method from the torch.Dataset parent class
         """
-        return len(self.x)
+        return self.x.shape[0]
 
     def read_df(self, file: str) -> pd.DataFrame:
         """

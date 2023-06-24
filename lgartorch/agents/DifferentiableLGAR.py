@@ -35,7 +35,7 @@ class DifferentiableLGAR(BaseAgent):
 
         self.data = Data(cfg, self.model.alpha, self.model.n, self.model.ksat)
         self.data_loader = DataLoader(
-            self.data, batch_size=self.cfg.models.nsteps, shuffle=False
+            self.data, batch_size=1, shuffle=False
         )
 
         self.criterion = torch.nn.MSELoss()
@@ -68,7 +68,10 @@ class DifferentiableLGAR(BaseAgent):
         One epoch of training
         :return:
         """
-        raise NotImplementedError
+        i = 0
+        for x, yt in self.data_loader:
+
+            i += 1
 
     def validate(self):
         """
