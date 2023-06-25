@@ -5,19 +5,89 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 
+from lgartorch.models.physics.layers.WettingFront import WettingFront
+
 log = logging.getLogger("models.physics.layers.Layer")
 
 
 class Layer:
-    def __init__(self, cfg, global_params, c, alpha, n, ksat, is_top=False):
+    def __init__(
+        self,
+        cfg: DictConfig,
+        global_params: object,
+        layer_index: int,
+        c: Tensor,
+        alpha: torch.nn.Parameter,
+        n: torch.nn.Parameter,
+        ksat: torch.nn.Parameter,
+        texture_map: dict,
+    ):
         """
-        A layer of soil. Each soil layer can have many wetting fronts and several properties
-        :param cfg:
-        :param global_params:
-        :param c:
-        :param alpha:
-        :param n:
-        :param ksat:
-        :param is_top:
+        A layer of soil (within the soil stack).
+        Each soil layer can have many wetting fronts and several properties
+        :param cfg: The DictConfig
+        :param global_params: many of the values within the cfg file, but as tensors
+        :param c: All soil attributes
+        :param alpha: All alpha van Genuchten params
+        :param n: All n van Genuchten params
+        :param ksat: All saturated hydraulic conductivity params
+        :param is_top: TBD if this is necessary. Rn it's always true
         """
         super().__init__()
+        self.cfg = cfg
+        self.layer_num = layer_index
+        self.layer_thickness = global_params.layer_thickness_cm[self.layer_num]
+        self.cumulative_layer_thickness = global_params.cum_layer_thickness[
+            self.layer_num
+        ]
+        self.soil_type = global_params.layer_soil_type[self.layer_num]
+        self.texture = texture_map[self.soil_type]
+        self.attributes = c[self.soil_type]
+        self.alpha_layer = alpha[self.soil_type]
+        self.n_layer = n[self.soil_type]
+        self.ksat_layer = ksat[self.soil_type]
+        self.wetting_fronts = []
+        self.wetting_fronts.append(
+            WettingFront(
+                cfg, self.cumulative_layer_thickness, self.attributes, self.ksat_layer
+            )
+        )
+        self.next_layer = None
+        if (
+            layer_index < global_params.num_layers - 1
+        ):  # Checking to see if there is a layer below this one
+            self.next_layer = Layer(
+                cfg, global_params, layer_index + 1, c, alpha, n, ksat, texture_map
+            )
+
+    def mass_balance(self) -> Tensor:
+        """
+        A function that calculates the mass inside of the current layer
+        If `next_layer` is not None, then we iterate through the soil stack to
+        find the mass underneath
+        :return:
+        """
+        sum = torch.tensor(0, dtype=torch.float64)
+        if self.layer_num == 0:
+            base_depth = torch.tensor(0.0, device=self.cfg.device)
+        else:
+            # The base depth is the depth at the top of the layer
+            base_depth = self.cumulative_layer_thickness - self.layer_thickness
+        if len(self.wetting_fronts) > 1:
+            # TODO TEST THIS!!!
+            # Iterate through the list elements except the last one
+            for i, wf in enumerate(self.wetting_fronts[:-1]):
+                current_front = self.wetting_fronts[i]
+                next_front = self.wetting_fronts[i + 1]
+                sum = sum + (current_front.depth - base_depth) * (
+                    current_front.theta - next_front.theta
+                )
+            last_front = self.wetting_fronts[-1]
+            sum = sum + (last_front.depth - base_depth) * last_front.theta
+        else:
+            current_front = self.wetting_fronts[0]
+            sum = sum + (current_front.depth - base_depth) * current_front.theta
+        if self.next_layer is not None:
+            return sum + self.next_layer.mass_balance()
+        else:
+            return sum

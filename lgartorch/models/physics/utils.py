@@ -40,6 +40,7 @@ def calc_m(n):
     m = 1.0 - (1.0 / n)
     return m
 
+
 def calc_h_min_cm(bc_lambda, bc_psib_cm) -> pd.DataFrame:
     """
     # /* this is the effective capillary drive after */
@@ -68,3 +69,29 @@ def calc_bc_psib(alpha: Tensor, m: Tensor) -> Tensor:
         / (2.0 * alpha * p_ * (p_ - 1.0) * (55.6 + 7.4 * p_ + p_ * p_))
     )
     return bc_psib
+
+
+def calc_se_from_theta(theta_init: Tensor, theta_e: Tensor, theta_r: Tensor) -> Tensor:
+    """
+    function to calculate Se from theta
+    :param theta_init: the calculated inital theta
+    :param theta_e: theta_e
+    :param theta_r: theta_r
+    :return: Se this is the relative (scaled 0-1) water content, like Theta
+    """
+    return torch.div((theta_init - theta_r), (theta_e - theta_r))
+
+
+def calc_k_from_se(se: Tensor, ksat: Tensor, m: Tensor) -> Tensor:
+    """
+    function to calculate K from Se
+    :param se: this is the relative (scaled 0-1) water content, like Theta
+    :param ksat: saturated hydraulic conductivity
+    :param m: Van Genuchten
+    :return: hydraulic conductivity (K)
+    """
+    return (
+        ksat
+        * torch.sqrt(se)
+        * torch.pow(1.0 - torch.pow(1.0 - torch.pow(se, 1.0 / m), m), 2.0)
+    )

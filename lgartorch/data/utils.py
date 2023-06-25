@@ -62,6 +62,9 @@ def generate_soil_metrics(
     h = torch.tensor(
         cfg.data.wilting_point_psi, device=cfg.device
     )  # Wilting point in cm
+    initial_psi = torch.tensor(
+        cfg.data.initial_psi, device=cfg.device
+    )
     # alpha = torch.tensor(self.soils_df["alpha(cm^-1)"], device=cfg.device) this is a nn.param. Commenting out to not pull from the .dat file
     # n = torch.tensor(self.soils_df["n"], device=cfg.device) this is a nn.param. Commenting out to not pull from the .dat file
     # m = torch.tensor(self.soils_df["m"], device=cfg.device)  # TODO We're calculating this through n
@@ -71,6 +74,7 @@ def generate_soil_metrics(
     # ksat_cm_per_h = k_sat * cfg.constants.frozen_factor
     m = torch.zeros(len(alpha), device=cfg.device)
     theta_wp = torch.zeros(len(alpha), device=cfg.device)
+    theta_init = torch.zeros(len(alpha), device=cfg.device)
     bc_lambda = torch.zeros(len(alpha), device=cfg.device)
     bc_psib_cm = torch.zeros(len(alpha), device=cfg.device)
     h_min_cm = torch.zeros(len(alpha), device=cfg.device)
@@ -83,22 +87,24 @@ def generate_soil_metrics(
         theta_wp[i] = calc_theta_from_h(
             h, single_alpha, single_n, m[i], theta_e[i], theta_r[i]
         )
+        theta_init[i] = calc_theta_from_h(initial_psi, single_alpha, single_n, m[i], theta_e[i], theta_r[i])
         bc_lambda[i] = calc_bc_lambda(m[i])
         bc_psib_cm[i] = calc_bc_psib(single_alpha, m[i])
         h_min_cm[i] = calc_h_min_cm(bc_lambda[i], bc_psib_cm[i])
 
     soils_data = torch.stack(
         [
-            theta_e,
             theta_r,
+            theta_e,
             theta_wp,
+            theta_init,
             m,
             bc_lambda,
             bc_psib_cm,
             h_min_cm,
         ]
     )  # Putting all numeric columns in a tensor other than the Texture column
-    return soils_data
+    return soils_data.transpose(0,1)
 
 
 def read_test_params(cfg: DictConfig) -> (Tensor, Tensor, Tensor):
