@@ -32,7 +32,9 @@ class Data(Dataset):
         precip = torch.tensor(self.forcing_df["P(mm/h)"].values, device=cfg.device)
         pet = torch.tensor(self.forcing_df["PET(mm/h)"].values, device=cfg.device)
         x_ = torch.stack([precip, pet])  # Index 0: Precip, index 1: PET
-        self.x = x_.transpose(0, 1)
+        x_tr = x_.transpose(0, 1)
+        # Convert from mm/hr to cm/hr
+        self.x = x_tr * cfg.conversions.mm_to_cm
         # Creating a time interval
         time_values = self.forcing_df["Time"].values
         self.timestep_map = {time: idx for idx, time in enumerate(time_values)}

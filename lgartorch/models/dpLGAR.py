@@ -13,6 +13,7 @@
 """
 from omegaconf import DictConfig
 import logging
+import time
 from tqdm import tqdm
 import torch
 from torch import Tensor
@@ -21,6 +22,7 @@ import torch.nn as nn
 from lgartorch.data.utils import generate_soil_metrics, read_df, read_test_params
 from lgartorch.models.physics.GlobalParams import GlobalParams
 from lgartorch.models.physics.layers.Layer import Layer
+from lgartorch.models.physics.lgar.frozen_factor import frozen_factor_hydraulic_conductivity
 
 log = logging.getLogger("models.dpLGAR")
 
@@ -35,7 +37,7 @@ class dpLGAR(nn.Module):
 
         self.cfg = cfg
 
-        # Setting parameters
+        # Setting NN parameters
         alpha_, n_, ksat_ = read_test_params(cfg)
         self.alpha = nn.ParameterList([])
         self.n = nn.ParameterList([])
@@ -63,7 +65,6 @@ class dpLGAR(nn.Module):
         }
 
         # Creating tensors from config variables
-        # TODO make sure to add the mapping functionality
         self.global_params = GlobalParams(cfg)
 
         # Creating initial soil layer stack
@@ -80,16 +81,59 @@ class dpLGAR(nn.Module):
         )
 
         # Running the initial mass balance check
-        self.starting_volume = self.calc_mass_balance()
+        self.volstart_cm = self.calc_mass_balance()
+
+        # Setting output tracking params
+        self.precip_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+        self.PET_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+        self.AET_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+        self.volend_timestep_cm = self.volstart_cm.clone()
+        self.volin_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+        # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
+        self.volon_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+        self.precip_previous_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+        # self.volrunoff_timestep_cm = torch.tensor(0.0, device=self.device)
+        # self.volrech_timestep_cm = torch.tensor(0.0, device=self.device)
+        self.surface_runoff_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+        self.volrunoff_giuh_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+        self.volQ_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+        self.volQ_gw_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+
+        # Variables we want to save at every timestep
+        self.volrunoff_timestep_cm = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
+        self.volrech_timestep_cm = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
 
     def forward(self, x) -> Tensor:
         """
         The forward function to model Precip/PET through LGAR functions
+        /* Note unit conversion:
+        Pr and PET are rates (fluxes) in mm/h
+        Pr [mm/h] * 1h/3600sec = Pr [mm/3600sec]
+        Model timestep (dt) = 300 sec (5 minutes for example)
+        convert rate to amount
+        Pr [mm/3600sec] * dt [300 sec] = Pr[mm] * 300/3600.
+        in the code below, subtimestep_h is this 300/3600 factor (see initialize from config in lgar.cxx)
         :param x: Precip and PET forcings
-        :return:
+        :return: runoff to be used for validation
         """
         # TODO implement the LGAR functions for if there is precip or PET
-        pass
+        precip = x[0][0]
+        pet = x[0][1]
+        if self.global_params.sft_coupled:
+            # TODO work in frozen soil components
+            frozen_factor_hydraulic_conductivity()
+        for i in tqdm(range(self.cfg.models.nsteps), desc="Running dpLGAR over specified timesteps"):
+            for j in range(self.cfg.models.num_subcycles):
+                precip_subtimestep = precip * self.cfg.subcycle_length_h
+                pet_subtimestep = pet * self.cfg.subcycle_length_h
+                if precip_subtimestep > 0:
+                    self.top_layer.input_precip(precip_subtimestep)
+                if pet_subtimestep > 0:
+                    self.top_layer.calc_aet(pet_subtimestep)
+
+            time.sleep(0.001)
+
+        return self.volrunoff_timestep_cm
 
     def calc_mass_balance(self) -> Tensor:
         """

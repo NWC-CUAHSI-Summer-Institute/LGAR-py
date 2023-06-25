@@ -28,9 +28,11 @@ class DifferentiableLGAR(BaseAgent):
         torch.manual_seed(0)
         torch.set_default_dtype(torch.float64)
 
+        # Configuring timesteps
         self.cfg.models.endtime_s = (
             self.cfg.models.endtime * self.cfg.conversions.hr_to_sec
         )
+        self.cfg.models.subcycle_length_h = self.cfg.models.subcycle_length * (1 / self.cfg.conversions.hr_to_sec)
         self.cfg.models.forcing_resolution_h = (
             self.cfg.models.forcing_resolution / self.cfg.conversions.hr_to_sec
         )
@@ -40,10 +42,13 @@ class DifferentiableLGAR(BaseAgent):
         self.cfg.models.nsteps = int(
             self.cfg.models.endtime_s / self.cfg.models.time_per_step
         )
+        self.cfg.models.num_subcycles = int(self.cfg.models.forcing_resolution_h / self.cfg.models.subcycle_length_h)
 
+        # Defining the torch Dataset and Dataloader
         self.data = Data(self.cfg)
         self.data_loader = DataLoader(self.data, batch_size=1, shuffle=False)
 
+        # Defining the model
         self.model = dpLGAR(self.cfg)
 
         self.criterion = torch.nn.MSELoss()

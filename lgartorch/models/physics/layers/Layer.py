@@ -59,6 +59,12 @@ class Layer:
                 global_params, layer_index + 1, c, alpha, n, ksat, texture_map
             )
 
+    def input_precip(self, precip: Tensor) -> None:
+        raise NotImplementedError
+
+    def calc_aet(self, pet: Tensor) -> None:
+        raise NotImplementedError
+
     def mass_balance(self) -> Tensor:
         """
         A function that calculates the mass inside of the current layer
