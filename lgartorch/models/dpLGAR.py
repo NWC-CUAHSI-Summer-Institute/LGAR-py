@@ -46,10 +46,6 @@ class dpLGAR(nn.Module):
             # Addressing Frozen Factor
             self.ksat.append(nn.Parameter(ksat_[i] * cfg.constants.frozen_factor))
 
-        # Creating tensors from config variables
-        # TODO make sure to add the mapping functionality
-        self.global_params = GlobalParams(cfg)
-
         # Creating static soil params
         self.soils_df = read_df(cfg.data.soil_params_file)
         texture_values = self.soils_df["Texture"].values
@@ -66,11 +62,14 @@ class dpLGAR(nn.Module):
             "h_min_cm": 7,
         }
 
+        # Creating tensors from config variables
+        # TODO make sure to add the mapping functionality
+        self.global_params = GlobalParams(cfg)
+
         # Creating initial soil layer stack
         # We're only saving a reference to the top layer as all precip, PET, and runoff deal with it
         layer_index = 0  # This is the top layer
         self.top_layer = Layer(
-            cfg,
             self.global_params,
             layer_index,
             self.c,
@@ -87,9 +86,9 @@ class dpLGAR(nn.Module):
         """
         The forward function to model Precip/PET through LGAR functions
         :param x: Precip and PET forcings
-        :param c: Soil Attributes
         :return:
         """
+        # TODO implement the LGAR functions for if there is precip or PET
         pass
 
     def calc_mass_balance(self) -> Tensor:

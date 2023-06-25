@@ -11,6 +11,8 @@ class GlobalParams:
     def __init__(self, cfg: DictConfig) -> None:
         super().__init__()
 
+        self.device = cfg.device
+
         # Defining all of the variables required by LGAR
         self.layer_thickness_cm = None
         self.cum_layer_thickness = None
@@ -63,6 +65,8 @@ class GlobalParams:
         # Setting these options to false (default)
         self.sft_coupled = False
         self.use_closed_form_G = False
+
+        self.soil_property_indexes = None
 
         self.initialize_config_parameters(cfg)
 
@@ -117,3 +121,5 @@ class GlobalParams:
         )
 
         self.giuh_ordinates = np.array(cfg.data.giuh_ordinates)
+
+        self.soil_property_indexes = cfg.data.soil_property_indexes

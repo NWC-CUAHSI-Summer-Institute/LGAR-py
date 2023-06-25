@@ -13,7 +13,7 @@ log = logging.getLogger("models.physics.layers.WettingFront")
 class WettingFront:
     def __init__(
         self,
-        cfg: DictConfig,
+        global_params: object,
         cum_layer_thickness: Tensor,
         attributes: Tensor,
         ksat: torch.nn.Parameter,
@@ -31,12 +31,14 @@ class WettingFront:
         """
         super().__init__()
         self.depth = cum_layer_thickness
-        self.theta = attributes[cfg.data.soil_property_indexes["theta_init"]]
-        self.dzdt_cm_per_h = torch.tensor(0.0, device=cfg.device)
-        theta_r = attributes[cfg.data.soil_property_indexes["theta_r"]]
-        theta_e = attributes[cfg.data.soil_property_indexes["theta_e"]]
-        m = attributes[cfg.data.soil_property_indexes["m"]]
+        self.theta = attributes[global_params.soil_property_indexes["theta_init"]]
+        self.dzdt_cm_per_h = torch.tensor(0.0, device=global_params.device)
+        theta_r = attributes[global_params.soil_property_indexes["theta_r"]]
+        theta_e = attributes[global_params.soil_property_indexes["theta_e"]]
+        m = attributes[global_params.soil_property_indexes["m"]]
         self.se = calc_se_from_theta(self.theta, theta_e, theta_r)
-        self.psi_cm = torch.tensor(cfg.data.initial_psi, device=cfg.device)
+        self.psi_cm = torch.tensor(
+            global_params.initial_psi, device=global_params.device
+        )
         self.ksat_cm_per_h = calc_k_from_se(self.se, ksat, m)
         self.bottom_flag = bottom_flag

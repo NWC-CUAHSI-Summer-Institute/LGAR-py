@@ -13,7 +13,6 @@ log = logging.getLogger("models.physics.layers.Layer")
 class Layer:
     def __init__(
         self,
-        cfg: DictConfig,
         global_params: object,
         layer_index: int,
         c: Tensor,
@@ -34,13 +33,13 @@ class Layer:
         :param is_top: TBD if this is necessary. Rn it's always true
         """
         super().__init__()
-        self.cfg = cfg
+        self.global_params = global_params
         self.layer_num = layer_index
-        self.layer_thickness = global_params.layer_thickness_cm[self.layer_num]
-        self.cumulative_layer_thickness = global_params.cum_layer_thickness[
+        self.layer_thickness = self.global_params.layer_thickness_cm[self.layer_num]
+        self.cumulative_layer_thickness = self.global_params.cum_layer_thickness[
             self.layer_num
         ]
-        self.soil_type = global_params.layer_soil_type[self.layer_num]
+        self.soil_type = self.global_params.layer_soil_type[self.layer_num]
         self.texture = texture_map[self.soil_type]
         self.attributes = c[self.soil_type]
         self.alpha_layer = alpha[self.soil_type]
@@ -49,7 +48,7 @@ class Layer:
         self.wetting_fronts = []
         self.wetting_fronts.append(
             WettingFront(
-                cfg, self.cumulative_layer_thickness, self.attributes, self.ksat_layer
+                self.global_params, self.cumulative_layer_thickness, self.attributes, self.ksat_layer
             )
         )
         self.next_layer = None
@@ -57,7 +56,7 @@ class Layer:
             layer_index < global_params.num_layers - 1
         ):  # Checking to see if there is a layer below this one
             self.next_layer = Layer(
-                cfg, global_params, layer_index + 1, c, alpha, n, ksat, texture_map
+                global_params, layer_index + 1, c, alpha, n, ksat, texture_map
             )
 
     def mass_balance(self) -> Tensor:
@@ -69,7 +68,7 @@ class Layer:
         """
         sum = torch.tensor(0, dtype=torch.float64)
         if self.layer_num == 0:
-            base_depth = torch.tensor(0.0, device=self.cfg.device)
+            base_depth = torch.tensor(0.0, device=self.global_params.device)
         else:
             # The base depth is the depth at the top of the layer
             base_depth = self.cumulative_layer_thickness - self.layer_thickness
