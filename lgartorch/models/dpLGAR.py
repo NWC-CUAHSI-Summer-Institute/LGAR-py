@@ -22,7 +22,9 @@ import torch.nn as nn
 from lgartorch.data.utils import generate_soil_metrics, read_df, read_test_params
 from lgartorch.models.physics.GlobalParams import GlobalParams
 from lgartorch.models.physics.layers.Layer import Layer
-from lgartorch.models.physics.lgar.frozen_factor import frozen_factor_hydraulic_conductivity
+from lgartorch.models.physics.lgar.frozen_factor import (
+    frozen_factor_hydraulic_conductivity,
+)
 
 log = logging.getLogger("models.dpLGAR")
 
@@ -100,8 +102,12 @@ class dpLGAR(nn.Module):
         self.volQ_gw_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
 
         # Variables we want to save at every timestep
-        self.volrunoff_timestep_cm = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
-        self.volrech_timestep_cm = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
+        self.volrunoff_timestep_cm = torch.zeros(
+            [self.cfg.models.nsteps], device=self.cfg.device
+        )
+        self.volrech_timestep_cm = torch.zeros(
+            [self.cfg.models.nsteps], device=self.cfg.device
+        )
 
     def forward(self, x) -> Tensor:
         """
@@ -119,17 +125,47 @@ class dpLGAR(nn.Module):
         # TODO implement the LGAR functions for if there is precip or PET
         precip = x[0][0]
         pet = x[0][1]
+        previous_precip = torch.tensor(0.0, device=self.cfg.device)
         if self.global_params.sft_coupled:
             # TODO work in frozen soil components
             frozen_factor_hydraulic_conductivity()
-        for i in tqdm(range(self.cfg.models.nsteps), desc="Running dpLGAR over specified timesteps"):
+        for i in tqdm(range(self.cfg.models.nsteps), desc="Running dpLGAR"):
             for j in range(self.cfg.models.num_subcycles):
                 precip_subtimestep = precip * self.cfg.subcycle_length_h
+                ponded_depth_subtimestep = precip_subtimestep + self.volon_timestep_cm
                 pet_subtimestep = pet * self.cfg.subcycle_length_h
-                if precip_subtimestep > 0:
-                    self.top_layer.input_precip(precip_subtimestep)
+                # Determining wetting cases
+                create_surficial_front = self.create_surficial_front(
+                    previous_precip, precip_subtimestep
+                )
+                is_top_layer_saturated = self.top_layer.is_saturated()
+                if pet_subtimestep > 0.0:
+                    raise NotImplementedError
+                    # self.top_layer.calc_aet(pet_subtimestep)
+                else:
+                    AET_subtimestep_cm = torch.tensor(0.0, device=self.device)
+                if create_surficial_front:
+                    if is_top_layer_saturated:
+                        # It's raining
+                        raise NotImplementedError
+                        # self.top_layer.input_precip(precip_subtimestep)
+                else:
+                    if ponded_depth_subtimestep > 0:
+                        #  infiltrate water based on the infiltration capacity given no new wetting front
+                        #  is created and that there is water on the surface (or raining).
+                        raise NotImplementedError
+                    else:
+                        if ponded_depth_subtimestep < self.global_params.ponded_depth_max_cm:
+                            raise NotImplementedError
+                        else:
+                            raise NotImplementedError
+                    # move wetting fronts if no new wetting front is created. Otherwise, movement
+                    # of wetting fronts has already happened at the time of creating surficial front,
+                    # so no need to move them here. */
+                    raise NotImplementedError
                 if pet_subtimestep > 0:
                     self.top_layer.calc_aet(pet_subtimestep)
+                previous_precip = precip_subtimestep
 
             time.sleep(0.001)
 
@@ -144,3 +180,17 @@ class dpLGAR(nn.Module):
         """
         return self.top_layer.mass_balance()
 
+    def create_surficial_front(self, previous_precip, precip_subtimestep):
+        """
+        Checks the volume of water on the surface, and if it's raining or has recently rained
+        to determine if any water has infiltrated the surface
+        :param previous_precip:
+        :param precip_subtimestep:
+        :param volon_timestep_cm:
+        :return:
+        """
+        # This enusures we don't add extra mass from a previous storm event
+        has_previous_precip = (previous_precip == 0.0).item()
+        is_it_raining = (precip_subtimestep > 0.0).item()
+        is_there_ponded_water = self.volon_timestep_cm == 0
+        return has_previous_precip and is_it_raining and is_there_ponded_water

@@ -65,6 +65,16 @@ class Layer:
     def calc_aet(self, pet: Tensor) -> None:
         raise NotImplementedError
 
+    def is_saturated(self):
+        """
+        Determining if the top layer's first wetting front is saturated
+        If saturated, then there will be runoff
+        :return:
+        """
+        top_wetting_front = self.wetting_fronts[0]
+        theta_e = self.attributes[self.global_params.soil_property_indexes["theta_e"]]
+        return True if top_wetting_front.theta >= theta_e else False
+
     def mass_balance(self) -> Tensor:
         """
         A function that calculates the mass inside of the current layer
