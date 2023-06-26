@@ -95,3 +95,12 @@ def calc_k_from_se(se: Tensor, ksat: Tensor, m: Tensor) -> Tensor:
         * torch.sqrt(se)
         * torch.pow(1.0 - torch.pow(1.0 - torch.pow(se, 1.0 / m), m), 2.0)
     )
+
+
+def calc_h_from_se(
+    se: torch.Tensor, alpha: torch.Tensor, m: torch.Tensor, n: torch.Tensor
+):
+    """
+    function to calculate h from Se
+    """
+    return 1.0 / alpha * torch.pow(torch.pow(se, (-1.0 / m)) - 1.0, (1.0 / n))

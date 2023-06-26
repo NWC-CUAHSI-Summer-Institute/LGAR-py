@@ -140,8 +140,7 @@ class dpLGAR(nn.Module):
                 )
                 is_top_layer_saturated = self.top_layer.is_saturated()
                 if pet_subtimestep > 0.0:
-                    raise NotImplementedError
-                    # self.top_layer.calc_aet(pet_subtimestep)
+                    self.top_layer.calc_aet(pet_subtimestep)
                 else:
                     AET_subtimestep_cm = torch.tensor(0.0, device=self.device)
                 if create_surficial_front:
@@ -194,3 +193,22 @@ class dpLGAR(nn.Module):
         is_it_raining = (precip_subtimestep > 0.0).item()
         is_there_ponded_water = self.volon_timestep_cm == 0
         return has_previous_precip and is_it_raining and is_there_ponded_water
+
+    def update_states(self, i):
+        self.volprecip_cm = self._model.volprecip_cm + precip_timestep_cm
+        self.volin_cm = self._model.volin_cm + volin_timestep_cm
+        self.volon_cm = volon_timestep_cm
+        self.volend_cm = volend_timestep_cm
+        self.volAET_cm = self._model.volAET_cm + AET_timestep_cm
+        self.volrech_cm = self._model.volrech_cm + volrech_timestep_cm
+        self.volrunoff_cm = self._model.volrunoff_cm + volrunoff_timestep_cm
+        self.volQ_cm = self._model.volQ_cm + volQ_timestep_cm
+        self.volQ_gw_cm = self._model.volQ_gw_cm + volQ_gw_timestep_cm
+        self.volPET_cm = self._model.volPET_cm + PET_timestep_cm
+        self.volrunoff_giuh_cm = (
+            self._model.volrunoff_giuh_cm + volrunoff_giuh_timestep_cm
+        )
+
+        # Variables we want to save at every timestep
+        self.volrunoff_timestep_cm[i] = volrunoff_timestep_cm
+        self.volrech_timestep_cm[i] = volrech_timestep_cm

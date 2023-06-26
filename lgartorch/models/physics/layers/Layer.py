@@ -6,6 +6,7 @@ from torch import Tensor
 import torch.nn as nn
 
 from lgartorch.models.physics.layers.WettingFront import WettingFront
+from lgartorch.models.physics.lgar.aet import calculate_aet
 
 log = logging.getLogger("models.physics.layers.Layer")
 
@@ -13,7 +14,7 @@ log = logging.getLogger("models.physics.layers.Layer")
 class Layer:
     def __init__(
         self,
-        global_params: object,
+        global_params,
         layer_index: int,
         c: Tensor,
         alpha: torch.nn.Parameter,
@@ -48,7 +49,10 @@ class Layer:
         self.wetting_fronts = []
         self.wetting_fronts.append(
             WettingFront(
-                self.global_params, self.cumulative_layer_thickness, self.attributes, self.ksat_layer
+                self.global_params,
+                self.cumulative_layer_thickness,
+                self.attributes,
+                self.ksat_layer,
             )
         )
         self.next_layer = None
@@ -63,7 +67,28 @@ class Layer:
         raise NotImplementedError
 
     def calc_aet(self, pet: Tensor) -> None:
-        raise NotImplementedError
+        """
+        ONLY CALLED FROM TOP LAYER
+        Calculates the Actual Evapotranspiration for each layer
+        :param pet: Potential evapotranspiration
+        :param subcycle_length_h: the length of each subcycle step (in hours)
+        :return:
+        """
+        top_wetting_front = self.wetting_fronts[0]
+        theta_e = self.attributes[self.global_params.soil_property_indexes["theta_e"]]
+        theta_r = self.attributes[self.global_params.soil_property_indexes["theta_r"]]
+        m = self.attributes[self.global_params.soil_property_indexes["m"]]
+        aet = calculate_aet(
+            self.global_params,
+            pet,
+            top_wetting_front.psi_cm,
+            theta_e,
+            theta_r,
+            m,
+            self.alpha_layer,
+            self.n_layer,
+        )
+        return aet
 
     def is_saturated(self):
         """
