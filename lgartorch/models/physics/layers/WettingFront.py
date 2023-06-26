@@ -15,6 +15,7 @@ class WettingFront:
         self,
         global_params,
         cum_layer_thickness: Tensor,
+        layer_num: int,
         attributes: Tensor,
         ksat: torch.nn.Parameter,
         bottom_flag=True,
@@ -30,8 +31,9 @@ class WettingFront:
         """
         super().__init__()
         self.depth = cum_layer_thickness
+        self.layer_num = layer_num
         self.theta = attributes[global_params.soil_property_indexes["theta_init"]]
-        self.dzdt_cm_per_h = torch.tensor(0.0, device=global_params.device)
+        self.dzdt = torch.tensor(0.0, device=global_params.device)
         theta_r = attributes[global_params.soil_property_indexes["theta_r"]]
         theta_e = attributes[global_params.soil_property_indexes["theta_e"]]
         m = attributes[global_params.soil_property_indexes["m"]]
@@ -39,3 +41,23 @@ class WettingFront:
         self.psi_cm = global_params.initial_psi
         self.ksat_cm_per_h = calc_k_from_se(self.se, ksat, m)
         self.bottom_flag = bottom_flag
+
+    def deepcopy(self, wf):
+        """
+        Creating a copy of the wf object. The tensors need to be clones to ensure that the objects are not manipulated
+        :param wf:
+        :return:
+        """
+        # TODO, we may need to detach the tensors here so the gradient is not tracked?? Making copies is annoying
+        wf.depth = self.depth.clone()
+        wf.layer_num = self.layer_num
+        wf.theta = self.theta.clone()
+        wf.dzdt = self.dzdt.clone()
+        wf.se = self.se.clone()
+        wf.psi_cm = self.psi_cm.clone()
+        wf.ksat_cm_per_h = self.ksat_cm_per_h.clone()
+        wf.bottom_flag = self.bottom_flag
+        return wf
+
+
+

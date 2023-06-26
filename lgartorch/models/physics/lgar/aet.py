@@ -13,7 +13,7 @@ from lgartorch.models.physics.utils import (
 log = logging.getLogger("models.physics.lgar.aet")
 
 
-def calculate_aet(global_params, pet, psi_cm, theta_e, theta_r, m, alpha, n) -> Tensor:
+def calc_aet(global_params, pet, psi_cm, theta_e, theta_r, m, alpha, n) -> Tensor:
     """
     /* authors : Fred Ogden and Ahmad Jan
     Translated by Tadd Bindas to Python
