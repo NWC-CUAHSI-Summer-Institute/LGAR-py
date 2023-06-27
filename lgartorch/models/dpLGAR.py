@@ -178,7 +178,7 @@ class dpLGAR(nn.Module):
                             ponded_depth_sub = self.global_params.ponded_depth_max_cm
                             ponded_water_sub = ponded_depth_sub
                     self.runoff[i] = self.runoff[i] + runoff_sub
-                    percolation_sub = self.bottom_layer.move_wetting_fronts(
+                    percolation_sub_post_move = self.bottom_layer.move_wetting_fronts(
                         percolation_sub,
                         AET_sub,
                         ending_volume_sub,
@@ -194,8 +194,12 @@ class dpLGAR(nn.Module):
                         + self.top_layer.wetting_front_cross_domain_boundary()
                     )
                     percolation_sub = bottom_boundary_flux
-                    self.top_layer.fix_dry_over_wet_fronts()
-                    self.top_layer.update_psi()
+                    mass_change = self.top_layer.fix_dry_over_wet_fronts()
+                    if torch.abs(mass_change) > 1e-7:
+                        AET_sub = AET_sub - mass_change
+                    self.percolation = self.percolation + percolation_sub_post_move  # Make sure the values aren't getting lost
+
+                self.top_layer.update_psi()
                 self.top_layer.calc_dzdt()
                 precip_timestep = precip_timestep + precip_sub
                 ending_volume_sub = self.calc_mass_balance()

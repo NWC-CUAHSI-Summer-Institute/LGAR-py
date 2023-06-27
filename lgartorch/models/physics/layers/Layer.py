@@ -749,21 +749,89 @@ class Layer:
             if next_to_next_front is None:
                 if current_front.depth > self.cumulative_layer_thickness:
                     # this is the water leaving the system through the bottom of the soil
-                    bottom_flux_cm_temp = (current_front.theta - next_front.theta) * (current_front.depth - next_front.depth)
+                    bottom_flux_cm_temp = (current_front.theta - next_front.theta) * (
+                        current_front.depth - next_front.depth
+                    )
 
                     next_front.theta = current_front.theta
                     se_k = calc_se_from_theta(
-                        current_front.theta, current_front.theta_e, current_front.theta_r
+                        current_front.theta,
+                        current_front.theta_e,
+                        current_front.theta_r,
                     )
-                    next_front.psi_cm = calc_h_from_se(se_k, self.alpha_layer, current_front.m, self.n_layer)
-                    next_front.k_cm_per_h = calc_k_from_se(se_k, self.ksat_layer, self.m)
-                    _ = self.wetting_fronts.pop(i)  # deleting the current front (i.e front with index i)
+                    next_front.psi_cm = calc_h_from_se(
+                        se_k, self.alpha_layer, current_front.m, self.n_layer
+                    )
+                    next_front.k_cm_per_h = calc_k_from_se(
+                        se_k, self.ksat_layer, self.m
+                    )
+                    _ = self.wetting_fronts.pop(
+                        i
+                    )  # deleting the current front (i.e front with index i)
 
             bottom_flux_cm = bottom_flux_cm + bottom_flux_cm_temp
             return bottom_flux_cm
 
     def fix_dry_over_wet_fronts(self):
-        raise NotImplementedError
+        """
+        /* The function handles situation of dry over wet wetting fronts
+        mainly happen when AET extracts more water from the upper wetting front
+        and the front gets drier than the lower wetting front */
+        :return:
+        """
+        mass_change = torch.tensor(0.0, device=self.global_params.device)
+        for i in range(len(self.wetting_fronts)):
+            neighboring_fronts = self.get_neighboring_fronts(i)
+            current_front = neighboring_fronts["current_front"]
+            next_front = neighboring_fronts["next_front"]
+            if next_front is not None:
+                """
+                // this part fixes case of upper theta less than lower theta due to AET extraction
+                // also handles the case when the current and next wetting fronts have the same theta
+                // and are within the same layer
+                /***************************************************/
+                """
+                #  TODO: TEST THIS!
+                theta_less = current_front.theta <= next_front.theta
+                same_layer = current_front.layer_num == next_front.layer_num
+                if theta_less and same_layer:
+                    mass_before = self.mass_balance()
+
+                    # replacing current = listDeleteFront(current->front_num);
+                    popped_front = self.wetting_fronts.pop(i)
+
+                    # if the dry wetting front is the most surficial then simply track the mass change
+                    # due to the deletion of the wetting front;
+                    # this needs to be revised
+                    if popped_front.layer_num > 0:
+                        raise NotImplementedError
+                        # se_k = calc_se_from_theta(popped_front.theta, popped_front.theta_e, popped_front.theta_r)
+                        # popped_front.psi_cm = calc_h_from_se(se_k, self.alpha_layer, popped_front.m, self.n_layer)
+                        # self.update_fronts(popped_front, i)
+
+                    # /* note: mass_before is less when we have wetter front over drier front condition,
+                    #  however, lgar_calc_mass_bal returns mass_before > mass_after due to fabs(theta_current - theta_next);
+                    # for mass_before the functions compuates more than the actual mass; removing fabs in that function
+                    # might be one option, but for now we are adding fabs to mass_change to make sure we added extra water
+                    # back to AET after deleting the drier front */
+                    mass_after = self.mass_balance()
+                    mass_change = mass_change + torch.abs(mass_after - mass_before)
+        if self.next_layer is not None:
+            return mass_change + self.next_layer.fix_dry_over_wet_fronts()
+        else:
+            return mass_change
+
+    # def update_fronts(self, popped_front, i):
+    #     neighboring_fronts = self.get_neighboring_fronts(i)
+    #     for i in range(len(self.wetting_fronts)):
+    #
+    #         current_local_front = neighboring_fronts["current_front"]
+    #         if current_local_front.layer_num < popped_front.layer_num:
+    #             se_l = calc_se_from_theta(current_local_front.theta, current_local_front.theta_e, current_local_front.theta_r)
+    #             current_local_front.psi_cm = calc_h_from_se(se_l, self.alpha_layer, current_local_front.m, self.n_layer)
+    #             current_local_front.theta = calc_theta_from_h(popped_front.psi_cm, self.alpha_layer, current_local_front.m, self.n_layer, current_local_front.theta_e, current_local_front.theta_r)
+    #             if neighboring_fronts["next_front"] is not None:
+    #                 self.update_fronts(self, popped_front):
 
     def update_psi(self):
         raise NotImplementedError
@@ -830,9 +898,7 @@ class Layer:
 
     def print(self, first=True):
         if first:
-            log.info(
-                f"[  Depth   Theta    Layer_num   dzdt       ksat      psi   ]"
-            )
+            log.info(f"[  Depth   Theta    Layer_num   dzdt       ksat      psi   ]")
         for wf in self.wetting_fronts:
             log.info(
                 f"[{wf.depth.item():.4f}, {wf.theta.item():.4f},      {wf.layer_num},     {wf.dzdt.item():.6f}, {wf.ksat_cm_per_h.item():.6f}, {wf.psi_cm:.4f}]"
