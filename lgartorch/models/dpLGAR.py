@@ -197,9 +197,8 @@ class dpLGAR(nn.Module):
                     mass_change = self.top_layer.fix_dry_over_wet_fronts()
                     if torch.abs(mass_change) > 1e-7:
                         AET_sub = AET_sub - mass_change
+                    self.top_layer.update_psi()
                     self.percolation = self.percolation + percolation_sub_post_move  # Make sure the values aren't getting lost
-
-                self.top_layer.update_psi()
                 self.top_layer.calc_dzdt()
                 precip_timestep = precip_timestep + precip_sub
                 ending_volume_sub = self.calc_mass_balance()

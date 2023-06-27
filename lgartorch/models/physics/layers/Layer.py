@@ -576,11 +576,7 @@ class Layer:
            way to deal with these scenarios. */
           :return:
         """
-
-        if self.next_layer is not None:
-            layer_fronts = len(self.wetting_fronts)
-        else:
-            layer_fronts = len(self.wetting_fronts) - 1
+        layer_fronts = self.get_len_layers()
         for i in range(layer_fronts):
             extended_neighbors = self.get_extended_neighbors(i)
             is_passing = self.is_passing(
@@ -633,10 +629,7 @@ class Layer:
         the function lets wetting fronts of a sufficient depth cross layer boundaries; called from lgar_move_wetting_fronts.
         :return:
         """
-        if self.next_layer is not None:
-            layer_fronts = len(self.wetting_fronts)
-        else:
-            layer_fronts = len(self.wetting_fronts) - 1
+        layer_fronts = self.get_len_layers()
         m = self.attributes[self.global_params.soil_property_indexes["m"]]
         for i in range(layer_fronts):
             extended_neighbors = self.get_extended_neighbors(i)
@@ -735,11 +728,7 @@ class Layer:
         :return:
         """
         bottom_flux_cm = torch.tensor(0.0, device=self.global_params.device)
-        if self.next_layer is not None:
-            layer_fronts = len(self.wetting_fronts)
-        else:
-            # Making sure we don't touch the deepest wetting front
-            layer_fronts = len(self.wetting_fronts) - 1
+        layer_fronts = self.get_len_layers()
         for i in range(layer_fronts):
             extended_neighbors = self.get_extended_neighbors(i)
             bottom_flux_cm_temp = torch.tensor(0.0, device=self.global_params.device)
@@ -763,7 +752,7 @@ class Layer:
                         se_k, self.alpha_layer, current_front.m, self.n_layer
                     )
                     next_front.k_cm_per_h = calc_k_from_se(
-                        se_k, self.ksat_layer, self.m
+                        se_k, self.ksat_layer, current_front.m
                     )
                     _ = self.wetting_fronts.pop(
                         i
@@ -833,10 +822,43 @@ class Layer:
     #             if neighboring_fronts["next_front"] is not None:
     #                 self.update_fronts(self, popped_front):
 
+    def get_len_layers(self):
+        """
+        Used to get the number of layers in a wetting front other than the deepest layer
+        :return:
+        """
+        if self.next_layer is not None:
+            layer_fronts = len(self.wetting_fronts)
+        else:
+            # Making sure we don't touch the deepest wetting front
+            layer_fronts = len(self.wetting_fronts) - 1
+        return layer_fronts
+
     def update_psi(self):
-        raise NotImplementedError
+        """
+        Makes sure all pressure values are updated
+        :return:
+        """
+        # TODO validate this function works
+        layer_fronts = self.get_len_layers()
+        for i in range(layer_fronts):
+            current_front = self.wetting_fronts[i]
+            se = calc_se_from_theta(
+                current_front.theta, current_front.theta_e, current_front.theta_r
+            )
+            current_front.psi_cm = calc_h_from_se(
+                se, self.alpha_layer, current_front.m, self.n_layer
+            )
+            current_front.k_cm_per_h = calc_k_from_se(
+                se, self.ksat_layer, current_front.m
+            )
+        if self.next_layer is not None:
+            self.next_layer.update_psi()
+        else:
+            return None
 
     def calc_dzdt(self):
+        # TODO WORK ON THIS !!!!
         raise NotImplementedError
 
     def giuh_runoff(self):
