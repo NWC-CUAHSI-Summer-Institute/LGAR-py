@@ -576,13 +576,23 @@ class Layer:
            way to deal with these scenarios. */
           :return:
         """
-        for i in range(len(self.wetting_fronts)):
+
+        if self.next_layer is not None:
+            layer_fronts = len(self.wetting_fronts)
+        else:
+            layer_fronts = len(self.wetting_fronts) - 1
+        for i in range(layer_fronts):
             extended_neighbors = self.get_extended_neighbors(i)
             is_passing = self.is_passing(
                 extended_neighbors["current_front"], extended_neighbors["next_front"]
             )
             if is_passing:
                 self.pass_front(extended_neighbors)
+        if self.next_layer is not None:
+            self.next_layer.merge_wetting_fronts()
+        else:
+            # We're on the last layer. We can't merge this to anything
+            return None
 
     def pass_front(self, extended_neighbors):
         current_front = extended_neighbors["current_front"]
@@ -619,89 +629,102 @@ class Layer:
                 raise IndexError
 
     def wetting_fronts_cross_layer_boundary(self):
-
-        log.debug("Layer boundary crossing...")
-
-        for i in range(1, len(self.wetting_fronts)):
-            log.debug(f"Boundary Crossing | ******* Wetting Front = {i} ******")
-
-            current = i - 1
-            next_ = i
-            next_to_next = i + 1 if i + 1 < len(self.wetting_fronts) else None
-
-            layer_num = self.wetting_fronts[current].layer_num
-            soil_num = self.layer_soil_type[layer_num]
-            soil_properties = self.soils_df.iloc[soil_num]
-            theta_e = torch.tensor(soil_properties["theta_e"], device=self.device)
-            theta_r = torch.tensor(soil_properties["theta_r"], device=self.device)
-            alpha = torch.tensor(soil_properties["alpha(cm^-1)"], device=self.device)
-            m = torch.tensor(soil_properties["m"], device=self.device)
-            n = torch.tensor(soil_properties["n"], device=self.device)
-            ksat_cm_per_h = (
-                    torch.tensor(soil_properties["Ks(cm/h)"])
-                    * self.frozen_factor[layer_num]
+        """
+        the function lets wetting fronts of a sufficient depth cross layer boundaries; called from lgar_move_wetting_fronts.
+        :return:
+        """
+        if self.next_layer is not None:
+            layer_fronts = len(self.wetting_fronts)
+        else:
+            layer_fronts = len(self.wetting_fronts) - 1
+        m = self.attributes[self.global_params.soil_property_indexes["m"]]
+        for i in range(layer_fronts):
+            extended_neighbors = self.get_extended_neighbors(i)
+            current_front = extended_neighbors["current_front"]
+            next_front = extended_neighbors["next_front"]
+            next_to_next_front = extended_neighbors["next_to_next_front"]
+            depth_greater_than_layer = (
+                current_front.depth > self.cumulative_layer_thickness
             )
-
+            next_depth_equal_to_thickness = (
+                next_front.depth == self.cumulative_layer_thickness
+            )
             # TODO VERIFY THAT THIS WORKS!
-            if (
-                    self.wetting_fronts[current].depth_cm
-                    > self.cum_layer_thickness[layer_num]
-                    and (
-                    self.wetting_fronts[next_].depth_cm
-                    == self.cum_layer_thickness[layer_num]
-            )
-                    and (layer_num != (self.num_layers - 1))  # 0-based
-            ):
-                current_theta = min(theta_e, self.wetting_fronts[current].theta)
-                overshot_depth = (
-                        self.wetting_fronts[current].depth_cm
-                        - self.wetting_fronts[next_].depth_cm
-                )
-                soil_num_next = self.layer_soil_type[layer_num + 1]
-                soil_properties_next = self.soils_df.iloc[soil_num]
-
-                se = calc_se_from_theta(
-                    self.wetting_fronts[current].theta, theta_e, theta_r
-                )
-                self.wetting_fronts[current].psi_cm = calc_h_from_se(se, alpha, m, n)
-
-                self.wetting_fronts[current].k_cm_per_h = calc_k_from_se(
-                    se, ksat_cm_per_h, m
-                )
-
-                theta_new = calc_theta_from_h(
-                    self.wetting_fronts[current].psi_cm,
-                    soil_properties_next,
-                    self.device,
-                )
-
-                mbal_correction = overshot_depth * (
-                        current_theta - self.wetting_fronts[next_].theta
-                )
-                mbal_Z_correction = mbal_correction / (
-                        theta_new - self.wetting_fronts[next_to_next].theta
-                )
-
-                depth_new = self.cum_layer_thickness[layer_num] + mbal_Z_correction
-
-                self.wetting_fronts[current].depth_cm = self.cum_layer_thickness[
-                    layer_num
+            # Supposed to not work if the last layer, but that's taken care of before the loop
+            if depth_greater_than_layer and next_depth_equal_to_thickness:
+                theta_e = self.attributes[
+                    self.global_params.soil_property_indexes["theta_e"]
                 ]
+                current_theta = torch.min(theta_e, current_front.theta)
+                overshot_depth = current_front.depth - next_front.depth
+                # Adding the current wetting front (popped_front) to the next layer
+                se = calc_se_from_theta(
+                    current_front.theta, current_front.theta_e, current_front.theta_r
+                )
+                current_front.psi_cm = calc_h_from_se(
+                    se, self.alpha_layer, m, self.n_layer
+                )
+                current_front.ksat_cm_per_h = calc_k_from_se(se, self.ksat_layer, m)
+                (
+                    extended_neighbors["current_front"],
+                    extended_neighbors["next_front"],
+                ) = self.recalibrate(
+                    current_front,
+                    next_front,
+                    next_to_next_front,
+                    overshot_depth,
+                )
+        if self.next_layer is not None:
+            self.next_layer.wetting_fronts_cross_layer_boundary()
+        else:
+            return None
 
-                self.wetting_fronts[next_].theta = theta_new
-                self.wetting_fronts[next_].psi_cm = self.wetting_fronts[current].psi_cm
-                self.wetting_fronts[next_].depth_cm = depth_new
-                self.wetting_fronts[next_].layer_num = layer_num + 1
-                self.wetting_fronts[next_].dzdt_cm_per_h = self.wetting_fronts[
-                    current
-                ].dzdt_cm_per_h
-                self.wetting_fronts[current].dzdt_cm_per_h = torch.tensor(0.0, device=self.device)
-                self.wetting_fronts[current].to_bottom = True
-                self.wetting_fronts[next_].to_bottom = False
-
-                log.debug("State after wetting fronts cross layer boundary...")
-                for wf in self.wetting_fronts:
-                    wf.print()
+    def recalibrate(
+        self,
+        current_front,
+        next_front,
+        next_to_next_front,
+        overshot_depth,
+    ):
+        """
+        Recalibrating parameters of the wetting front to match the new soil layer
+        :param front:
+        :param overshot_depth:
+        :return:
+        """
+        # TODO there is a case that if there is too much rainfall we can traverse two layers in one go.
+        #  Highly unlikely, but could be worth checking into
+        next_theta_r = self.next_layer.attributes[
+            self.global_params.soil_property_indexes["theta_r"]
+        ]
+        next_theta_e = self.next_layer.attributes[
+            self.global_params.soil_property_indexes["theta_e"]
+        ]
+        next_m = self.next_layer.attributes[
+            self.global_params.soil_property_indexes["theta_m"]
+        ]
+        next_alpha = self.next_layer.alpha_layer
+        next_n = self.next_layer.n_layer
+        theta_new = calc_theta_from_h(
+            current_front.psi_cm, next_alpha, next_m, next_n, next_theta_e, next_theta_r
+        )
+        mbal_correction = overshot_depth * (current_front.theta - next_front.theta)
+        mbal_Z_correction = mbal_correction / (
+            theta_new - next_to_next_front.theta
+        )  # this is the new wetting front depth
+        depth_new = (
+            self.cumulative_layer_thickness + mbal_Z_correction
+        )  # this is the new wetting front absolute depth
+        current_front.depth = self.cumulative_layer_thickness
+        next_front.theta = theta_new
+        next_front.psi_cm = current_front.psi_cm
+        next_front.depth = depth_new
+        next_front.layer_num = current_front.layer_num + 1
+        next_front.dzdt = current_front.dzdt
+        current_front.dzdt = torch.tensor(0.0, self.global_params.device)
+        current_front.to_bottom = True
+        next_front.to_bottom = False
+        return current_front, next_front
 
     def wetting_front_cross_domain_boundary(self):
         raise NotImplementedError

@@ -136,6 +136,7 @@ class dpLGAR(nn.Module):
             frozen_factor_hydraulic_conductivity()
         for i in tqdm(range(self.cfg.models.nsteps), desc="Running dpLGAR"):
             precip_timestep = torch.tensor(0.0, device=self.cfg.device)
+            bottom_boundary_flux = torch.tensor(0.0, device=self.cfg.device)
             ending_volume_sub = self.ending_volume.clone()
             for j in range(self.cfg.models.num_subcycles):
                 precip_sub = precip * self.cfg.models.subcycle_length_h

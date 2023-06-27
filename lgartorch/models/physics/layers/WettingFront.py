@@ -41,7 +41,7 @@ class WettingFront:
         self.se = calc_se_from_theta(self.theta, self.theta_e, self.theta_r)
         self.psi_cm = global_params.initial_psi
         self.ksat_cm_per_h = calc_k_from_se(self.se, ksat, self.m)
-        self.bottom_flag = bottom_flag
+        self.to_bottom = bottom_flag
 
     def deepcopy(self, wf):
         """
@@ -61,7 +61,7 @@ class WettingFront:
         wf.se = self.se.clone()
         wf.psi_cm = self.psi_cm.clone()
         wf.ksat_cm_per_h = self.ksat_cm_per_h.clone()
-        wf.bottom_flag = self.bottom_flag
+        wf.to_bottom = self.to_bottom
         return wf
 
     def is_equal(self, front):
