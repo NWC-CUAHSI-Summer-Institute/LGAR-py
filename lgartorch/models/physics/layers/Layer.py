@@ -11,6 +11,7 @@ from lgartorch.models.physics.utils import (
     calc_theta_from_h,
     calc_se_from_theta,
     calc_h_from_se,
+    calc_k_from_se,
 )
 
 log = logging.getLogger("models.physics.layers.Layer")
@@ -410,7 +411,9 @@ class Layer:
                 else:
                     if not switched:
                         switched = True
-                        factor = factor * torch.tensor(0.001, device=self.global_params.device)
+                        factor = factor * torch.tensor(
+                            0.001, device=self.global_params.device
+                        )
                     depth_new = depth_new - (
                         torch.tensor(0.01, device=self.global_params.device) * factor
                     )
@@ -427,33 +430,59 @@ class Layer:
         :param i:
         :return:
         """
-        get_neighboring_fronts = {}
-        get_neighboring_fronts["current_front"] = self.wetting_fronts[i]
-        get_neighboring_fronts["previous_current_front"] = self.previous_state[
+        neighboring_fronts = {}
+        neighboring_fronts["current_front"] = self.wetting_fronts[i]
+        neighboring_fronts["previous_current_front"] = self.previous_state[
             "wetting_fronts"
         ][i]
-        get_neighboring_fronts["next_front"] = None
-        get_neighboring_fronts["previous_front"] = None
-        get_neighboring_fronts["previous_next_front"] = None
+        neighboring_fronts["next_front"] = None
+        neighboring_fronts["previous_front"] = None
+        neighboring_fronts["previous_next_front"] = None
         if i > 0:
-            get_neighboring_fronts["previous_front"] = self.wetting_fronts[i - 1]
+            neighboring_fronts["previous_front"] = self.wetting_fronts[i - 1]
         if i < (len(self.wetting_fronts) - 1):
-            get_neighboring_fronts["next_front"] = self.wetting_fronts[i + 1]
-            get_neighboring_fronts["previous_next_front"] = self.previous_state[
+            neighboring_fronts["next_front"] = self.wetting_fronts[i + 1]
+            neighboring_fronts["previous_next_front"] = self.previous_state[
                 "wetting_fronts"
             ][i + 1]
         if self.next_layer is not None:
             if i == (len(self.wetting_fronts) - 1):
-                get_neighboring_fronts["next_front"] = self.next_layer.wetting_fronts[0]
-                get_neighboring_fronts["previous_next_front"] = self.previous_state[
+                neighboring_fronts["next_front"] = self.next_layer.wetting_fronts[0]
+                neighboring_fronts["previous_next_front"] = self.previous_state[
                     "wetting_fronts"
                 ][0]
         if self.previous_layer is not None:
             if i == 0:
-                get_neighboring_fronts[
+                neighboring_fronts[
                     "previous_front"
                 ] = self.previous_layer.wetting_fronts[-1]
-        return get_neighboring_fronts
+        return neighboring_fronts
+
+    def get_extended_neighbors(self, i):
+        neighboring_fronts = self.get_neighboring_fronts(i)
+        neighboring_fronts["next_to_next_front"] = None
+        if i < (len(self.wetting_fronts) - 2):
+            neighboring_fronts["next_to_next_front"] = self.wetting_fronts[i + 2]
+        else:
+            if neighboring_fronts["next_front"] is not None:
+                if (
+                    neighboring_fronts["next_front"].layer_num
+                    != neighboring_fronts["current_front"].layer_num
+                ):
+                    if len(self.next_layer.wetting_fronts) > 1:
+                        neighboring_fronts[
+                            "next_to_next_front"
+                        ] = self.next_layer.wetting_fronts[1]
+                    else:
+                        if self.next_layer.next_layer is not None:
+                            neighboring_fronts[
+                                "next_to_next_front"
+                            ] = self.next_layer.next_layer.wetting_fronts[0]
+                else:
+                    neighboring_fronts[
+                        "next_to_next_front"
+                    ] = self.next_layer.wetting_fronts[0]
+        return neighboring_fronts
 
     def calc_aet(self, pet: Tensor) -> Tensor:
         """
@@ -521,22 +550,6 @@ class Layer:
         else:
             return sum
 
-    def get_deeper_fronts(self, i):
-        if i < len(self.wetting_fronts) - 1:
-            next_front = self.wetting_fronts[i + 1]
-            next_to_next_front = self.next_layer.wetting_fronts[0]
-        else:
-            next_front = self.next_layer.wetting_fronts[0]
-            if len(self.next_layer.wetting_fronts) == 1:
-                try:
-                    next_to_next_front = self.next_layer.next_layer.wetting_fronts[0]
-                except AttributeError:
-                    # No more layers left
-                    next_to_next_front = None
-            else:
-                next_to_next_front = self.next_layer.wetting_fronts[1]
-        return next_front, next_to_next_front
-
     def is_passing(self, current_front, next_front):
         """
         # case : wetting front passing another wetting front within a layer
@@ -546,35 +559,149 @@ class Layer:
         """
         larger_depth = current_front.depth > next_front.depth
         same_layer = current_front.layer_num == next_front.layer_num
-        return larger_depth and same_layer and not next_front.to_bottom
+        is_passing = larger_depth and same_layer and not next_front.to_bottom
+        return is_passing
 
     def merge_wetting_fronts(self):
         """
-          // **************************** MERGING WETTING FRONT ********************************
-
-      /* In the python version of LGAR, wetting front merging, layer boundary crossing, and lower boundary crossing
-         all occur in a loop that happens after wetting fronts have been moved. This prevents the model from crashing,
-         as there are rare but possible cases where multiple merging / layer boundary crossing events will happen in
-         the same time step. For example, if two wetting fronts cross a layer boundary in the same time step, it will
-         be necessary for merging to occur before layer boundary crossing. So, LGAR-C now approaches merging in the
-         same way as in LGAR-Py, where wetting fronts are moved, then a new loop does merging for all wetting fronts,
-         then a new loop does layer boundary corssing for all wetting fronts, then a new loop does merging again for
-         all wetting fronts, and then a new loop does lower boundary crossing for all wetting fronts. this is a thorough
-         way to deal with these scenarios. */
-        :return:
+            // **************************** MERGING WETTING FRONT ********************************
+        /* In the python version of LGAR, wetting front merging, layer boundary crossing, and lower boundary crossing
+           all occur in a loop that happens after wetting fronts have been moved. This prevents the model from crashing,
+           as there are rare but possible cases where multiple merging / layer boundary crossing events will happen in
+           the same time step. For example, if two wetting fronts cross a layer boundary in the same time step, it will
+           be necessary for merging to occur before layer boundary crossing. So, LGAR-C now approaches merging in the
+           same way as in LGAR-Py, where wetting fronts are moved, then a new loop does merging for all wetting fronts,
+           then a new loop does layer boundary corssing for all wetting fronts, then a new loop does merging again for
+           all wetting fronts, and then a new loop does lower boundary crossing for all wetting fronts. this is a thorough
+           way to deal with these scenarios. */
+          :return:
         """
         for i in range(len(self.wetting_fronts)):
-            current_front = self.wetting_fronts[i]
-            try:
-                next_front = self.wetting_fronts[i + 1]
-                next_to_next_front = self.wetting_fronts[i + 2]
-            except IndexError:
-                next_front, next_to_next_front = self.get_deeper_fronts(i)
-            if self.is_passing():
-                raise NotImplementedError
+            extended_neighbors = self.get_extended_neighbors(i)
+            is_passing = self.is_passing(
+                extended_neighbors["current_front"], extended_neighbors["next_front"]
+            )
+            if is_passing:
+                self.pass_front(extended_neighbors)
+
+    def pass_front(self, extended_neighbors):
+        current_front = extended_neighbors["current_front"]
+        next_front = extended_neighbors["current_front"]
+        next_to_next_front = extended_neighbors["current_front"]
+        current_mass_this_layer = current_front.depth_cm * (
+            current_front.theta - next_front.theta
+        ) + next_front.depth_cm * (next_front.theta - next_to_next_front.theta)
+        current_front.depth_cm = current_mass_this_layer / (
+            current_front.theta - next_to_next_front.theta
+        )
+        se = calc_se_from_theta(
+            current_front.theta, current_front.theta_e, current_front.theta_r
+        )
+        current_front.psi_cm = calc_h_from_se(
+            se, self.alpha_layer, current_front.m, self.n_layer
+        )
+        current_front.k_cm_per_h = calc_k_from_se(
+            se, current_front.ksat_cm_per_h, current_front.m
+        )
+        # equivalent to listDeleteFront(next['front_num'])
+        self.delete_front(next_front)
+
+    def delete_front(self, front):
+        if front.layer_num == self.layer_num:
+            for i in range(len(self.wetting_fronts)):
+                if self.wetting_fronts[i].is_equal(front):
+                    self.wetting_fronts.pop(i)
+        else:
+            if self.next_layer is not None:
+                self.next_layer.delete_front(front)
+            else:
+                log.error("There is a problem deleting this front")
+                raise IndexError
 
     def wetting_fronts_cross_layer_boundary(self):
-        raise NotImplementedError
+
+        log.debug("Layer boundary crossing...")
+
+        for i in range(1, len(self.wetting_fronts)):
+            log.debug(f"Boundary Crossing | ******* Wetting Front = {i} ******")
+
+            current = i - 1
+            next_ = i
+            next_to_next = i + 1 if i + 1 < len(self.wetting_fronts) else None
+
+            layer_num = self.wetting_fronts[current].layer_num
+            soil_num = self.layer_soil_type[layer_num]
+            soil_properties = self.soils_df.iloc[soil_num]
+            theta_e = torch.tensor(soil_properties["theta_e"], device=self.device)
+            theta_r = torch.tensor(soil_properties["theta_r"], device=self.device)
+            alpha = torch.tensor(soil_properties["alpha(cm^-1)"], device=self.device)
+            m = torch.tensor(soil_properties["m"], device=self.device)
+            n = torch.tensor(soil_properties["n"], device=self.device)
+            ksat_cm_per_h = (
+                    torch.tensor(soil_properties["Ks(cm/h)"])
+                    * self.frozen_factor[layer_num]
+            )
+
+            # TODO VERIFY THAT THIS WORKS!
+            if (
+                    self.wetting_fronts[current].depth_cm
+                    > self.cum_layer_thickness[layer_num]
+                    and (
+                    self.wetting_fronts[next_].depth_cm
+                    == self.cum_layer_thickness[layer_num]
+            )
+                    and (layer_num != (self.num_layers - 1))  # 0-based
+            ):
+                current_theta = min(theta_e, self.wetting_fronts[current].theta)
+                overshot_depth = (
+                        self.wetting_fronts[current].depth_cm
+                        - self.wetting_fronts[next_].depth_cm
+                )
+                soil_num_next = self.layer_soil_type[layer_num + 1]
+                soil_properties_next = self.soils_df.iloc[soil_num]
+
+                se = calc_se_from_theta(
+                    self.wetting_fronts[current].theta, theta_e, theta_r
+                )
+                self.wetting_fronts[current].psi_cm = calc_h_from_se(se, alpha, m, n)
+
+                self.wetting_fronts[current].k_cm_per_h = calc_k_from_se(
+                    se, ksat_cm_per_h, m
+                )
+
+                theta_new = calc_theta_from_h(
+                    self.wetting_fronts[current].psi_cm,
+                    soil_properties_next,
+                    self.device,
+                )
+
+                mbal_correction = overshot_depth * (
+                        current_theta - self.wetting_fronts[next_].theta
+                )
+                mbal_Z_correction = mbal_correction / (
+                        theta_new - self.wetting_fronts[next_to_next].theta
+                )
+
+                depth_new = self.cum_layer_thickness[layer_num] + mbal_Z_correction
+
+                self.wetting_fronts[current].depth_cm = self.cum_layer_thickness[
+                    layer_num
+                ]
+
+                self.wetting_fronts[next_].theta = theta_new
+                self.wetting_fronts[next_].psi_cm = self.wetting_fronts[current].psi_cm
+                self.wetting_fronts[next_].depth_cm = depth_new
+                self.wetting_fronts[next_].layer_num = layer_num + 1
+                self.wetting_fronts[next_].dzdt_cm_per_h = self.wetting_fronts[
+                    current
+                ].dzdt_cm_per_h
+                self.wetting_fronts[current].dzdt_cm_per_h = torch.tensor(0.0, device=self.device)
+                self.wetting_fronts[current].to_bottom = True
+                self.wetting_fronts[next_].to_bottom = False
+
+                log.debug("State after wetting fronts cross layer boundary...")
+                for wf in self.wetting_fronts:
+                    wf.print()
 
     def wetting_front_cross_domain_boundary(self):
         raise NotImplementedError
@@ -647,7 +774,9 @@ class Layer:
 
     def print(self):
         for wf in self.wetting_fronts:
-            log.info(f"[{wf.depth.item():.4f}, {wf.theta.item():.4f}, {wf.layer_num}, {wf.dzdt.item():.6f}, {wf.ksat_cm_per_h.item():.6f}, {wf.psi_cm:.4f}]")
+            log.info(
+                f"[{wf.depth.item():.4f}, {wf.theta.item():.4f}, {wf.layer_num}, {wf.dzdt.item():.6f}, {wf.ksat_cm_per_h.item():.6f}, {wf.psi_cm:.4f}]"
+            )
         if self.next_layer is not None:
             return self.next_layer.print()
         else:

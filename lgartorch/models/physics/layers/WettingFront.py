@@ -64,5 +64,15 @@ class WettingFront:
         wf.bottom_flag = self.bottom_flag
         return wf
 
+    def is_equal(self, front):
+        depth_equal = (front.depth == self.depth)
+        psi_cm_equal = (front.psi_cm == self.psi_cm)
+        dzdt = (front.dzdt == self.dzdt)
+        if depth_equal:
+            if psi_cm_equal:
+                if dzdt:
+                    return True
+        return False
+
 
 
