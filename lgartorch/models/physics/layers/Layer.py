@@ -63,9 +63,7 @@ class Layer:
                 self.ksat_layer,
             )
         )
-        self.wf_free_drainage_demand = (
-            self.layer_num
-        )  # TODO FIX THIS. THIS IS NOT IMPLEMENTED
+        self.wf_free_drainage_demand = None  # TODO FIX THIS. THIS IS NOT IMPLEMENTED
         self.previous_layer = previous_layer
         self.next_layer = None
         if (
@@ -102,15 +100,35 @@ class Layer:
                 )
             )
             state["wetting_fronts"][i].deepcopy(WettingFront)
-        # try:
-        #     state["previous_layer"] = self.previous_layer.deepcopy()
-        # except AttributeError:
-        #     pass
-        # try:
-        #     state["next_layer"] = self.next_layer.deepcopy()
-        # except AttributeError:
-        #     pass
         return state
+
+    def calc_wetting_front_free_drainage(
+        self, wf_that_supplies_free_drainage_demand, num_wetting_fronts
+    ):
+        """
+         /*
+         finds the wetting front that corresponds to psi (head) value closest to zero
+         (i.e., saturation in terms of psi). This is the wetting front that experiences infiltration
+         and actual ET based on precipitatona and PET, respectively. For example, the actual ET
+         is extracted from this wetting front plus the wetting fronts above it.
+         Note: the free_drainage name came from its python version, which is probably not the correct name.
+         */
+        :return:
+        """
+        deepest_layer = len(self.wetting_fronts) - 1
+        for i in range(len(self.wetting_fronts)):
+            # current_front = self.wetting_fronts[i]
+            if self.next_layer is not None:
+                if i == deepest_layer:
+                    wf_that_supplies_free_drainage_demand += 1
+        if self.next_layer is not None:
+            return self.next_layer.calc_wetting_front_free_drainage(
+                wf_that_supplies_free_drainage_demand, num_wetting_fronts
+            )
+        else:
+            if wf_that_supplies_free_drainage_demand > num_wetting_fronts:
+                wf_that_supplies_free_drainage_demand -= 1
+            return wf_that_supplies_free_drainage_demand
 
     def calc_num_wetting_fronts(self) -> int:
         if self.next_layer is not None:
@@ -342,7 +360,9 @@ class Layer:
         m = self.attributes[self.global_params.soil_property_indexes["m"]]
         theta_e = self.attributes[self.global_params.soil_property_indexes["theta_e"]]
         theta_r = self.attributes[self.global_params.soil_property_indexes["theta_r"]]
-        current_front.theta = calc_theta_from_h(next_front.psi_cm, self.alpha_layer, self.n_layer, m, theta_e, theta_r)
+        current_front.theta = calc_theta_from_h(
+            next_front.psi_cm, self.alpha_layer, self.n_layer, m, theta_e, theta_r
+        )
         current_front.psi_cm = next_front.psi_cm
 
     def wetting_front_in_layer(self):
@@ -358,14 +378,60 @@ class Layer:
 
     def top_layer_in_front(self):
         """
-                // if f_p (predicted infiltration) causes theta > theta_e, mass correction is needed.
+        // if f_p (predicted infiltration) causes theta > theta_e, mass correction is needed.
         // depth of the wetting front is increased to close the mass balance when theta > theta_e.
         // l == 1 is the last iteration (top most wetting front), so do a check on the mass balance)
         // this part should be moved out of here to a subroutine; add a call to that subroutine
             :return:
         """
-        # TODO START HERE TOMORROW!
-        raise NotImplementedError
+        #TODO WORK HERE!!!!
+        #TODO, need a way to understand what soil layers there are
+        soil_num_k1 = lgar.layer_soil_type[wf_free_drainage_demand]
+        theta_e_k1 = lgar.soils_df.iloc[soil_num_k1]["theta_e"]
+
+        wf_free_drainage = lgar.wetting_fronts[wf_free_drainage_demand]
+        mass_timestep = (old_mass + precip_mass_to_add) - (
+            actual_ET_demand + free_drainage_demand
+        )
+
+        # Making sure that the mass is correct
+        assert old_mass > 0.0
+
+        if torch.abs(wf_free_drainage.theta - theta_e_k1) < 1e-15:
+            current_mass = lgar.calc_mass_balance()
+
+            mass_balance_error = torch.abs(current_mass - mass_timestep)  # mass error
+
+            factor = torch.tensor(1.0, device=lgar.device)
+            switched = False
+            tolerance = 1e-12
+
+            # check if the difference is less than the tolerance
+            if mass_balance_error <= tolerance:
+                pass
+                # return current_mass
+
+            depth_new = wf_free_drainage.depth_cm
+
+            # loop to adjust the depth for mass balance
+            while torch.abs(mass_balance_error - tolerance) > 1e-12:
+                if current_mass < mass_timestep:
+                    depth_new = (
+                        depth_new + torch.tensor(0.01, device=lgar.device) * factor
+                    )
+                    switched = False
+                else:
+                    if not switched:
+                        switched = True
+                        factor = factor * torch.tensor(0.001, device=lgar.device)
+                    depth_new = depth_new - (
+                        torch.tensor(0.01, device=lgar.device) * factor
+                    )
+
+                wf_free_drainage.depth_cm = depth_new
+
+                current_mass = lgar.calc_mass_balance()
+                mass_balance_error = torch.abs(current_mass - mass_timestep)
 
     def get_neighboring_fronts(self, i):
         """
@@ -402,7 +468,14 @@ class Layer:
                 ] = self.previous_layer.wetting_fronts[-1]
         return get_neighboring_fronts
 
-    def move_wetting_fronts(self, percolation, aet, num_wetting_fronts, subtimestep, num_wetting_front_count=None):
+    def move_wetting_fronts(
+        self,
+        percolation,
+        aet,
+        num_wetting_fronts,
+        subtimestep,
+        num_wetting_front_count=None,
+    ):
         """
         main loop advancing all wetting fronts and doing the mass balance
         loop goes over deepest to top most wetting front
@@ -420,7 +493,10 @@ class Layer:
         for i in reversed(range(len(self.wetting_fronts))):
             neighboring_fronts = self.get_neighboring_fronts(i)
             if num_wetting_front_count < num_wetting_fronts:
-                if neighboring_fronts["current_front"].depth == self.cumulative_layer_thickness:
+                if (
+                    neighboring_fronts["current_front"].depth
+                    == self.cumulative_layer_thickness
+                ):
                     self.deepest_layer_front(neighboring_fronts)
                 else:
                     self.wetting_front_in_layer()
@@ -432,7 +508,11 @@ class Layer:
         if self.previous_layer is not None:
             # going to the next layer
             return volume_infiltraton + self.previous_layer.move_wetting_fronts(
-                percolation, aet, num_wetting_fronts, subtimestep, num_wetting_front_count
+                percolation,
+                aet,
+                num_wetting_fronts,
+                subtimestep,
+                num_wetting_front_count,
             )
         else:
             return volume_infiltraton

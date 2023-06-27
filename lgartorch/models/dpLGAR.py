@@ -89,6 +89,7 @@ class dpLGAR(nn.Module):
 
         # Determining the number of wetting fronts total
         self.num_wetting_fronts = self.calc_num_wetting_fronts()
+        self.wf_free_drainage_demand = None
 
         # Running the initial mass balance check
         self.starting_volume = self.calc_mass_balance()
@@ -149,6 +150,7 @@ class dpLGAR(nn.Module):
                 create_surficial_front = self.create_surficial_front(
                     previous_precip, precip_sub
                 )
+                self.wf_free_drainage_demand = self.calc_wetting_front_free_drainage()
                 is_top_layer_saturated = self.top_layer.is_saturated()
                 if pet_sub > 0.0:
                     AET_sub = self.top_layer.calc_aet(pet_sub)
@@ -228,18 +230,14 @@ class dpLGAR(nn.Module):
     def calc_num_wetting_fronts(self):
         return self.top_layer.calc_num_wetting_fronts()
 
-    def infiltration_wetting_front(self):
+    def calc_wetting_front_free_drainage(self):
         """
-        /*
-         finds the wetting front that corresponds to psi (head) value closest to zero
-         (i.e., saturation in terms of psi). This is the wetting front that experiences infiltration
-         and actual ET based on precipitatona and PET, respectively. For example, the actual ET
-         is extracted from this wetting front plus the wetting fronts above it.
-         Note: the free_drainage name came from its python version, which is probably not the correct name.
-         */
+        A function to determine the bottom-most layer impacted by infiltration
         :return:
         """
-        raise NotImplementedError
+        # Starting at 0 since python is 0-based
+        wf_that_supplies_free_drainage_demand = 0
+        return self.top_layer.calc_wetting_front_free_drainage(wf_that_supplies_free_drainage_demand, self.num_wetting_fronts)
 
     def update_states(self, i):
         raise NotImplementedError
