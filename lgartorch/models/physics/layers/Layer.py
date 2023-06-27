@@ -286,7 +286,12 @@ class Layer:
         )
         new_mass = (current_front.depth - base_thickness) * (current_front.theta - 0.0)
 
-        new_mass, prior_mass, delta_thetas, delta_thickness = self.previous_layer.populate_delta_thickness(
+        (
+            new_mass,
+            prior_mass,
+            delta_thetas,
+            delta_thickness,
+        ) = self.previous_layer.populate_delta_thickness(
             psi_cm_old, psi_cm, prior_mass, new_mass, delta_thetas, delta_thickness
         )
         delta_thickness[self.layer_num] = current_front.depth - base_thickness
@@ -311,7 +316,7 @@ class Layer:
         se = calc_se_from_theta(current_front.theta, theta_e, theta_r)
         current_front.psi_cm = calc_h_from_se(se, self.alpha_layer, m, self.n_layer)
 
-    def deepest_layer_front(self):
+    def deepest_layer_front(self, neighboring_fronts):
         """
          // case to check if the wetting front is at the interface, i.e. deepest wetting front within a layer
         // psi of the layer below is already known/updated, so we that psi to compute the theta of the deepest current layer
@@ -328,9 +333,17 @@ class Layer:
                       _____|________
         */
         /*************************************************************************************/
+        :param neighboring_fronts: A dictionary containing pointers to all the current wetting front
+        and its neighboring fronts
         :return:
         """
-        pass
+        current_front = neighboring_fronts["current_front"]
+        next_front = neighboring_fronts["next_front"]
+        m = self.attributes[self.global_params.soil_property_indexes["m"]]
+        theta_e = self.attributes[self.global_params.soil_property_indexes["theta_e"]]
+        theta_r = self.attributes[self.global_params.soil_property_indexes["theta_r"]]
+        current_front.theta = calc_theta_from_h(next_front.psi_cm, self.alpha_layer, self.n_layer, m, theta_e, theta_r)
+        current_front.psi_cm = next_front.psi_cm
 
     def wetting_front_in_layer(self):
         """
@@ -351,6 +364,7 @@ class Layer:
         // this part should be moved out of here to a subroutine; add a call to that subroutine
             :return:
         """
+        # TODO START HERE TOMORROW!
         raise NotImplementedError
 
     def get_neighboring_fronts(self, i):
@@ -388,7 +402,7 @@ class Layer:
                 ] = self.previous_layer.wetting_fronts[-1]
         return get_neighboring_fronts
 
-    def move_wetting_fronts(self, percolation, aet, num_wetting_fronts, subtimestep):
+    def move_wetting_fronts(self, percolation, aet, num_wetting_fronts, subtimestep, num_wetting_front_count=None):
         """
         main loop advancing all wetting fronts and doing the mass balance
         loop goes over deepest to top most wetting front
@@ -396,22 +410,32 @@ class Layer:
         :param AET_sub: The amount actual evapotranspiration
         :return:
         """
+        if num_wetting_front_count is None:
+            # Will only reach this point if the function is recursively called
+            num_wetting_front_count = num_wetting_fronts
         is_bottom_layer = True if self.next_layer is None else False
-        deepest_layer_index = len(self.wetting_fronts) - 1
-        column_depth = self.global_params.cum_layer_thickness[-1]
+        # has_many_layers = True if len(self.wetting_fronts) > 1 else False
+        # deepest_layer_index = num_wetting_fronts - 1
         volume_infiltraton = torch.tensor(0.0, device=self.global_params.device)
         for i in reversed(range(len(self.wetting_fronts))):
             neighboring_fronts = self.get_neighboring_fronts(i)
-            if i == deepest_layer_index and self.next_layer is not None:
-                # Finding the deepest layer that is not the bottom layer
-                self.deepest_layer_front()
-            if num_wetting_fronts == self.num_layers:
+            if num_wetting_front_count < num_wetting_fronts:
+                if neighboring_fronts["current_front"].depth == self.cumulative_layer_thickness:
+                    self.deepest_layer_front(neighboring_fronts)
+                else:
+                    self.wetting_front_in_layer()
+            if num_wetting_fronts == self.num_layers and is_bottom_layer:
                 self.base_case(i, percolation, aet, subtimestep, neighboring_fronts)
-            if i < len(self.wetting_fronts):
-                self.wetting_front_in_layer()
-            if i == 0 and self.layer_num == 0:
-                self.top_layer_front()
-        return volume_infiltraton
+            if num_wetting_front_count == 1:
+                self.top_layer_in_front()
+            num_wetting_front_count -= 1
+        if self.previous_layer is not None:
+            # going to the next layer
+            return volume_infiltraton + self.previous_layer.move_wetting_fronts(
+                percolation, aet, num_wetting_fronts, subtimestep, num_wetting_front_count
+            )
+        else:
+            return volume_infiltraton
 
     def calc_aet(self, pet: Tensor) -> Tensor:
         """
