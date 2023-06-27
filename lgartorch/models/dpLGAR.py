@@ -98,7 +98,7 @@ class dpLGAR(nn.Module):
         self.precip_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
         self.PET_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
         self.AET_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
-        self.volend_timestep_cm = self.starting_volume.clone()
+        self.ending_volume = self.starting_volume.clone()
         # self.volin_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
         # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
         self.ponded_water = torch.tensor(0.0, device=self.cfg.device)
@@ -111,12 +111,8 @@ class dpLGAR(nn.Module):
         self.groundwater_discharge = torch.tensor(0.0, device=self.cfg.device)
 
         # Variables we want to save at every timestep
-        self.runoff = torch.zeros(
-            [self.cfg.models.nsteps], device=self.cfg.device
-        )
-        self.percolation = torch.zeros(
-            [self.cfg.models.nsteps], device=self.cfg.device
-        )
+        self.runoff = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
+        self.percolation = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
 
     def forward(self, x) -> Tensor:
         """
@@ -140,6 +136,7 @@ class dpLGAR(nn.Module):
             frozen_factor_hydraulic_conductivity()
         for i in tqdm(range(self.cfg.models.nsteps), desc="Running dpLGAR"):
             precip_timestep = torch.tensor(0.0, device=self.cfg.device)
+            ending_volume_sub = self.ending_volume.clone()
             for j in range(self.cfg.models.num_subcycles):
                 precip_sub = precip * self.cfg.models.subcycle_length_h
                 pet_sub = pet * self.cfg.models.subcycle_length_h
@@ -167,34 +164,40 @@ class dpLGAR(nn.Module):
                         #  is created and that there is water on the surface (or raining).
                         raise NotImplementedError
                     else:
-                        if (
-                            ponded_depth_sub
-                            < self.global_params.ponded_depth_max_cm
-                        ):
+                        if ponded_depth_sub < self.global_params.ponded_depth_max_cm:
                             ponded_water_sub = ponded_depth_sub
                             runoff_sub = torch.tensor(0.0, device=self.cfg.device)
                             ponded_depth_sub = torch.tensor(0.0, device=self.cfg.device)
                         else:
                             # There is some runoff here
-                            runoff_sub = (ponded_depth_sub - self.global_params.ponded_depth_max_cm);
+                            runoff_sub = (
+                                ponded_depth_sub
+                                - self.global_params.ponded_depth_max_cm
+                            )
                             ponded_depth_sub = self.global_params.ponded_depth_max_cm
                             ponded_water_sub = ponded_depth_sub
                     self.runoff[i] = self.runoff[i] + runoff_sub
-                    percolation_sub = self.bottom_layer.move_wetting_fronts(percolation_sub, AET_sub, self.num_wetting_fronts, self.cfg.models.subcycle_length_h)
-
-                    # move wetting fronts if no new wetting front is created. Otherwise, movement
-                    # of wetting fronts has already happened at the time of creating surficial front,
-                    # so no need to move them here. */
+                    percolation_sub = self.bottom_layer.move_wetting_fronts(
+                        percolation_sub,
+                        AET_sub,
+                        ending_volume_sub,
+                        self.num_wetting_fronts,
+                        self.cfg.models.subcycle_length_h,
+                        self.wf_free_drainage_demand
+                    )
                     self.top_layer.merge_wetting_fronts()
                     self.top_layer.wetting_fronts_cross_layer_boundary()
                     self.top_layer.merge_wetting_fronts()
-                    bottom_boundary_flux = bottom_boundary_flux + self.top_layer.wetting_front_cross_domain_boundary()
+                    bottom_boundary_flux = (
+                        bottom_boundary_flux
+                        + self.top_layer.wetting_front_cross_domain_boundary()
+                    )
                     percolation_sub = bottom_boundary_flux
                     self.top_layer.fix_dry_over_wet_fronts()
                     self.top_layer.update_psi()
                 self.top_layer.calc_dzdt()
                 precip_timestep = precip_timestep + precip_sub
-                ending_volume = self.calc_mass_balance()
+                ending_volume_sub = self.calc_mass_balance()
                 giuh_runoff_sub = self.top_layer.giuh_runoff()
                 previous_precip = precip_sub
                 self.update_states()
@@ -236,8 +239,12 @@ class dpLGAR(nn.Module):
         :return:
         """
         # Starting at 0 since python is 0-based
-        wf_that_supplies_free_drainage_demand = 0
-        return self.top_layer.calc_wetting_front_free_drainage(wf_that_supplies_free_drainage_demand, self.num_wetting_fronts)
+        wf_that_supplies_free_drainage_demand = self.top_layer.wetting_fronts[0]
+        psi_start = self.cfg.data.initial_psi  # setting a super large theta value as the starting point. There will be a layer with less theta than this
+        return self.top_layer.calc_wetting_front_free_drainage(
+            psi_start,
+            wf_that_supplies_free_drainage_demand,
+        )
 
     def update_states(self, i):
         raise NotImplementedError
