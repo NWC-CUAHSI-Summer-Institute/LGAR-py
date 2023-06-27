@@ -727,7 +727,40 @@ class Layer:
         return current_front, next_front
 
     def wetting_front_cross_domain_boundary(self):
-        raise NotImplementedError
+        """
+        the function lets wetting fronts of a sufficient depth interact with the lower boundary; called from lgar_move_wetting_fronts.
+        It checks the following case:
+        // case : wetting front is the deepest one in the last layer (most deepested wetting front in the domain)
+        /**********************************************************/
+        :return:
+        """
+        bottom_flux_cm = torch.tensor(0.0, device=self.global_params.device)
+        if self.next_layer is not None:
+            layer_fronts = len(self.wetting_fronts)
+        else:
+            # Making sure we don't touch the deepest wetting front
+            layer_fronts = len(self.wetting_fronts) - 1
+        for i in range(layer_fronts):
+            extended_neighbors = self.get_extended_neighbors(i)
+            bottom_flux_cm_temp = torch.tensor(0.0, device=self.global_params.device)
+            current_front = extended_neighbors["current_front"]
+            next_front = extended_neighbors["next_front"]
+            next_to_next_front = extended_neighbors["next_to_next_front"]
+            if next_to_next_front is None:
+                if current_front.depth > self.cumulative_layer_thickness:
+                    # this is the water leaving the system through the bottom of the soil
+                    bottom_flux_cm_temp = (current_front.theta - next_front.theta) * (current_front.depth - next_front.depth)
+
+                    next_front.theta = current_front.theta
+                    se_k = calc_se_from_theta(
+                        current_front.theta, current_front.theta_e, current_front.theta_r
+                    )
+                    next_front.psi_cm = calc_h_from_se(se_k, self.alpha_layer, current_front.m, self.n_layer)
+                    next_front.k_cm_per_h = calc_k_from_se(se_k, self.ksat_layer, self.m)
+                    _ = self.wetting_fronts.pop(i)  # deleting the current front (i.e front with index i)
+
+            bottom_flux_cm = bottom_flux_cm + bottom_flux_cm_temp
+            return bottom_flux_cm
 
     def fix_dry_over_wet_fronts(self):
         raise NotImplementedError
@@ -795,12 +828,16 @@ class Layer:
         else:
             return volume_infiltraton
 
-    def print(self):
+    def print(self, first=True):
+        if first:
+            log.info(
+                f"[  Depth   Theta    Layer_num   dzdt       ksat      psi   ]"
+            )
         for wf in self.wetting_fronts:
             log.info(
-                f"[{wf.depth.item():.4f}, {wf.theta.item():.4f}, {wf.layer_num}, {wf.dzdt.item():.6f}, {wf.ksat_cm_per_h.item():.6f}, {wf.psi_cm:.4f}]"
+                f"[{wf.depth.item():.4f}, {wf.theta.item():.4f},      {wf.layer_num},     {wf.dzdt.item():.6f}, {wf.ksat_cm_per_h.item():.6f}, {wf.psi_cm:.4f}]"
             )
         if self.next_layer is not None:
-            return self.next_layer.print()
+            return self.next_layer.print(first=False)
         else:
             return None
