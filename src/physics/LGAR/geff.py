@@ -15,7 +15,7 @@ torch.set_default_dtype(torch.float64)
 
 def calc_geff(use_closed_form_G, soils_data, theta_1, theta_2, nint, device):
     """
-    /***********************************************************************************************/
+  /***********************************************************************************************/
     /* This function calculates the unsaturated capillary drive Geff(0i,0o)  (note "0" are thetas) */
     /* for the Green and Ampt redistribution function.                                             */
     /* used for redistribution following the equation published by Ogden and Saghafian 1995.       */
@@ -29,6 +29,7 @@ def calc_geff(use_closed_form_G, soils_data, theta_1, theta_2, nint, device):
     :param theta_2:
     :param nint:
     :return:
+    """
     """
     # Theta_1 = theta, theta_2 = soils_data["theta_<x>"] in most cases
     if use_closed_form_G is False:

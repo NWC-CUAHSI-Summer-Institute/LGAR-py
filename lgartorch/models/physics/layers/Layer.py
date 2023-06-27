@@ -7,6 +7,7 @@ import torch.nn as nn
 
 from lgartorch.models.physics.layers.WettingFront import WettingFront
 from lgartorch.models.physics.lgar.aet import calc_aet
+from lgartorch.models.physics.lgar.green_ampt import calc_geff
 from lgartorch.models.physics.utils import (
     calc_theta_from_h,
     calc_se_from_theta,
@@ -858,8 +859,35 @@ class Layer:
             return None
 
     def calc_dzdt(self):
-        # TODO WORK ON THIS !!!!
-        raise NotImplementedError
+        """
+        code to calculate velocity of fronts
+        equations with full description are provided in the lgar paper (currently under review) */
+        :return:
+        """
+        layer_fronts = self.get_len_layers()
+        # We don't calculate dz/dt for the deepest layer
+        for i in range(layer_fronts):
+            neighboring_fronts = self.get_neighboring_fronts(i)
+            current_front = neighboring_fronts["current_front"]
+            next_front = neighboring_fronts["next_front"]
+            # needed for multi-layered dz/dt equation.  Equal to sum from n=1 to N-1 of (L_n/K_n(theta_n))
+            bottom_sum = torch.tensor(0.0, device=self.global_params.device)
+            theta_1 = next_front.theta
+            theta_2 = current_front.theta
+            if current_front.to_bottom:
+                current_front.dzdt = torch.tensor(0.0, device=self.global_params.device)
+            else:
+                if current_front.layer_num > 0:
+                    bottom_sum = bottom_sum + (current_front.depth - self.previous_layer.cumulative_layer_thickness) / current_front.ksat_cm_per_h
+                else:
+                    if theta_1 > theta_2:
+                        log.error("theta_1 cannot be larger than theta_2")
+                        raise ValueError
+
+                # TODO work here!
+                geff = calc_geff(use_closed_form_G, soils_data, theta_1, theta_2, nint, lgar.device)
+
+
 
     def giuh_runoff(self):
         raise NotImplementedError
