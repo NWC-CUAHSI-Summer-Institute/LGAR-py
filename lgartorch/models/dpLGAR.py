@@ -104,6 +104,7 @@ class dpLGAR(nn.Module):
         # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
         self.ponded_water = torch.tensor(0.0, device=self.cfg.device)
         self.precip_previous_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+        self.infiltration = torch.tensor(0.0, device=self.cfg.device)
         # self.volrunoff_timestep_cm = torch.tensor(0.0, device=self.device)
         # self.volrech_timestep_cm = torch.tensor(0.0, device=self.device)
         self.surface_runoff_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
@@ -145,6 +146,7 @@ class dpLGAR(nn.Module):
                 pet_sub = pet * self.cfg.models.subcycle_length_h
                 ponded_depth_sub = precip_sub + self.ponded_water
                 percolation_sub = torch.tensor(0.0, device=self.cfg.device)
+                infiltration_sub = torch.tensor(0.0, device=self.cfg.device)
                 AET_sub = torch.tensor(0.0, device=self.cfg.device)
                 # Determining wetting cases
                 create_surficial_front = self.create_surficial_front(
@@ -181,8 +183,9 @@ class dpLGAR(nn.Module):
                             ponded_depth_sub = self.global_params.ponded_depth_max_cm
                             ponded_water_sub = ponded_depth_sub
                     self.runoff[i] = self.runoff[i] + runoff_sub
-                    percolation_sub_post_move = self.bottom_layer.move_wetting_fronts(
-                        percolation_sub,
+                    infiltration_temp = infiltration_sub.clone()
+                    infiltration_sub = self.bottom_layer.move_wetting_fronts(
+                        infiltration_sub,
                         AET_sub,
                         ending_volume_sub,
                         self.num_wetting_fronts,
@@ -196,14 +199,16 @@ class dpLGAR(nn.Module):
                         bottom_boundary_flux
                         + self.top_layer.wetting_front_cross_domain_boundary()
                     )
-                    percolation_sub = bottom_boundary_flux
+                    infiltration_sub = bottom_boundary_flux
                     mass_change = self.top_layer.fix_dry_over_wet_fronts()
                     if torch.abs(mass_change) > 1e-7:
                         AET_sub = AET_sub - mass_change
                     self.top_layer.update_psi()
+                    percolation_sub = infiltration_sub.clone()
                     self.percolation = (
-                        self.percolation + percolation_sub_post_move
+                        self.percolation + percolation_sub
                     )  # Make sure the values aren't getting lost
+                    infiltration_sub = infiltration_temp
                 # Prepping the loop for the next subtimestep
                 self.top_layer.calc_dzdt(ponded_depth_sub)
                 ending_volume_sub = self.calc_mass_balance()
