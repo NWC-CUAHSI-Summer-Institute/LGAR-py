@@ -70,6 +70,7 @@ class Layer:
                 self.ksat_layer,
             )
         )
+        self.previous_fronts = None
         self.wf_free_drainage_demand = None
         self.previous_layer = previous_layer
         self.next_layer = None
@@ -975,6 +976,36 @@ class Layer:
             )
         else:
             return volume_infiltraton
+
+    def calc_dry_depth(self, subtimestep):
+        head_index = 0  # 0 is always the starting index
+        current_front = self.wetting_fronts[head_index]
+
+        #  these are the limits of integration
+        theta_1 = current_front.theta
+        theta_2 = current_front.theta_e
+        delta_theta = current_front.theta_e - current_front.theta  # water content of the first (most surficial) existing wetting front
+        tau = subtimestep * current_front.ksat_cm_per_h / delta_theta
+        geff = calc_geff(
+            self.global_params,
+            self.attributes,
+            theta_1,
+            theta_2,
+            self.alpha_layer,
+            self.n_layer,
+            self.ksat_layer,
+        )
+        # note that dry depth originally has a factor of 0.5 in front
+        dry_depth = 0.5 * (tau + torch.sqrt(tau * tau + 4.0 * tau * geff))
+        # when dry depth greater than layer 1 thickness, set dry depth to layer 1 thickness
+        dry_depth = torch.min(self.cumulative_layer_thickness, dry_depth)
+        return dry_depth
+
+    def create_surficial_front(self, dry_depth, ponded_depth_sub, infiltration_sub):
+        raise NotImplementedError
+
+    def set_previous_state(self):
+        raise NotImplementedError
 
     def print(self, first=True):
         if first:

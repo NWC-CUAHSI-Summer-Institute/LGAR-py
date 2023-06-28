@@ -107,13 +107,13 @@ class dpLGAR(nn.Module):
         self.infiltration = torch.tensor(0.0, device=self.cfg.device)
         # self.volrunoff_timestep_cm = torch.tensor(0.0, device=self.device)
         # self.volrech_timestep_cm = torch.tensor(0.0, device=self.device)
-        self.surface_runoff_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+        self.runoff = torch.tensor(0.0, device=self.cfg.device)
         self.giuh_runoff = torch.tensor(0.0, device=self.cfg.device)
         self.discharge = torch.tensor(0.0, device=self.cfg.device)
         self.groundwater_discharge = torch.tensor(0.0, device=self.cfg.device)
         self.percolation = torch.tensor(0.0, device=self.cfg.device)
 
-    def forward(self, i, x) -> Tensor:
+    def forward(self, i, x) -> (Tensor, Tensor):
         """
         The forward function to model Precip/PET through LGAR functions
         /* Note unit conversion:
@@ -137,7 +137,6 @@ class dpLGAR(nn.Module):
             frozen_factor_hydraulic_conductivity()
         # creating local timestep tensors for runoff and percolation
         runoff_timestep = torch.tensor(0.0, device=self.cfg.device)
-        percolation_timestep = torch.tensor(0.0, device=self.cfg.device)
         bottom_boundary_flux = torch.tensor(0.0, device=self.cfg.device)
         ending_volume_sub = self.ending_volume.clone()
         for j in range(self.cfg.models.num_subcycles):
@@ -158,11 +157,21 @@ class dpLGAR(nn.Module):
             starting_volume_sub = self.calc_mass_balance()
             if create_surficial_front:
                 if is_top_layer_saturated:
-                    # It's raining
                     raise NotImplementedError
-                    # self.top_layer.input_precip(precip_subtimestep)
                 else:
-                    raise NotImplementedError
+                    temp_pd = torch.tensor(0.0, device=self.cfg.device)
+                    temp_pd = self.bottom_layer.move_wetting_fronts(
+                        temp_pd,
+                        AET_sub,
+                        ending_volume_sub,
+                        self.num_wetting_fronts,
+                        self.cfg.models.subcycle_length_h,
+                        self.wf_free_drainage_demand,
+                    )
+                    dry_depth = self.top_layer.calc_dry_depth(self.cfg.models.subcycle_length_h)
+                    ponded_depth_sub, infiltration_sub = self.top_layer.create_surficial_front(dry_depth, ponded_depth_sub, infiltration_sub)
+                    self.top_layer.set_previous_state()
+                    self.infiltration = self.infiltration + infiltration_sub
             else:
                 if ponded_depth_sub > 0:
                     #  infiltrate water based on the infiltration capacity given no new wetting front
@@ -204,8 +213,8 @@ class dpLGAR(nn.Module):
                     AET_sub = AET_sub - mass_change
                 self.top_layer.update_psi()
                 percolation_sub = infiltration_sub.clone()
-                percolation_timestep = (
-                    percolation_timestep + percolation_sub
+                self.percolation = (
+                    self.percolation + percolation_sub
                 )  # Make sure the values aren't getting lost
                 infiltration_sub = infiltration_temp
             # Prepping the loop for the next subtimestep
@@ -225,8 +234,7 @@ class dpLGAR(nn.Module):
                 groundwater_discharge_sub,
                 giuh_runoff_sub
             )
-        self.runoff_output[i] = runoff_timestep
-        self.percolation_output[i] = percolation_timestep
+        return self.runoff, self.percolation
 
     def calc_mass_balance(self) -> Tensor:
         """

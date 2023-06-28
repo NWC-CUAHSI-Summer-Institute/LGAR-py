@@ -95,7 +95,7 @@ class DifferentiableLGAR(BaseAgent):
 
         for i, (x, y_t) in enumerate(tqdm(self.data_loader, desc="Processing data")):
             runoff, percolation = self.model(i, x)
-            y_hat = runoff
+            y_hat[i] = runoff
             self.percolation_output[i] = percolation
             # Updating the total mass of the system
             self.mass_balance.change_mass(self.model)

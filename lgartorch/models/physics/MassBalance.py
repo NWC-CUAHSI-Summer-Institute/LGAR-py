@@ -33,7 +33,7 @@ class MassBalance:
     def change_mass(self, model):
         self.precip = self.precip + model.precip
         self.infiltration = self.infiltration + model.infiltration
-        self.starting_volume = self.starting_volume + model.self.precip + model.precip
+        self.starting_volume = self.starting_volume + model.precip
         self.ending_volume = self.ending_volume + model.ending_volume
         self.AET = self.AET + model.AET
         self.percolation = self.percolation + model.percolation
@@ -41,7 +41,6 @@ class MassBalance:
         self.giuh_runoff = self.giuh_runoff + model.giuh_runoff
         self.discharge = self.discharge + model.discharge
         self.PET = self.PET + model.PET
-        self.ponded_depth = self.ponded_depth + model.ponded_depth
         self.ponded_water = self.ponded_water + model.ponded_water
         self.groundwater_discharge = (
             self.groundwater_discharge + model.groundwater_discharge
@@ -78,15 +77,15 @@ class MassBalance:
         log.info("********************************************************* ")
         log.info("-------------------- Simulation Summary ----------------- ")
         log.info("------------------------ Mass balance ------------------- ")
-        log.info(f"Initial water in soil    = {self.starting_volume}14.10f cm")
-        log.info(f"Total precipitation      = {self.precip}14.10f cm")
-        log.info(f"Total infiltration       = {self.infiltration}14.10f cm")
-        log.info(f"Final water in soil      = {self.ending_volume}14.10f cm")
-        log.info(f"Surface ponded water     = {self.ponded_water}14.10f cm")
-        log.info(f"Surface runoff           = {self.runoff}14.10f cm")
-        log.info(f"GIUH runoff              = {self.giuh_runoff}14.10f cm")
-        log.info(f"Total percolation        = {self.percolation}14.10f cm")
-        log.info(f"Total AET                = {self.AET}14.10f cm")
-        log.info(f"Total PET                = {self.PET}14.10f cm")
-        log.info(f"Total discharge (Q)      = {self.discharge}14.10f cm")
-        log.info(f"Global balance           =   {global_error_cm}.6e cm")
+        log.info(f"Initial water in soil    = {self.starting_volume.item():14f} cm")
+        log.info(f"Total precipitation      = {self.precip.item():14f} cm")
+        log.info(f"Total infiltration       = {self.infiltration.item():14f} cm")
+        log.info(f"Final water in soil      = {self.ending_volume.item():14f} cm")
+        log.info(f"Surface ponded water     = {self.ponded_water.item():14f} cm")
+        log.info(f"Surface runoff           = {self.runoff.item():14f} cm")
+        log.info(f"GIUH runoff              = {self.giuh_runoff.item():14f} cm")
+        log.info(f"Total percolation        = {self.percolation.item():14f} cm")
+        log.info(f"Total AET                = {self.AET.item():14f} cm")
+        log.info(f"Total PET                = {self.PET.item():14f} cm")
+        log.info(f"Total discharge (Q)      = {self.discharge.item():14f} cm")
+        log.info(f"Global balance           =   {global_error_cm.item():.6e} cm")
