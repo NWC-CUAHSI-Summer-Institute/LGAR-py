@@ -1084,7 +1084,16 @@ class Layer:
         return ponded_depth, infiltration
 
     def set_previous_state(self):
-        raise NotImplementedError
+        wf = WettingFront(
+                    self.global_params,
+                    self.cumulative_layer_thickness,
+                    self.layer_num,
+                    self.attributes,
+                    self.ksat_layer,
+                )
+        # Copying elements of current node to wf
+        self.wetting_fronts[0].deepcopy(wf)
+        self.previous_state = wf
 
     def print(self, first=True):
         if first:
