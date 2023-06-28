@@ -95,9 +95,9 @@ class dpLGAR(nn.Module):
         self.starting_volume = self.calc_mass_balance()
 
         # Setting output tracking params
-        self.precip_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
-        self.PET_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
-        self.AET_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+        self.precip = torch.tensor(0.0, device=self.cfg.device)
+        self.PET = torch.tensor(0.0, device=self.cfg.device)
+        self.AET = torch.tensor(0.0, device=self.cfg.device)
         self.ending_volume = self.starting_volume.clone()
         # self.volin_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
         # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
@@ -152,6 +152,7 @@ class dpLGAR(nn.Module):
                 is_top_layer_saturated = self.top_layer.is_saturated()
                 if pet_sub > 0.0:
                     AET_sub = self.top_layer.calc_aet(pet_sub)
+                starting_volume_sub = self.calc_mass_balance()
                 if create_surficial_front:
                     if is_top_layer_saturated:
                         # It's raining
@@ -184,7 +185,7 @@ class dpLGAR(nn.Module):
                         ending_volume_sub,
                         self.num_wetting_fronts,
                         self.cfg.models.subcycle_length_h,
-                        self.wf_free_drainage_demand
+                        self.wf_free_drainage_demand,
                     )
                     self.top_layer.merge_wetting_fronts()
                     self.top_layer.wetting_fronts_cross_layer_boundary()
@@ -198,13 +199,23 @@ class dpLGAR(nn.Module):
                     if torch.abs(mass_change) > 1e-7:
                         AET_sub = AET_sub - mass_change
                     self.top_layer.update_psi()
-                    self.percolation = self.percolation + percolation_sub_post_move  # Make sure the values aren't getting lost
-                self.top_layer.calc_dzdt()
-                precip_timestep = precip_timestep + precip_sub
+                    self.percolation = (
+                        self.percolation + percolation_sub_post_move
+                    )  # Make sure the values aren't getting lost
+                # Prepping the loop for the next subtimestep
+                self.top_layer.calc_dzdt(ponded_depth_sub)
                 ending_volume_sub = self.calc_mass_balance()
-                giuh_runoff_sub = self.top_layer.giuh_runoff()
+                giuh_runoff_sub = self.top_layer.giuh_runoff(runoff_sub)
                 previous_precip = precip_sub
-                self.update_states()
+                self.update_states(
+                    starting_volume_sub,
+                    precip_sub,
+                    runoff_sub,
+                    AET_sub,
+                    ponded_water_sub,
+                    percolation_sub,
+                    ending_volume_sub,
+                )
 
             time.sleep(0.001)
 
@@ -244,11 +255,39 @@ class dpLGAR(nn.Module):
         """
         # Starting at 0 since python is 0-based
         wf_that_supplies_free_drainage_demand = self.top_layer.wetting_fronts[0]
-        psi_start = self.cfg.data.initial_psi  # setting a super large theta value as the starting point. There will be a layer with less theta than this
+        psi_start = (
+            self.cfg.data.initial_psi
+        )  # setting a super large theta value as the starting point. There will be a layer with less theta than this
         return self.top_layer.calc_wetting_front_free_drainage(
             psi_start,
             wf_that_supplies_free_drainage_demand,
         )
 
-    def update_states(self, i):
-        raise NotImplementedError
+    def update_states(
+        self,
+        starting_volume_sub,
+        precip_sub,
+        runoff_sub,
+        AET_sub,
+        ponded_water_sub,
+        percolation_sub,
+        ending_volume_sub,
+    ):
+        """
+        Running the local mass balance, updating timestep vars, resetting variables
+        :return:
+        """
+        self.precip = self.precip + precip_sub
+        self.ending_volume = ending_volume_sub
+        local_mb = (
+            starting_volume_sub
+            + precip_sub
+            + self.ponded_water
+            - runoff_sub
+            - AET_sub
+            - ponded_water_sub
+            - percolation_sub
+            - ending_volume_sub
+        )
+        self.AET += AET_sub
+

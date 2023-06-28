@@ -38,7 +38,6 @@ class GlobalParams:
         self.frozen_factor = None
 
         self.ponded_depth_cm = None
-        self.nint = None
         self.num_wetting_fronts = None
         self.time_s = None
         self.timesteps = None
@@ -72,6 +71,7 @@ class GlobalParams:
 
         # Variables for specific functions:
         self.relative_moisture_at_which_PET_equals_AET = torch.tensor(0.75, device=self.device)
+        self.nint = torch.tensor(cfg.constants.nint, device=self.device)
 
     def initialize_config_parameters(self, cfg: DictConfig) -> None:
         """

@@ -858,7 +858,7 @@ class Layer:
         else:
             return None
 
-    def calc_dzdt(self):
+    def calc_dzdt(self, h_p):
         """
         code to calculate velocity of fronts
         equations with full description are provided in the lgar paper (currently under review) */
@@ -878,18 +878,51 @@ class Layer:
                 current_front.dzdt = torch.tensor(0.0, device=self.global_params.device)
             else:
                 if current_front.layer_num > 0:
-                    bottom_sum = bottom_sum + (current_front.depth - self.previous_layer.cumulative_layer_thickness) / current_front.ksat_cm_per_h
+                    bottom_sum = (
+                        bottom_sum
+                        + (
+                            current_front.depth
+                            - self.previous_layer.cumulative_layer_thickness
+                        )
+                        / current_front.ksat_cm_per_h
+                    )
                 else:
                     if theta_1 > theta_2:
                         log.error("theta_1 cannot be larger than theta_2")
                         raise ValueError
 
-                # TODO work here!
-                geff = calc_geff(use_closed_form_G, soils_data, theta_1, theta_2, nint, lgar.device)
+                geff = calc_geff(
+                    self.global_params,
+                    self.attributes,
+                    theta_1,
+                    theta_2,
+                    self.alpha_layer,
+                    self.n_layer,
+                    self.ksat_layer,
+                )
+                delta_theta = current_front.theta - next_front.theta
+                if i == 0 and current_front.layer_num == 0:
+                    # This is the top wetting front
+                    if delta_theta > 0:
+                        dzdt = (
+                            1.0
+                            / delta_theta
+                            * (
+                                self.ksat_layer * (geff + h_p) / current_front.depth
+                                + current_front.ksat_cm_per_h
+                            )
+                        )
+                    else:
+                        dzdt = torch.tensor(0.0, device=self.global_params.device)
+                else:  # we are in the second or greater layer
+                    raise NotImplementedError
+                current_front.dzdt = dzdt
+        if self.next_layer is not None:
+            self.next_layer.calc_dzdt(h_p)
+        else:
+            return None
 
-
-
-    def giuh_runoff(self):
+    def giuh_runoff(self, runoff_sub):
         raise NotImplementedError
 
     def move_wetting_fronts(

@@ -17,6 +17,7 @@ constants:
   frozen_factor: 1
   AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET (fix later!)
   AET_expon: 1.0
+  nint: 120
 conversions:
   cm_to_mm: 10.0
   mm_to_cm: 0.1

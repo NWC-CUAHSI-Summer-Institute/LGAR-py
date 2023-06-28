@@ -30,7 +30,6 @@ def calc_geff(use_closed_form_G, soils_data, theta_1, theta_2, nint, device):
     :param nint:
     :return:
     """
-    """
     # Theta_1 = theta, theta_2 = soils_data["theta_<x>"] in most cases
     if use_closed_form_G is False:
         # note: units of h in cm.  units of K in cm/s

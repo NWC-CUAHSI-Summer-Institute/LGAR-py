@@ -82,6 +82,23 @@ def calc_se_from_theta(theta_init: Tensor, theta_e: Tensor, theta_r: Tensor) -> 
     return torch.div((theta_init - theta_r), (theta_e - theta_r))
 
 
+def calc_se_from_h(h, alpha, m, n):
+    """
+    function to calculate Se from h
+    :param h:
+    :param alpha:
+    :param m:
+    :param n:
+    :return:
+    """
+    h_abs = torch.abs(h)
+    if h_abs < 1.0e-01:
+        return torch.tensor(
+            1.0
+        )  # TODO EXPLORE A CLAMP (this function doesn't work well for tiny h)
+    return 1.0 / (torch.pow(1.0 + torch.pow(alpha * h, n), m))
+
+
 def calc_k_from_se(se: Tensor, ksat: Tensor, m: Tensor) -> Tensor:
     """
     function to calculate K from Se
