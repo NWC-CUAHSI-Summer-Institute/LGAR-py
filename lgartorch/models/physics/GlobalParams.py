@@ -25,6 +25,7 @@ class GlobalParams:
         self.wilting_point_psi_cm = None
         self.giuh_ordinates = None
         self.num_giuh_ordinates = None
+        self.giuh_runoff = None
 
         self.timestep_h = None
         self.endtime_s = None
@@ -68,6 +69,7 @@ class GlobalParams:
         self.soil_property_indexes = None
 
         self.initialize_config_parameters(cfg)
+        self.initialize_giuh_params(cfg)
 
         # Variables for specific functions:
         self.relative_moisture_at_which_PET_equals_AET = torch.tensor(0.75, device=self.device)
@@ -126,3 +128,13 @@ class GlobalParams:
         self.giuh_ordinates = np.array(cfg.data.giuh_ordinates)
 
         self.soil_property_indexes = cfg.data.soil_property_indexes
+
+    def initialize_giuh_params(self, cfg: DictConfig):
+        """
+        Initalizing all giuh params
+        :param cfg:
+        :return:
+        """
+        self.giuh_ordinates = torch.tensor(cfg.data.giuh_ordinates, device=cfg.device)
+        self.giuh_runoff = torch.zeros([len(self.giuh_ordinates)], device=cfg.device)
+        self.num_giuh_ordinates = len(self.giuh_ordinates)

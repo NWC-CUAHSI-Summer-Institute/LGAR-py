@@ -922,9 +922,6 @@ class Layer:
         else:
             return None
 
-    def giuh_runoff(self, runoff_sub):
-        raise NotImplementedError
-
     def move_wetting_fronts(
         self,
         percolation,

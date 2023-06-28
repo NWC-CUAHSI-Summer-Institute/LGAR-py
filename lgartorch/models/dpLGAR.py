@@ -25,6 +25,7 @@ from lgartorch.models.physics.layers.Layer import Layer
 from lgartorch.models.physics.lgar.frozen_factor import (
     frozen_factor_hydraulic_conductivity,
 )
+from lgartorch.models.physics.lgar.giuh import calc_giuh
 
 log = logging.getLogger("models.dpLGAR")
 
@@ -131,6 +132,7 @@ class dpLGAR(nn.Module):
         precip = x[0][0]
         pet = x[0][1]
         previous_precip = torch.tensor(0.0, device=self.cfg.device)
+        groundwater_discharge_sub = torch.tensor(0.0, device=self.cfg.device)
         if self.global_params.sft_coupled:
             # TODO work in frozen soil components
             frozen_factor_hydraulic_conductivity()
@@ -205,7 +207,7 @@ class dpLGAR(nn.Module):
                 # Prepping the loop for the next subtimestep
                 self.top_layer.calc_dzdt(ponded_depth_sub)
                 ending_volume_sub = self.calc_mass_balance()
-                giuh_runoff_sub = self.top_layer.giuh_runoff(runoff_sub)
+                giuh_runoff_sub = calc_giuh(self.global_params, runoff_sub)
                 previous_precip = precip_sub
                 self.update_states(
                     starting_volume_sub,
@@ -215,6 +217,8 @@ class dpLGAR(nn.Module):
                     ponded_water_sub,
                     percolation_sub,
                     ending_volume_sub,
+                    giuh_runoff_sub,
+                    groundwater_discharge_sub
                 )
 
             time.sleep(0.001)
@@ -272,6 +276,8 @@ class dpLGAR(nn.Module):
         ponded_water_sub,
         percolation_sub,
         ending_volume_sub,
+        giuh_runoff_sub,
+        groundwater_discharge_sub
     ):
         """
         Running the local mass balance, updating timestep vars, resetting variables
@@ -290,4 +296,35 @@ class dpLGAR(nn.Module):
             - ending_volume_sub
         )
         self.AET += AET_sub
+        self.runoff = runoff_sub
+        self.giuh_runoff = self.giuh_runoff + giuh_runoff_sub
+        self.discharge = self.discharge + giuh_runoff_sub
+        self.groundwater_discharge = groundwater_discharge_sub
+
+        self.print_local_mass_balance()
+
+    def print_local_mass_balance(
+        self,
+        local_mb,
+        starting_volume_sub,
+        precip_sub,
+        runoff_sub,
+        AET_sub,
+        ponded_water_sub,
+        percolation_sub,
+        ending_volume_sub,
+        giuh_runoff_sub,
+        groundwater_discharge_sub
+    ):
+        log.debug(f"Local mass balance at this timestep...")
+        log.debug(f"Error         = {local_mb.item():14.10f}")
+        log.debug(f"Initial water = {starting_volume_sub.item():14.10f}")
+        log.debug(f"Water added   = {precip_sub.item():14.10f}")
+        log.debug(f"Ponded water  = {ponded_water_sub.item():14.10f}")
+        log.debug(f"Infiltration  = {percolation_sub.item():14.10f}")
+        log.debug(f"Runoff        = {runoff_sub.item():14.10f}")
+        log.debug(f"AET           = {AET_sub.item():14.10f}")
+        log.debug(f"Percolation   = {volrech_subtimestep_cm.item():14.10f}")
+        log.debug(f"Final water   = {volend_subtimestep_cm.item():14.10f}")
+        # TODO MAKE SURE WE"RE CORRECTLY DETERMINING INFILTRATION VS PERCOLATION!!!!!
 
