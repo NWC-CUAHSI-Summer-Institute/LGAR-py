@@ -124,9 +124,7 @@ class GlobalParams:
         self.wilting_point_psi_cm = torch.tensor(
             cfg.data.wilting_point_psi, device=cfg.device
         )
-
-        self.giuh_ordinates = np.array(cfg.data.giuh_ordinates)
-
+        self.frozen_factor = torch.tensor(cfg.constants.frozen_factor, device=cfg.device)
         self.soil_property_indexes = cfg.data.soil_property_indexes
 
     def initialize_giuh_params(self, cfg: DictConfig):

@@ -984,7 +984,9 @@ class Layer:
         #  these are the limits of integration
         theta_1 = current_front.theta
         theta_2 = current_front.theta_e
-        delta_theta = current_front.theta_e - current_front.theta  # water content of the first (most surficial) existing wetting front
+        delta_theta = (
+            current_front.theta_e - current_front.theta
+        )  # water content of the first (most surficial) existing wetting front
         tau = subtimestep * current_front.ksat_cm_per_h / delta_theta
         geff = calc_geff(
             self.global_params,
@@ -1001,8 +1003,85 @@ class Layer:
         dry_depth = torch.min(self.cumulative_layer_thickness, dry_depth)
         return dry_depth
 
-    def create_surficial_front(self, dry_depth, ponded_depth_sub, infiltration_sub):
-        raise NotImplementedError
+    def create_surficial_front(self, dry_depth, ponded_depth, infiltration):
+        """
+        // ######################################################################################
+        /* This subroutine is called iff there is no surfacial front, it creates a new front and
+           inserts ponded depth, and will return some amount if can't fit all water */
+        // ######################################################################################
+        :param dry_depth:
+        :param ponded_depth_sub:
+        :param infiltration_sub:
+        :return:
+        """
+        to_bottom = False
+        head_index = 0
+        current_front = self.wetting_fronts[
+            head_index
+        ]  # Specifically pointing to the first front
+
+        delta_theta = current_front.theta_e - current_front.theta
+
+        if dry_depth * delta_theta > ponded_depth:
+            # all the ponded depth enters the soil
+            infiltration = ponded_depth
+            theta_new = torch.min(
+                (current_front.theta + ponded_depth / dry_depth), current_front.theta_e
+            )
+            new_front = WettingFront(
+                self.global_params,
+                self.cumulative_layer_thickness,
+                self.layer_num,
+                self.attributes,
+                self.ksat_layer,
+            )
+            new_front.theta = theta_new
+            new_front.depth = dry_depth
+            new_front.to_bottom = to_bottom
+            # inserting the new front in the front layer
+            self.wetting_fronts.insert(0, new_front)
+            ponded_depth = torch.tensor(0.0, device=self.global_params.device)
+        else:
+            # // not all ponded depth fits in
+            infiltration = dry_depth * delta_theta
+            ponded_depth = ponded_depth - (dry_depth * delta_theta)
+            theta_new = current_front.theta
+            if dry_depth < self.cumulative_layer_thickness:
+                # checking against the first layer
+                new_front = WettingFront(
+                    self.global_params,
+                    self.cumulative_layer_thickness,
+                    self.layer_num,
+                    self.attributes,
+                    self.ksat_layer,
+                )
+                new_front.depth = dry_depth
+                new_front.theta = current_front.theta_e
+                new_front.to_bottom = to_bottom
+            else:
+                new_front = WettingFront(
+                    self.global_params,
+                    self.cumulative_layer_thickness,
+                    self.layer_num,
+                    self.attributes,
+                    self.ksat_layer,
+                )
+                new_front.depth = dry_depth
+                new_front.theta = current_front.theta_e
+                new_front.to_bottom = True
+            self.wetting_fronts.insert(0, new_front)
+
+        # These calculations are allowed as we're creating a dry layer of the same soil type
+        se = calc_se_from_theta(theta_new, new_front.theta_e, new_front.theta_r)
+        new_front.psi_cm = calc_h_from_se(se, self.alpha_layer, new_front.m, self.n)
+        new_front.k_cm_per_h = (
+            calc_k_from_se(se, new_front.ksat_cm_per_h, new_front.m)
+            * self.global_params.frozen_factor
+        )  # // AJ - K_temp in python version for 1st layer
+        new_front.dzdt = torch.tensor(0.0, device=self.device)
+        # for now assign 0 to dzdt as it will be computed/updated in lgar_dzdt_calc function
+
+        return ponded_depth, infiltration
 
     def set_previous_state(self):
         raise NotImplementedError
