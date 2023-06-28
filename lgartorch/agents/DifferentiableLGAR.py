@@ -4,11 +4,13 @@ import time
 import torch
 from torch import Tensor
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from lgartorch.agents.base import BaseAgent
 from lgartorch.data.Data import Data
 from lgartorch.data.metrics import calculate_nse
 from lgartorch.models.dpLGAR import dpLGAR
+from lgartorch.models.physics.MassBalance import MassBalance
 
 log = logging.getLogger("agents.DifferentiableLGAR")
 
@@ -48,8 +50,10 @@ class DifferentiableLGAR(BaseAgent):
         self.data = Data(self.cfg)
         self.data_loader = DataLoader(self.data, batch_size=1, shuffle=False)
 
-        # Defining the model
+        # Defining the model and output variables to save
         self.model = dpLGAR(self.cfg)
+        self.percolation_output = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
+        self.mass_balance = MassBalance(cfg)
 
         self.criterion = torch.nn.MSELoss()
         self.optimizer = torch.optim.Adam(
@@ -83,13 +87,19 @@ class DifferentiableLGAR(BaseAgent):
         One epoch of training
         :return:
         """
-        i = 0
-        for x, y_t in self.data_loader:
-            self.optimizer.zero_grad()
-            y_hat = self.model(x)
-            self.validate(y_hat, y_t)
-            i += 1
+        self.optimizer.zero_grad()
 
+        # Resetting output vars
+        y_hat = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)  # runoff
+        self.percolation_output = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
+
+        for i, (x, y_t) in enumerate(tqdm(self.data_loader, desc="Processing data")):
+            runoff, percolation = self.model(i, x)
+            y_hat = runoff
+            self.percolation_output[i] = percolation
+            # Updating the total mass of the system
+            self.mass_balance.change_mass(self.model)
+        self.validate(y_hat, self.data.y)
     def validate(self, y_hat_: Tensor, y_t_: Tensor) -> None:
         """
         One cycle of model validation

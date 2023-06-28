@@ -111,12 +111,9 @@ class dpLGAR(nn.Module):
         self.giuh_runoff = torch.tensor(0.0, device=self.cfg.device)
         self.discharge = torch.tensor(0.0, device=self.cfg.device)
         self.groundwater_discharge = torch.tensor(0.0, device=self.cfg.device)
+        self.percolation = torch.tensor(0.0, device=self.cfg.device)
 
-        # Variables we want to save at every timestep
-        self.runoff = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
-        self.percolation = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
-
-    def forward(self, x) -> Tensor:
+    def forward(self, i, x) -> Tensor:
         """
         The forward function to model Precip/PET through LGAR functions
         /* Note unit conversion:
@@ -126,6 +123,7 @@ class dpLGAR(nn.Module):
         convert rate to amount
         Pr [mm/3600sec] * dt [300 sec] = Pr[mm] * 300/3600.
         in the code below, subtimestep_h is this 300/3600 factor (see initialize from config in lgar.cxx)
+        :param i: The current timestep index
         :param x: Precip and PET forcings
         :return: runoff to be used for validation
         """
@@ -137,98 +135,98 @@ class dpLGAR(nn.Module):
         if self.global_params.sft_coupled:
             # TODO work in frozen soil components
             frozen_factor_hydraulic_conductivity()
-        for i in tqdm(range(self.cfg.models.nsteps), desc="Running dpLGAR"):
-            precip_timestep = torch.tensor(0.0, device=self.cfg.device)
-            bottom_boundary_flux = torch.tensor(0.0, device=self.cfg.device)
-            ending_volume_sub = self.ending_volume.clone()
-            for j in range(self.cfg.models.num_subcycles):
-                precip_sub = precip * self.cfg.models.subcycle_length_h
-                pet_sub = pet * self.cfg.models.subcycle_length_h
-                ponded_depth_sub = precip_sub + self.ponded_water
-                percolation_sub = torch.tensor(0.0, device=self.cfg.device)
-                infiltration_sub = torch.tensor(0.0, device=self.cfg.device)
-                AET_sub = torch.tensor(0.0, device=self.cfg.device)
-                # Determining wetting cases
-                create_surficial_front = self.create_surficial_front(
-                    previous_precip, precip_sub
-                )
-                self.wf_free_drainage_demand = self.calc_wetting_front_free_drainage()
-                is_top_layer_saturated = self.top_layer.is_saturated()
-                if pet_sub > 0.0:
-                    AET_sub = self.top_layer.calc_aet(pet_sub)
-                starting_volume_sub = self.calc_mass_balance()
-                if create_surficial_front:
-                    if is_top_layer_saturated:
-                        # It's raining
-                        raise NotImplementedError
-                        # self.top_layer.input_precip(precip_subtimestep)
-                    else:
-                        raise NotImplementedError
+        # creating local timestep tensors for runoff and percolation
+        runoff_timestep = torch.tensor(0.0, device=self.cfg.device)
+        percolation_timestep = torch.tensor(0.0, device=self.cfg.device)
+        bottom_boundary_flux = torch.tensor(0.0, device=self.cfg.device)
+        ending_volume_sub = self.ending_volume.clone()
+        for j in range(self.cfg.models.num_subcycles):
+            precip_sub = precip * self.cfg.models.subcycle_length_h
+            pet_sub = pet * self.cfg.models.subcycle_length_h
+            ponded_depth_sub = precip_sub + self.ponded_water
+            percolation_sub = torch.tensor(0.0, device=self.cfg.device)
+            infiltration_sub = torch.tensor(0.0, device=self.cfg.device)
+            AET_sub = torch.tensor(0.0, device=self.cfg.device)
+            # Determining wetting cases
+            create_surficial_front = self.create_surficial_front(
+                previous_precip, precip_sub
+            )
+            self.wf_free_drainage_demand = self.calc_wetting_front_free_drainage()
+            is_top_layer_saturated = self.top_layer.is_saturated()
+            if pet_sub > 0.0:
+                AET_sub = self.top_layer.calc_aet(pet_sub)
+            starting_volume_sub = self.calc_mass_balance()
+            if create_surficial_front:
+                if is_top_layer_saturated:
+                    # It's raining
+                    raise NotImplementedError
+                    # self.top_layer.input_precip(precip_subtimestep)
                 else:
-                    if ponded_depth_sub > 0:
-                        #  infiltrate water based on the infiltration capacity given no new wetting front
-                        #  is created and that there is water on the surface (or raining).
-                        raise NotImplementedError
+                    raise NotImplementedError
+            else:
+                if ponded_depth_sub > 0:
+                    #  infiltrate water based on the infiltration capacity given no new wetting front
+                    #  is created and that there is water on the surface (or raining).
+                    raise NotImplementedError
+                else:
+                    if ponded_depth_sub < self.global_params.ponded_depth_max_cm:
+                        ponded_water_sub = ponded_depth_sub
+                        runoff_sub = torch.tensor(0.0, device=self.cfg.device)
+                        ponded_depth_sub = torch.tensor(0.0, device=self.cfg.device)
                     else:
-                        if ponded_depth_sub < self.global_params.ponded_depth_max_cm:
-                            ponded_water_sub = ponded_depth_sub
-                            runoff_sub = torch.tensor(0.0, device=self.cfg.device)
-                            ponded_depth_sub = torch.tensor(0.0, device=self.cfg.device)
-                        else:
-                            # There is some runoff here
-                            runoff_sub = (
-                                ponded_depth_sub
-                                - self.global_params.ponded_depth_max_cm
-                            )
-                            ponded_depth_sub = self.global_params.ponded_depth_max_cm
-                            ponded_water_sub = ponded_depth_sub
-                    self.runoff[i] = self.runoff[i] + runoff_sub
-                    infiltration_temp = infiltration_sub.clone()
-                    infiltration_sub = self.bottom_layer.move_wetting_fronts(
-                        infiltration_sub,
-                        AET_sub,
-                        ending_volume_sub,
-                        self.num_wetting_fronts,
-                        self.cfg.models.subcycle_length_h,
-                        self.wf_free_drainage_demand,
-                    )
-                    self.top_layer.merge_wetting_fronts()
-                    self.top_layer.wetting_fronts_cross_layer_boundary()
-                    self.top_layer.merge_wetting_fronts()
-                    bottom_boundary_flux = (
-                        bottom_boundary_flux
-                        + self.top_layer.wetting_front_cross_domain_boundary()
-                    )
-                    infiltration_sub = bottom_boundary_flux
-                    mass_change = self.top_layer.fix_dry_over_wet_fronts()
-                    if torch.abs(mass_change) > 1e-7:
-                        AET_sub = AET_sub - mass_change
-                    self.top_layer.update_psi()
-                    percolation_sub = infiltration_sub.clone()
-                    self.percolation = (
-                        self.percolation + percolation_sub
-                    )  # Make sure the values aren't getting lost
-                    infiltration_sub = infiltration_temp
-                # Prepping the loop for the next subtimestep
-                self.top_layer.calc_dzdt(ponded_depth_sub)
-                ending_volume_sub = self.calc_mass_balance()
-                giuh_runoff_sub = calc_giuh(self.global_params, runoff_sub)
-                previous_precip = precip_sub
-                self.update_states(
-                    starting_volume_sub,
-                    precip_sub,
-                    runoff_sub,
+                        # There is some runoff here
+                        runoff_sub = (
+                            ponded_depth_sub
+                            - self.global_params.ponded_depth_max_cm
+                        )
+                        ponded_depth_sub = self.global_params.ponded_depth_max_cm
+                        ponded_water_sub = ponded_depth_sub
+                runoff_timestep = runoff_timestep + runoff_sub
+                infiltration_temp = infiltration_sub.clone()
+                infiltration_sub = self.bottom_layer.move_wetting_fronts(
+                    infiltration_sub,
                     AET_sub,
-                    ponded_water_sub,
-                    percolation_sub,
                     ending_volume_sub,
-                    giuh_runoff_sub,
-                    groundwater_discharge_sub
+                    self.num_wetting_fronts,
+                    self.cfg.models.subcycle_length_h,
+                    self.wf_free_drainage_demand,
                 )
-
-            time.sleep(0.001)
-
-        return self.volrunoff_timestep_cm
+                self.top_layer.merge_wetting_fronts()
+                self.top_layer.wetting_fronts_cross_layer_boundary()
+                self.top_layer.merge_wetting_fronts()
+                bottom_boundary_flux = (
+                    bottom_boundary_flux
+                    + self.top_layer.wetting_front_cross_domain_boundary()
+                )
+                infiltration_sub = bottom_boundary_flux
+                mass_change = self.top_layer.fix_dry_over_wet_fronts()
+                if torch.abs(mass_change) > 1e-7:
+                    AET_sub = AET_sub - mass_change
+                self.top_layer.update_psi()
+                percolation_sub = infiltration_sub.clone()
+                percolation_timestep = (
+                    percolation_timestep + percolation_sub
+                )  # Make sure the values aren't getting lost
+                infiltration_sub = infiltration_temp
+            # Prepping the loop for the next subtimestep
+            self.top_layer.calc_dzdt(ponded_depth_sub)
+            ending_volume_sub = self.calc_mass_balance()
+            giuh_runoff_sub = calc_giuh(self.global_params, runoff_sub)
+            previous_precip = precip_sub
+            self.update_states(
+                starting_volume_sub,
+                precip_sub,
+                runoff_sub,
+                AET_sub,
+                ponded_water_sub,
+                percolation_sub,
+                ending_volume_sub,
+                infiltration_sub,
+                groundwater_discharge_sub,
+                giuh_runoff_sub
+            )
+        self.runoff_output[i] = runoff_timestep
+        self.percolation_output[i] = percolation_timestep
 
     def calc_mass_balance(self) -> Tensor:
         """
@@ -281,8 +279,9 @@ class dpLGAR(nn.Module):
         ponded_water_sub,
         percolation_sub,
         ending_volume_sub,
-        giuh_runoff_sub,
-        groundwater_discharge_sub
+        infiltration_sub,
+        groundwater_discharge_sub,
+        giuh_runoff_sub
     ):
         """
         Running the local mass balance, updating timestep vars, resetting variables
@@ -301,12 +300,21 @@ class dpLGAR(nn.Module):
             - ending_volume_sub
         )
         self.AET += AET_sub
-        self.runoff = runoff_sub
         self.giuh_runoff = self.giuh_runoff + giuh_runoff_sub
         self.discharge = self.discharge + giuh_runoff_sub
         self.groundwater_discharge = groundwater_discharge_sub
 
-        self.print_local_mass_balance()
+        # self.print_local_mass_balance(
+        #     local_mb,
+        #     starting_volume_sub,
+        #     precip_sub,
+        #     runoff_sub,
+        #     AET_sub,
+        #     ponded_water_sub,
+        #     percolation_sub,
+        #     ending_volume_sub,
+        #     infiltration_sub,
+        # )
 
     def print_local_mass_balance(
         self,
@@ -318,18 +326,15 @@ class dpLGAR(nn.Module):
         ponded_water_sub,
         percolation_sub,
         ending_volume_sub,
-        giuh_runoff_sub,
-        groundwater_discharge_sub
+        infiltration_sub,
     ):
-        log.debug(f"Local mass balance at this timestep...")
-        log.debug(f"Error         = {local_mb.item():14.10f}")
-        log.debug(f"Initial water = {starting_volume_sub.item():14.10f}")
-        log.debug(f"Water added   = {precip_sub.item():14.10f}")
-        log.debug(f"Ponded water  = {ponded_water_sub.item():14.10f}")
-        log.debug(f"Infiltration  = {percolation_sub.item():14.10f}")
-        log.debug(f"Runoff        = {runoff_sub.item():14.10f}")
-        log.debug(f"AET           = {AET_sub.item():14.10f}")
-        log.debug(f"Percolation   = {volrech_subtimestep_cm.item():14.10f}")
-        log.debug(f"Final water   = {volend_subtimestep_cm.item():14.10f}")
-        # TODO MAKE SURE WE"RE CORRECTLY DETERMINING INFILTRATION VS PERCOLATION!!!!!
-
+        log.info(f"Local mass balance at this timestep...")
+        log.info(f"Error         = {local_mb.item():14.10f}")
+        log.info(f"Initial water = {starting_volume_sub.item():14.10f}")
+        log.info(f"Water added   = {precip_sub.item():14.10f}")
+        log.info(f"Ponded water  = {ponded_water_sub.item():14.10f}")
+        log.info(f"Infiltration  = {infiltration_sub.item():14.10f}")
+        log.info(f"Runoff        = {runoff_sub.item():14.10f}")
+        log.info(f"AET           = {AET_sub.item():14.10f}")
+        log.info(f"Percolation   = {percolation_sub.item():14.10f}")
+        log.info(f"Final water   = {ending_volume_sub.item():14.10f}")
