@@ -486,7 +486,7 @@ class Layer:
                     ] = self.next_layer.wetting_fronts[0]
         return neighboring_fronts
 
-    def calc_aet(self, pet: Tensor) -> Tensor:
+    def calc_aet(self, pet: Tensor, subtimestep_h: float) -> Tensor:
         """
         ONLY CALLED FROM TOP LAYER
         Calculates the Actual Evapotranspiration for each layer
@@ -500,6 +500,7 @@ class Layer:
         m = self.attributes[self.global_params.soil_property_indexes["m"]]
         aet = calc_aet(
             self.global_params,
+            subtimestep_h,
             pet,
             top_wetting_front.psi_cm,
             theta_e,
@@ -534,7 +535,6 @@ class Layer:
             # The base depth is the depth at the top of the layer
             base_depth = self.cumulative_layer_thickness - self.layer_thickness
         if len(self.wetting_fronts) > 1:
-            # TODO TEST THIS!!!
             # Iterate through the list elements except the last one
             for i, wf in enumerate(self.wetting_fronts[:-1]):
                 current_front = self.wetting_fronts[i]

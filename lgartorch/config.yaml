@@ -3,7 +3,7 @@ defaults:
   - data: config/Phillipsburg
   - models: config/base
 #cwd: /mnt/sdb1/tkb5476/LGAR-Torch/
-cwd: /Users/taddbindas/projects/LGAR-Torch
+cwd: /Users/taddbindas/projects/dpLGAR
 save_name: debugger
 output_dir: ${cwd}/output
 device: cpu

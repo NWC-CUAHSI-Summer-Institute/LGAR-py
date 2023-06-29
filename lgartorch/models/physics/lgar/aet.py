@@ -13,7 +13,7 @@ from lgartorch.models.physics.utils import (
 log = logging.getLogger("models.physics.lgar.aet")
 
 
-def calc_aet(global_params, pet, psi_cm, theta_e, theta_r, m, alpha, n) -> Tensor:
+def calc_aet(global_params, subtimestep_h, pet, psi_cm, theta_e, theta_r, m, alpha, n) -> Tensor:
     """
     /* authors : Fred Ogden and Ahmad Jan
     Translated by Tadd Bindas to Python
@@ -23,7 +23,8 @@ def calc_aet(global_params, pet, psi_cm, theta_e, theta_r, m, alpha, n) -> Tenso
     AET = PET * 1/(1 + (h/h_50) )^3
     h is the capillary head at the surface and
     h_50 is the capillary head at which AET = 0.5 * PET. */
-    :param global_params:
+    :param global_params: a global config file to store cfg values in tensor form
+    :param subtimestep_h: The time interval of each subcycle in hours
     :param pet: potential evapotranspiration
     :param theta_e: ????
     :param theta_r: ????
@@ -43,7 +44,7 @@ def calc_aet(global_params, pet, psi_cm, theta_e, theta_r, m, alpha, n) -> Tenso
     psi_wp_cm = calc_h_from_se(se, alpha, m, n)
 
     h_ratio = 1.0 + torch.pow((psi_cm / psi_wp_cm), 3.0)
-    actual_ET_demand_ = pet * (1 / h_ratio)
+    actual_ET_demand_ = pet * (1 / h_ratio) * subtimestep_h
     # Actual ET cannot be higher than PET nor negative
     actual_ET_demand = torch.clamp(actual_ET_demand_, min=0.0, max=pet)
     return actual_ET_demand

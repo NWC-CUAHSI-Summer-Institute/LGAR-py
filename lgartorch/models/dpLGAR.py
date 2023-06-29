@@ -129,16 +129,14 @@ class dpLGAR(nn.Module):
         pet = x[0][1]
         previous_precip = torch.tensor(0.0, device=self.cfg.device)
         groundwater_discharge_sub = torch.tensor(0.0, device=self.cfg.device)
-        if self.global_params.sft_coupled:
-            # TODO work in frozen soil components
-            frozen_factor_hydraulic_conductivity()
-        # creating local timestep tensors for runoff and percolation
         runoff_timestep = torch.tensor(0.0, device=self.cfg.device)
         bottom_boundary_flux = torch.tensor(0.0, device=self.cfg.device)
         ending_volume_sub = self.ending_volume.clone()
+        if self.global_params.sft_coupled:
+            frozen_factor_hydraulic_conductivity()
+        subtimestep_h = self.cfg.models.subcycle_length_h
         for j in range(self.cfg.models.num_subcycles):
-            precip_sub = precip * self.cfg.models.subcycle_length_h
-            pet_sub = pet * self.cfg.models.subcycle_length_h
+            precip_sub = precip * subtimestep_h
             ponded_depth_sub = precip_sub + self.ponded_water
             percolation_sub = torch.tensor(0.0, device=self.cfg.device)
             infiltration_sub = torch.tensor(0.0, device=self.cfg.device)
@@ -149,8 +147,8 @@ class dpLGAR(nn.Module):
             )
             self.wf_free_drainage_demand = self.calc_wetting_front_free_drainage()
             is_top_layer_saturated = self.top_layer.is_saturated()
-            if pet_sub > 0.0:
-                AET_sub = self.top_layer.calc_aet(pet_sub)
+            if pet > 0.0:
+                AET_sub = self.top_layer.calc_aet(pet, subtimestep_h)
             starting_volume_sub = self.calc_mass_balance()
             if create_surficial_front:
                 if is_top_layer_saturated is False:
@@ -160,11 +158,11 @@ class dpLGAR(nn.Module):
                         AET_sub,
                         ending_volume_sub,
                         self.num_wetting_fronts,
-                        self.cfg.models.subcycle_length_h,
+                        subtimestep_h,
                         self.wf_free_drainage_demand,
                     )
                     dry_depth = self.top_layer.calc_dry_depth(
-                        self.cfg.models.subcycle_length_h
+                        subtimestep_h
                     )
                     (
                         ponded_depth_sub,
@@ -183,7 +181,7 @@ class dpLGAR(nn.Module):
                         infiltration_sub,
                         ponded_depth_sub,
                     ) = self.top_layer.insert_water(
-                        self.cfg.models.subcycle_length_h,
+                        subtimestep_h,
                         precip_sub,
                         self.wf_free_drainage_demand,
                         ponded_depth_sub,
@@ -218,7 +216,7 @@ class dpLGAR(nn.Module):
                     AET_sub,
                     ending_volume_sub,
                     self.num_wetting_fronts,
-                    self.cfg.models.subcycle_length_h,
+                    subtimestep_h,
                     self.wf_free_drainage_demand,
                 )
                 self.top_layer.merge_wetting_fronts()
@@ -318,23 +316,12 @@ class dpLGAR(nn.Module):
         """
         self.precip = self.precip + precip_sub
         self.ending_volume = ending_volume_sub
-        local_mb = (
-            starting_volume_sub
-            + precip_sub
-            + self.ponded_water
-            - runoff_sub
-            - AET_sub
-            - ponded_water_sub
-            - percolation_sub
-            - ending_volume_sub
-        )
         self.AET += AET_sub
         self.giuh_runoff = self.giuh_runoff + giuh_runoff_sub
         self.discharge = self.discharge + giuh_runoff_sub
         self.groundwater_discharge = groundwater_discharge_sub
 
         # self.print_local_mass_balance(
-        #     local_mb,
         #     starting_volume_sub,
         #     precip_sub,
         #     runoff_sub,
@@ -347,7 +334,6 @@ class dpLGAR(nn.Module):
 
     def print_local_mass_balance(
         self,
-        local_mb,
         starting_volume_sub,
         precip_sub,
         runoff_sub,
@@ -357,6 +343,17 @@ class dpLGAR(nn.Module):
         ending_volume_sub,
         infiltration_sub,
     ):
+        local_mb = (
+            starting_volume_sub
+            + precip_sub
+            + self.ponded_water
+            - runoff_sub
+            - AET_sub
+            - ponded_water_sub
+            - percolation_sub
+            - ending_volume_sub
+        )
+        self.top_layer.print()
         log.info(f"Local mass balance at this timestep...")
         log.info(f"Error         = {local_mb.item():14.10f}")
         log.info(f"Initial water = {starting_volume_sub.item():14.10f}")
