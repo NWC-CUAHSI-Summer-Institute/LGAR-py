@@ -136,6 +136,7 @@ class dpLGAR(nn.Module):
             frozen_factor_hydraulic_conductivity()
         subtimestep_h = self.cfg.models.subcycle_length_h
         for j in range(self.cfg.models.num_subcycles):
+            self.top_layer.copy_states()
             precip_sub = precip * subtimestep_h
             ponded_depth_sub = precip_sub + self.ponded_water
             percolation_sub = torch.tensor(0.0, device=self.cfg.device)
@@ -151,8 +152,12 @@ class dpLGAR(nn.Module):
                 AET_sub = self.top_layer.calc_aet(pet, subtimestep_h)
             starting_volume_sub = self.calc_mass_balance()
             if create_surficial_front:
+                #-------------------------------------------------------------------------------------------------------
+                # /* create a new wetting front if the following is true. Meaning there is no
+                #    wetting front in the top layer to accept the water, must create one. */
                 if is_top_layer_saturated is False:
                     temp_pd = torch.tensor(0.0, device=self.cfg.device)
+                    # // move the wetting fronts without adding any water; this is done to close the mass balance
                     temp_pd = self.bottom_layer.move_wetting_fronts(
                         temp_pd,
                         AET_sub,
@@ -161,6 +166,7 @@ class dpLGAR(nn.Module):
                         subtimestep_h,
                         self.wf_free_drainage_demand,
                     )
+                    # depth of the surficial front to be created
                     dry_depth = self.top_layer.calc_dry_depth(
                         subtimestep_h
                     )
@@ -170,9 +176,13 @@ class dpLGAR(nn.Module):
                     ) = self.top_layer.create_surficial_front(
                         dry_depth, ponded_depth_sub, infiltration_sub
                     )
-                    self.top_layer.set_previous_state()
+                    self.top_layer.copy_states()
                     self.infiltration = self.infiltration + infiltration_sub
             else:
+                #-------------------------------------------------------------------------------------------------------
+                # /*----------------------------------------------------------------------*/
+                # /* infiltrate water based on the infiltration capacity given no new wetting front
+                #    is created and that there is water on the surface (or raining). */
                 if ponded_depth_sub > 0:
                     #  infiltrate water based on the infiltration capacity given no new wetting front
                     #  is created and that there is water on the surface (or raining).
@@ -210,6 +220,10 @@ class dpLGAR(nn.Module):
                         ponded_depth_sub = self.global_params.ponded_depth_max_cm
                         ponded_water_sub = ponded_depth_sub
                 runoff_timestep = runoff_timestep + runoff_sub
+                #-------------------------------------------------------------------------------------------------------
+                # /* move wetting fronts if no new wetting front is created. Otherwise, movement
+                #    of wetting fronts has already happened at the time of creating surficial front,
+                #    so no need to move them here. */
                 infiltration_temp = infiltration_sub.clone()
                 infiltration_sub = self.bottom_layer.move_wetting_fronts(
                     infiltration_sub,
@@ -239,6 +253,8 @@ class dpLGAR(nn.Module):
             # Prepping the loop for the next subtimestep
             self.top_layer.calc_dzdt(ponded_depth_sub)
             ending_volume_sub = self.calc_mass_balance()
+            #-----------------------------------------------------------------------------------------------------------
+            # compute giuh runoff for the subtimestep
             giuh_runoff_sub = calc_giuh(self.global_params, runoff_sub)
             previous_precip = precip_sub
             self.update_states(

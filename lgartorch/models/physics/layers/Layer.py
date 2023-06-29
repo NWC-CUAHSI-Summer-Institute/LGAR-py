@@ -155,6 +155,7 @@ class Layer:
         :param delta_thickness:
         :return:
         """
+        # TODO REFERNCE THIS WITH self.find_front_layer()
         m = self.attributes[self.global_params.soil_index["m"]]
         theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
@@ -173,12 +174,12 @@ class Layer:
         new_mass = new_mass + layer_thickness * (theta - theta_below)
         delta_thetas[self.layer_num] = theta_below
         delta_thickness[self.layer_num] = layer_thickness
-        if self.previous_layer is None:
-            return new_mass, prior_mass, delta_thetas, delta_thickness
-        else:
+        if self.next_layer is not None:
             return self.previous_layer.populate_delta_thickness(
                 psi_cm_old, psi_cm, prior_mass, new_mass, delta_thetas, delta_thickness
             )
+        else:
+            return new_mass, prior_mass, delta_thetas, delta_thickness
 
     def recalculate_mass(self, psi_cm, new_mass, delta_thetas, delta_thickness):
         theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
@@ -1089,17 +1090,17 @@ class Layer:
 
         return ponded_depth, infiltration
 
-    def set_previous_state(self):
-        wf = WettingFront(
-            self.global_params,
-            self.cumulative_layer_thickness,
-            self.layer_num,
-            self.attributes,
-            self.ksat_layer,
-        )
-        # Copying elements of current node to wf
-        self.wetting_fronts[0].deepcopy(wf)
-        self.previous_fronts = wf
+    # def set_previous_state(self):
+    #     wf = WettingFront(
+    #         self.global_params,
+    #         self.cumulative_layer_thickness,
+    #         self.layer_num,
+    #         self.attributes,
+    #         self.ksat_layer,
+    #     )
+    #     # Copying elements of current node to wf
+    #     self.wetting_fronts[0].deepcopy(wf)
+    #     self.previous_fronts = wf
 
     def insert_water(
         self,
@@ -1220,6 +1221,16 @@ class Layer:
                             current_free_drainage,
                             self.next_layer.wetting_fronts[0],
                         )
+
+    def find_front_layer(self):
+        """
+        Traverses the soil layers to determine the front layer
+        :return: a self obj
+        """
+        if self.previous_layer is not None:
+            return self.previous_layer.find_front_layer()
+        else:
+            return self
 
     def print(self, first=True):
         if first:
