@@ -100,13 +100,10 @@ class dpLGAR(nn.Module):
         self.PET = torch.tensor(0.0, device=self.cfg.device)
         self.AET = torch.tensor(0.0, device=self.cfg.device)
         self.ending_volume = self.starting_volume.clone()
-        # self.volin_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
         # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
         self.ponded_water = torch.tensor(0.0, device=self.cfg.device)
         self.precip_previous_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
         self.infiltration = torch.tensor(0.0, device=self.cfg.device)
-        # self.volrunoff_timestep_cm = torch.tensor(0.0, device=self.device)
-        # self.volrech_timestep_cm = torch.tensor(0.0, device=self.device)
         self.runoff = torch.tensor(0.0, device=self.cfg.device)
         self.giuh_runoff = torch.tensor(0.0, device=self.cfg.device)
         self.discharge = torch.tensor(0.0, device=self.cfg.device)
@@ -156,9 +153,7 @@ class dpLGAR(nn.Module):
                 AET_sub = self.top_layer.calc_aet(pet_sub)
             starting_volume_sub = self.calc_mass_balance()
             if create_surficial_front:
-                if is_top_layer_saturated:
-                    raise NotImplementedError
-                else:
+                if is_top_layer_saturated is False:
                     temp_pd = torch.tensor(0.0, device=self.cfg.device)
                     temp_pd = self.bottom_layer.move_wetting_fronts(
                         temp_pd,
@@ -168,15 +163,42 @@ class dpLGAR(nn.Module):
                         self.cfg.models.subcycle_length_h,
                         self.wf_free_drainage_demand,
                     )
-                    dry_depth = self.top_layer.calc_dry_depth(self.cfg.models.subcycle_length_h)
-                    ponded_depth_sub, infiltration_sub = self.top_layer.create_surficial_front(dry_depth, ponded_depth_sub, infiltration_sub)
+                    dry_depth = self.top_layer.calc_dry_depth(
+                        self.cfg.models.subcycle_length_h
+                    )
+                    (
+                        ponded_depth_sub,
+                        infiltration_sub,
+                    ) = self.top_layer.create_surficial_front(
+                        dry_depth, ponded_depth_sub, infiltration_sub
+                    )
                     self.top_layer.set_previous_state()
                     self.infiltration = self.infiltration + infiltration_sub
             else:
                 if ponded_depth_sub > 0:
                     #  infiltrate water based on the infiltration capacity given no new wetting front
                     #  is created and that there is water on the surface (or raining).
-                    raise NotImplementedError
+                    (
+                        runoff_sub,
+                        infiltration_sub,
+                        ponded_depth_sub,
+                    ) = self.top_layer.insert_water(
+                        self.cfg.models.subcycle_length_h,
+                        precip_sub,
+                        self.wf_free_drainage_demand,
+                        ponded_depth_sub,
+                        infiltration_sub,
+                    )
+
+                    self.infiltration = self.infiltration + infiltration_sub
+                    self.runoff = self.runoff + runoff_sub
+                    percolation_sub = infiltration_sub  # this gets updated later, probably not needed here
+
+                    ponded_depth_sub = ponded_depth_sub
+
+                    if runoff_sub < 0:
+                        log.error("There is a mass balance problem")
+                        raise ValueError
                 else:
                     if ponded_depth_sub < self.global_params.ponded_depth_max_cm:
                         ponded_water_sub = ponded_depth_sub
@@ -185,8 +207,7 @@ class dpLGAR(nn.Module):
                     else:
                         # There is some runoff here
                         runoff_sub = (
-                            ponded_depth_sub
-                            - self.global_params.ponded_depth_max_cm
+                            ponded_depth_sub - self.global_params.ponded_depth_max_cm
                         )
                         ponded_depth_sub = self.global_params.ponded_depth_max_cm
                         ponded_water_sub = ponded_depth_sub
@@ -232,7 +253,7 @@ class dpLGAR(nn.Module):
                 ending_volume_sub,
                 infiltration_sub,
                 groundwater_discharge_sub,
-                giuh_runoff_sub
+                giuh_runoff_sub,
             )
         return self.runoff, self.percolation
 
@@ -289,7 +310,7 @@ class dpLGAR(nn.Module):
         ending_volume_sub,
         infiltration_sub,
         groundwater_discharge_sub,
-        giuh_runoff_sub
+        giuh_runoff_sub,
     ):
         """
         Running the local mass balance, updating timestep vars, resetting variables

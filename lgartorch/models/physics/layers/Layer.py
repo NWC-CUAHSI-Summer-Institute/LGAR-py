@@ -94,7 +94,7 @@ class Layer:
         Creating a persisted copy of the previous wetting fronts and states
         :return:
         """
-        # TODO CHECK IF THE OBJECT POINTERS NEED TO BE COPIED VS THE OBJ
+        # TODO WORK ON DEEP COPY!!!!!!! THIS IS A PROBLEM
         state = {}
         state["wetting_fronts"] = []
         for i in range(len(self.wetting_fronts)):
@@ -1073,27 +1073,149 @@ class Layer:
 
         # These calculations are allowed as we're creating a dry layer of the same soil type
         se = calc_se_from_theta(theta_new, new_front.theta_e, new_front.theta_r)
-        new_front.psi_cm = calc_h_from_se(se, self.alpha_layer, new_front.m, self.n)
+        new_front.psi_cm = calc_h_from_se(
+            se, self.alpha_layer, new_front.m, self.n_layer
+        )
         new_front.k_cm_per_h = (
             calc_k_from_se(se, new_front.ksat_cm_per_h, new_front.m)
             * self.global_params.frozen_factor
         )  # // AJ - K_temp in python version for 1st layer
-        new_front.dzdt = torch.tensor(0.0, device=self.device)
+        new_front.dzdt = torch.tensor(0.0, device=self.global_params.device)
         # for now assign 0 to dzdt as it will be computed/updated in lgar_dzdt_calc function
 
         return ponded_depth, infiltration
 
     def set_previous_state(self):
         wf = WettingFront(
-                    self.global_params,
-                    self.cumulative_layer_thickness,
-                    self.layer_num,
-                    self.attributes,
-                    self.ksat_layer,
-                )
+            self.global_params,
+            self.cumulative_layer_thickness,
+            self.layer_num,
+            self.attributes,
+            self.ksat_layer,
+        )
         # Copying elements of current node to wf
         self.wetting_fronts[0].deepcopy(wf)
-        self.previous_state = wf
+        self.previous_fronts = wf
+
+    def insert_water(
+        self,
+        subtimestep,
+        precip,
+        wf_free_drainage_demand,
+        ponded_depth,
+        infiltration,
+    ):
+        wf_that_supplies_free_drainage_demand = wf_free_drainage_demand
+
+        f_p = torch.tensor(0.0, device=self.global_params.device)
+        runoff = torch.tensor(0.0, device=self.global_params.device)
+
+        # water ponded on the surface
+        h_p_ = ponded_depth - precip * subtimestep
+        h_p = torch.clamp(h_p_, min=0.0)
+
+        head_index = 0
+        (
+            current_front,
+            current_free_drainage,
+            next_free_drainage,
+        ) = self.get_drainage_neighbors(0)
+
+        number_of_wetting_fronts = self.calc_num_wetting_fronts()
+
+        layer_num_fp = current_free_drainage.layer_num
+
+        if number_of_wetting_fronts == self.num_layers:
+            # i.e., case of no capillary suction, dz/dt is also zero for all wetting fronts
+            geff = torch.tensor(0.0, device=self.global_params.device)
+            # i.e., case of no capillary suction, dz/dt is also zero for all wetting fronts
+        else:
+            # double theta = current_free_drainage->theta;
+            theta_1 = next_free_drainage.theta  # theta_below
+            theta_2 = current_front.theta_e
+            geff = calc_geff(
+                self.global_params,
+                self.attributes,
+                theta_1,
+                theta_2,
+                self.alpha_layer,
+                self.n_layer,
+                self.ksat_layer,
+            )
+        # if the free_drainage wetting front is the top most, then the potential infiltration capacity has the following simple form
+        if layer_num_fp == 0:
+            f_p = current_front.ksat_cm_per_h * (
+                1 + (geff + h_p) / current_free_drainage.depth
+            )
+        else:
+            # This condition has yet to be seen. Leaving this here for last
+            raise NotImplementedError
+        theta_e1 = current_front.theta
+        layer_nums_equal = layer_num_fp == self.num_layers
+        thetas_equal = current_free_drainage.theta == theta_e1
+        layers_equal_wetting_fronts = self.num_layers == number_of_wetting_fronts
+        if layers_equal_wetting_fronts and thetas_equal and layer_nums_equal:
+            f_p = torch.tensor(0.0, device=self.global_params.device)
+        free_drainage_demand = torch.tensor(0.0, device=self.global_params.device)
+        ponded_depth_temp_ = ponded_depth - f_p * subtimestep - free_drainage_demand * 0
+        ponded_depth_temp = torch.clamp(ponded_depth_temp_, min=0.0)
+
+        fp_cm = (
+            f_p * subtimestep + free_drainage_demand / subtimestep
+        )  # infiltration in cm
+
+        if self.global_params.ponded_depth_max_cm > 0.0:
+            if ponded_depth_temp < self.global_params.ponded_depth_max_cm:
+                runoff = torch.tensor(0.0, device=self.global_params.device)
+                infiltration = torch.min(ponded_depth, fp_cm)
+                ponded_depth = ponded_depth - infiltration
+                # PTL: does this code account for the case where volin_this_timestep can not all infiltrate?
+                return runoff, infiltration, ponded_depth
+            elif ponded_depth_temp > self.global_params.ponded_depth_max_cm:
+                runoff = ponded_depth_temp - self.global_params.ponded_depth_max_cm
+                ponded_depth = self.global_params.ponded_depth_max_cm
+                infiltration = fp_cm
+                return (
+                    runoff,
+                    infiltration,
+                    ponded_depth,
+                )
+        else:
+            # if it got to this point, no ponding is allowed, either infiltrate or runoff
+            # order is important here; assign zero to ponded depth once we compute volume in and runoff
+            infiltration = torch.min(ponded_depth, fp_cm)
+            if ponded_depth < fp_cm:
+                runoff = torch.tensor(0.0, device=self.global_params.device)
+            else:
+                runoff = ponded_depth - infiltration
+            ponded_depth_cm = 0.0
+
+        return runoff, infiltration, ponded_depth
+
+    def get_drainage_neighbors(self, i):
+        current_front = self.wetting_fronts[i]
+        current_free_drainage = self.wf_free_drainage_demand
+        if current_free_drainage.layer_num > self.layer_num:
+            return self.next_layer.get_drainage_neighbors(i)
+        elif current_free_drainage.layer_num < self.layer_num:
+            return self.previous_layer.get_drainage_neighbors(i)
+        else:
+            # The wetting front is in this layer
+            for i in range(len(self.wetting_fronts)):
+                front = self.wetting_fronts[i]
+                if front.is_equal(current_front):
+                    if i < len(self.wetting_fronts) - 1:
+                        return (
+                            current_front,
+                            current_free_drainage,
+                            self.wetting_fronts[i + 1],
+                        )
+                    else:
+                        return (
+                            current_front,
+                            current_free_drainage,
+                            self.next_layer.wetting_fronts[0],
+                        )
 
     def print(self, first=True):
         if first:
