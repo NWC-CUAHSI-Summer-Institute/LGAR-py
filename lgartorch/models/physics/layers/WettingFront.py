@@ -33,11 +33,11 @@ class WettingFront:
         self.depth = cum_layer_thickness
         self.layer_num = layer_num
         # self.attributes = attributes
-        self.theta = attributes[global_params.soil_property_indexes["theta_init"]]
+        self.theta = attributes[global_params.soil_index["theta_init"]]
         self.dzdt = torch.tensor(0.0, device=global_params.device)
-        self.theta_r = attributes[global_params.soil_property_indexes["theta_r"]]
-        self.theta_e = attributes[global_params.soil_property_indexes["theta_e"]]
-        self.m = attributes[global_params.soil_property_indexes["m"]]
+        self.theta_r = attributes[global_params.soil_index["theta_r"]]
+        self.theta_e = attributes[global_params.soil_index["theta_e"]]
+        self.m = attributes[global_params.soil_index["m"]]
         self.se = calc_se_from_theta(self.theta, self.theta_e, self.theta_r)
         self.psi_cm = global_params.initial_psi
         self.ksat_cm_per_h = calc_k_from_se(self.se, ksat, self.m)
@@ -54,7 +54,7 @@ class WettingFront:
         wf.layer_num = self.layer_num
         # wf.attributes = self.attributes
         wf.theta = self.theta.clone()
-        wf.theta = self.theta_r
+        wf.theta_r = self.theta_r
         wf.theta_e = self.theta_e
         wf.m = self.m
         wf.dzdt = self.dzdt.clone()

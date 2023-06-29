@@ -66,7 +66,7 @@ class GlobalParams:
         self.sft_coupled = False
         self.use_closed_form_G = False
 
-        self.soil_property_indexes = None
+        self.soil_index = None
 
         self.initialize_config_parameters(cfg)
         self.initialize_giuh_params(cfg)
@@ -125,7 +125,7 @@ class GlobalParams:
             cfg.data.wilting_point_psi, device=cfg.device
         )
         self.frozen_factor = torch.tensor(cfg.constants.frozen_factor, device=cfg.device)
-        self.soil_property_indexes = cfg.data.soil_property_indexes
+        self.soil_index = cfg.data.soil_index
 
     def initialize_giuh_params(self, cfg: DictConfig):
         """

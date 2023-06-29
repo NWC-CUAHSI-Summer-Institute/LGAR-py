@@ -71,7 +71,7 @@ def calc_bc_psib(alpha: Tensor, m: Tensor) -> Tensor:
     return bc_psib
 
 
-def calc_se_from_theta(theta_init: Tensor, theta_e: Tensor, theta_r: Tensor) -> Tensor:
+def calc_se_from_theta(theta: Tensor, theta_e: Tensor, theta_r: Tensor) -> Tensor:
     """
     function to calculate Se from theta
     :param theta_init: the calculated inital theta
@@ -79,7 +79,7 @@ def calc_se_from_theta(theta_init: Tensor, theta_e: Tensor, theta_r: Tensor) -> 
     :param theta_r: theta_r
     :return: Se this is the relative (scaled 0-1) water content, like Theta
     """
-    return torch.div((theta_init - theta_r), (theta_e - theta_r))
+    return (theta - theta_r)/(theta_e - theta_r)
 
 
 def calc_se_from_h(h, alpha, m, n):

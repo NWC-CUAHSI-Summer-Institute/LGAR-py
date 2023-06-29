@@ -22,7 +22,7 @@ soil_type_by_layer:
   - 13  # Sand
   - 14  # Sandy Loam
   - 15  # Clay
-soil_property_indexes: ???
+soil_index: ???
 max_soil_types: 25
 wilting_point_psi: 15495.0 #[cm]
 giuh_ordinates:

@@ -98,17 +98,22 @@ class Layer:
         state = {}
         state["wetting_fronts"] = []
         for i in range(len(self.wetting_fronts)):
-            state["wetting_fronts"].append(
-                WettingFront(
-                    self.global_params,
-                    self.cumulative_layer_thickness,
-                    self.layer_num,
-                    self.attributes,
-                    self.ksat_layer,
-                )
-            )
-            state["wetting_fronts"][i].deepcopy(WettingFront)
+            wf = WettingFront(
+                            self.global_params,
+                            self.cumulative_layer_thickness,
+                            self.layer_num,
+                            self.attributes,
+                            self.ksat_layer,
+                        )
+            state["wetting_fronts"].append(self.wetting_fronts[i].deepcopy(wf))
         return state
+
+    def copy_states(self):
+        self.previous_state = self.deepcopy()
+        if self.next_layer is not None:
+            self.next_layer.copy_states()
+        else:
+            return None
 
     def calc_wetting_front_free_drainage(
         self, psi, wf_that_supplies_free_drainage_demand
@@ -150,9 +155,9 @@ class Layer:
         :param delta_thickness:
         :return:
         """
-        m = self.attributes[self.global_params.soil_property_indexes["m"]]
-        theta_e = self.attributes[self.global_params.soil_property_indexes["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_property_indexes["theta_r"]]
+        m = self.attributes[self.global_params.soil_index["m"]]
+        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
+        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
         theta_old = calc_theta_from_h(
             psi_cm_old, self.alpha_layer, self.n_layer, m, theta_e, theta_r
         )
@@ -176,9 +181,9 @@ class Layer:
             )
 
     def recalculate_mass(self, psi_cm, new_mass, delta_thetas, delta_thickness):
-        theta_e = self.attributes[self.global_params["theta_e"]]
-        theta_r = self.attributes[self.global_params["theta_r"]]
-        m = self.attributes[self.global_params["m"]]
+        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
+        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
+        m = self.attributes[self.global_params.soil_index["m"]]
         theta_layer = calc_theta_from_h(
             psi_cm, self.alpha_layer, self.n_layer, m, theta_e, theta_r
         )
@@ -200,9 +205,9 @@ class Layer:
         delta_thetas,
         delta_thickness,
     ):
-        theta_e = self.attributes[self.global_params.soil_property_indexes["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_property_indexes["theta_r"]]
-        m = self.attributes[self.global_params.soil_property_indexes["m"]]
+        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
+        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
+        m = self.attributes[self.global_params.soil_index["m"]]
         delta_mass = torch.abs(new_mass - prior_mass)
 
         # flag that determines capillary head to be incremented or decremented
@@ -256,7 +261,7 @@ class Layer:
             # 1. enough accuracy, 2. the algorithm can't improve the error further,
             # 3. avoid infinite loop, 4. handles a corner case when prior mass is tiny (e.g., <1.E-5)
             # printf("A1 = %.20f, %.18f %.18f %.18f %.18f \n ",fabs(psi_cm_loc - psi_cm_loc_prev) , psi_cm_loc, psi_cm_loc_prev, factor, delta_mass);
-            if torch.abs(psi_cm_loc - psi_cm_loc_prev) < 1e-15 and factor < 1e-13:
+            if torch.abs(psi_cm - psi_cm_loc_prev) < 1e-15 and factor < 1e-13:
                 break
             if torch.abs(delta_mass - delta_mass_prev) < 1e-15:
                 count_no_mass_change += 1
@@ -264,7 +269,7 @@ class Layer:
                 count_no_mass_change = 0
             if count_no_mass_change == break_no_mass_change:
                 break
-            if psi_cm_loc <= 0 and psi_cm_loc_prev < 1e-50:
+            if psi_cm <= 0 and psi_cm_loc_prev < 1e-50:
                 break
             delta_mass_prev = delta_mass
         return theta
@@ -331,9 +336,9 @@ class Layer:
             delta_thetas,
             delta_thickness,
         )
-        theta_e = self.attributes[self.global_params.soil_property_indexes["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_property_indexes["theta_r"]]
-        m = self.attributes[self.global_params.soil_property_indexes["m"]]
+        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
+        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
+        m = self.attributes[self.global_params.soil_index["m"]]
         current_front.theta = torch.minimum(theta_new, theta_e)
         se = calc_se_from_theta(current_front.theta, theta_e, theta_r)
         current_front.psi_cm = calc_h_from_se(se, self.alpha_layer, m, self.n_layer)
@@ -361,9 +366,9 @@ class Layer:
         """
         current_front = neighboring_fronts["current_front"]
         next_front = neighboring_fronts["next_front"]
-        m = self.attributes[self.global_params.soil_property_indexes["m"]]
-        theta_e = self.attributes[self.global_params.soil_property_indexes["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_property_indexes["theta_r"]]
+        m = self.attributes[self.global_params.soil_index["m"]]
+        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
+        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
         current_front.theta = calc_theta_from_h(
             next_front.psi_cm, self.alpha_layer, self.n_layer, m, theta_e, theta_r
         )
@@ -495,9 +500,9 @@ class Layer:
         :return:
         """
         top_wetting_front = self.wetting_fronts[0]
-        theta_e = self.attributes[self.global_params.soil_property_indexes["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_property_indexes["theta_r"]]
-        m = self.attributes[self.global_params.soil_property_indexes["m"]]
+        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
+        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
+        m = self.attributes[self.global_params.soil_index["m"]]
         aet = calc_aet(
             self.global_params,
             subtimestep_h,
@@ -518,7 +523,7 @@ class Layer:
         :return:
         """
         top_wetting_front = self.wetting_fronts[0]
-        theta_e = self.attributes[self.global_params.soil_property_indexes["theta_e"]]
+        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
         return True if top_wetting_front.theta >= theta_e else False
 
     def mass_balance(self) -> Tensor:
@@ -632,7 +637,7 @@ class Layer:
         :return:
         """
         layer_fronts = self.get_len_layers()
-        m = self.attributes[self.global_params.soil_property_indexes["m"]]
+        m = self.attributes[self.global_params.soil_index["m"]]
         for i in range(layer_fronts):
             extended_neighbors = self.get_extended_neighbors(i)
             current_front = extended_neighbors["current_front"]
@@ -648,7 +653,7 @@ class Layer:
             # Supposed to not work if the last layer, but that's taken care of before the loop
             if depth_greater_than_layer and next_depth_equal_to_thickness:
                 theta_e = self.attributes[
-                    self.global_params.soil_property_indexes["theta_e"]
+                    self.global_params.soil_index["theta_e"]
                 ]
                 current_theta = torch.min(theta_e, current_front.theta)
                 overshot_depth = current_front.depth - next_front.depth
@@ -690,13 +695,13 @@ class Layer:
         # TODO there is a case that if there is too much rainfall we can traverse two layers in one go.
         #  Highly unlikely, but could be worth checking into
         next_theta_r = self.next_layer.attributes[
-            self.global_params.soil_property_indexes["theta_r"]
+            self.global_params.soil_index["theta_r"]
         ]
         next_theta_e = self.next_layer.attributes[
-            self.global_params.soil_property_indexes["theta_e"]
+            self.global_params.soil_index["theta_e"]
         ]
         next_m = self.next_layer.attributes[
-            self.global_params.soil_property_indexes["theta_m"]
+            self.global_params.soil_index["theta_m"]
         ]
         next_alpha = self.next_layer.alpha_layer
         next_n = self.next_layer.n_layer
@@ -841,7 +846,6 @@ class Layer:
         Makes sure all pressure values are updated
         :return:
         """
-        # TODO validate this function works
         layer_fronts = self.get_len_layers()
         for i in range(layer_fronts):
             current_front = self.wetting_fronts[i]

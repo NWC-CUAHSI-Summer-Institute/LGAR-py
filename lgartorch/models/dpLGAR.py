@@ -56,7 +56,7 @@ class dpLGAR(nn.Module):
         texture_values = self.soils_df["Texture"].values
         self.texture_map = {idx: texture for idx, texture in enumerate(texture_values)}
         self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
-        self.cfg.data.soil_property_indexes = {
+        self.cfg.data.soil_index = {
             "theta_r": 0,
             "theta_e": 1,
             "theta_wp": 2,

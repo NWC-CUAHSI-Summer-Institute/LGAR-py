@@ -35,12 +35,12 @@ def calc_geff(global_params, attributes, theta_1, theta_2, alpha, n, ksat) -> Te
     :param ksat_layer:
     :return:
     """
-    theta_r = attributes[global_params.soil_property_indexes["theta_r"]]
-    theta_e = attributes[global_params.soil_property_indexes["theta_e"]]
-    m = attributes[global_params.soil_property_indexes["m"]]
-    bc_lambda = attributes[global_params.soil_property_indexes["bc_lambda"]]
-    bc_psib_cm = attributes[global_params.soil_property_indexes["bc_psib_cm"]]
-    h_min_cm = attributes[global_params.soil_property_indexes["h_min_cm"]]
+    theta_r = attributes[global_params.soil_index["theta_r"]]
+    theta_e = attributes[global_params.soil_index["theta_e"]]
+    m = attributes[global_params.soil_index["m"]]
+    bc_lambda = attributes[global_params.soil_index["bc_lambda"]]
+    bc_psib_cm = attributes[global_params.soil_index["bc_psib_cm"]]
+    h_min_cm = attributes[global_params.soil_index["h_min_cm"]]
     if global_params.use_closed_form_G is False:
         # note: units of h in cm.  units of K in cm/s
         # double h2;         // the head at the right-hand side of the trapezoid being integrated [m]
