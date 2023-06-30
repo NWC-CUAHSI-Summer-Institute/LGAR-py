@@ -133,6 +133,11 @@ class Layer:
             if current_front.psi_cm <= psi:
                 psi = current_front.psi_cm
                 wf_that_supplies_free_drainage_demand = current_front
+            else:
+                # Checking for machine precision errors
+                if torch.isclose(current_front.psi_cm, psi, atol=1e-8):
+                    psi = current_front.psi_cm
+                    wf_that_supplies_free_drainage_demand = current_front
         if self.next_layer is not None:
             return self.next_layer.calc_wetting_front_free_drainage(
                 psi, wf_that_supplies_free_drainage_demand
@@ -155,7 +160,6 @@ class Layer:
         :param delta_thickness:
         :return:
         """
-        # TODO REFERNCE THIS WITH self.find_front_layer()
         m = self.attributes[self.global_params.soil_index["m"]]
         theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
@@ -174,8 +178,8 @@ class Layer:
         new_mass = new_mass + layer_thickness * (theta - theta_below)
         delta_thetas[self.layer_num] = theta_below
         delta_thickness[self.layer_num] = layer_thickness
-        if self.next_layer is not None:
-            return self.previous_layer.populate_delta_thickness(
+        if self.layer_num < (self.num_layers - 1):
+            return self.next_layer.populate_delta_thickness(
                 psi_cm_old, psi_cm, prior_mass, new_mass, delta_thetas, delta_thickness
             )
         else:
@@ -320,7 +324,7 @@ class Layer:
             prior_mass,
             delta_thetas,
             delta_thickness,
-        ) = self.previous_layer.populate_delta_thickness(
+        ) = self.find_front_layer().populate_delta_thickness(
             psi_cm_old, psi_cm, prior_mass, new_mass, delta_thetas, delta_thickness
         )
         delta_thickness[self.layer_num] = current_front.depth - base_thickness

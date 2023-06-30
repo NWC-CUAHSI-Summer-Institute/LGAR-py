@@ -149,6 +149,7 @@ class dpLGAR(nn.Module):
             self.wf_free_drainage_demand = self.calc_wetting_front_free_drainage()
             is_top_layer_saturated = self.top_layer.is_saturated()
             if pet > 0.0:
+                # TODO MAKE SURE THE PRIOR MASS IS CORRECT
                 AET_sub = self.top_layer.calc_aet(pet, subtimestep_h)
             starting_volume_sub = self.calc_mass_balance()
             if create_surficial_front:
@@ -305,11 +306,8 @@ class dpLGAR(nn.Module):
         """
         # Starting at 0 since python is 0-based
         wf_that_supplies_free_drainage_demand = self.top_layer.wetting_fronts[0]
-        psi_start = (
-            self.cfg.data.initial_psi
-        )  # setting a super large theta value as the starting point. There will be a layer with less theta than this
         return self.top_layer.calc_wetting_front_free_drainage(
-            psi_start,
+            wf_that_supplies_free_drainage_demand.psi_cm,
             wf_that_supplies_free_drainage_demand,
         )
 
