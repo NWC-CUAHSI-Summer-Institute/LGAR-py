@@ -40,7 +40,7 @@ class WettingFront:
         self.m = attributes[global_params.soil_index["m"]]
         self.se = calc_se_from_theta(self.theta, self.theta_e, self.theta_r)
         self.psi_cm = global_params.initial_psi
-        self.ksat_cm_per_h = calc_k_from_se(self.se, ksat, self.m)
+        self.k_cm_per_h = calc_k_from_se(self.se, ksat, self.m)
         self.to_bottom = bottom_flag
 
     def deepcopy(self, wf):
@@ -60,7 +60,7 @@ class WettingFront:
         wf.dzdt = self.dzdt.clone()
         wf.se = self.se.clone()
         wf.psi_cm = self.psi_cm.clone()
-        wf.ksat_cm_per_h = self.ksat_cm_per_h.clone()
+        wf.k_cm_per_h = self.k_cm_per_h.clone()
         wf.to_bottom = self.to_bottom
         return wf
 
@@ -73,6 +73,11 @@ class WettingFront:
                 if dzdt:
                     return True
         return False
+
+    def print(self):
+        log.info(
+            f"[{self.depth.item():.4f}, {self.theta.item():.10f},      {self.layer_num},     {self.dzdt.item():.6f}, {self.k_cm_per_h.item():.6f}, {self.psi_cm:.4f}]"
+        )
 
 
 

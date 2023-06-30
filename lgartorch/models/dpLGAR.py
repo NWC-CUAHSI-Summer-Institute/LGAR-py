@@ -135,11 +135,13 @@ class dpLGAR(nn.Module):
         if self.global_params.sft_coupled:
             frozen_factor_hydraulic_conductivity()
         subtimestep_h = self.cfg.models.subcycle_length_h
-        for _ in range(self.cfg.models.num_subcycles):
+        for _ in range(int(self.cfg.models.num_subcycles)):
             self.top_layer.copy_states()
             precip_sub = precip * subtimestep_h
             ponded_depth_sub = precip_sub + self.ponded_water
+            ponded_water_sub = torch.tensor(0.0, device=self.cfg.device)
             percolation_sub = torch.tensor(0.0, device=self.cfg.device)
+            runoff_sub = torch.tensor(0.0, device=self.cfg.device)
             infiltration_sub = torch.tensor(0.0, device=self.cfg.device)
             AET_sub = torch.tensor(0.0, device=self.cfg.device)
             # Determining wetting cases
@@ -153,23 +155,21 @@ class dpLGAR(nn.Module):
                 AET_sub = self.top_layer.calc_aet(pet, subtimestep_h)
             starting_volume_sub = self.calc_mass_balance()
             if create_surficial_front:
-                #-------------------------------------------------------------------------------------------------------
+                # -------------------------------------------------------------------------------------------------------
                 # /* create a new wetting front if the following is true. Meaning there is no
                 #    wetting front in the top layer to accept the water, must create one. */
                 if is_top_layer_saturated is False:
                     temp_pd = torch.tensor(0.0, device=self.cfg.device)
                     # // move the wetting fronts without adding any water; this is done to close the mass balance
-                    temp_pd = self.bottom_layer.move_wetting_fronts(
+                    temp_pd, AET_sub = self.move_wetting_front(
                         temp_pd,
                         AET_sub,
                         ending_volume_sub,
-                        self.num_wetting_fronts,
                         subtimestep_h,
+                        bottom_boundary_flux,
                     )
                     # depth of the surficial front to be created
-                    dry_depth = self.top_layer.calc_dry_depth(
-                        subtimestep_h
-                    )
+                    dry_depth = self.top_layer.calc_dry_depth(subtimestep_h)
                     (
                         ponded_depth_sub,
                         infiltration_sub,
@@ -179,7 +179,7 @@ class dpLGAR(nn.Module):
                     self.top_layer.copy_states()
                     self.infiltration = self.infiltration + infiltration_sub
             else:
-                #-------------------------------------------------------------------------------------------------------
+                # -------------------------------------------------------------------------------------------------------
                 # /*----------------------------------------------------------------------*/
                 # /* infiltrate water based on the infiltration capacity given no new wetting front
                 #    is created and that there is water on the surface (or raining). */
@@ -193,7 +193,6 @@ class dpLGAR(nn.Module):
                     ) = self.top_layer.insert_water(
                         subtimestep_h,
                         precip_sub,
-                        self.wf_free_drainage_demand,
                         ponded_depth_sub,
                         infiltration_sub,
                     )
@@ -220,30 +219,18 @@ class dpLGAR(nn.Module):
                         ponded_depth_sub = self.global_params.ponded_depth_max_cm
                         ponded_water_sub = ponded_depth_sub
                 runoff_timestep = runoff_timestep + runoff_sub
-                #-------------------------------------------------------------------------------------------------------
+                # -------------------------------------------------------------------------------------------------------
                 # /* move wetting fronts if no new wetting front is created. Otherwise, movement
                 #    of wetting fronts has already happened at the time of creating surficial front,
                 #    so no need to move them here. */
                 infiltration_temp = infiltration_sub.clone()
-                infiltration_sub = self.bottom_layer.move_wetting_fronts(
+                infiltration_sub, AET_sub = self.move_wetting_front(
                     infiltration_sub,
                     AET_sub,
                     ending_volume_sub,
-                    self.num_wetting_fronts,
                     subtimestep_h,
+                    bottom_boundary_flux,
                 )
-                self.top_layer.merge_wetting_fronts()
-                self.top_layer.wetting_fronts_cross_layer_boundary()
-                self.top_layer.merge_wetting_fronts()
-                bottom_boundary_flux = (
-                    bottom_boundary_flux
-                    + self.top_layer.wetting_front_cross_domain_boundary()
-                )
-                infiltration_sub = bottom_boundary_flux
-                mass_change = self.top_layer.fix_dry_over_wet_fronts()
-                if torch.abs(mass_change) > 1e-7:
-                    AET_sub = AET_sub - mass_change
-                self.top_layer.update_psi()
                 percolation_sub = infiltration_sub.clone()
                 self.percolation = (
                     self.percolation + percolation_sub
@@ -252,7 +239,7 @@ class dpLGAR(nn.Module):
             # Prepping the loop for the next subtimestep
             self.top_layer.calc_dzdt(ponded_depth_sub)
             ending_volume_sub = self.calc_mass_balance()
-            #-----------------------------------------------------------------------------------------------------------
+            # -----------------------------------------------------------------------------------------------------------
             # compute giuh runoff for the subtimestep
             giuh_runoff_sub = calc_giuh(self.global_params, runoff_sub)
             previous_precip = precip_sub
@@ -308,6 +295,34 @@ class dpLGAR(nn.Module):
             wf_that_supplies_free_drainage_demand.psi_cm,
             wf_that_supplies_free_drainage_demand,
         )
+
+    def move_wetting_front(
+        self,
+        infiltration,
+        AET_sub,
+        ending_volume_sub,
+        subtimestep_h,
+        bottom_boundary_flux,
+    ):
+        infiltration = self.bottom_layer.move_wetting_fronts(
+            infiltration,
+            AET_sub,
+            ending_volume_sub,
+            self.num_wetting_fronts,
+            subtimestep_h,
+        )
+        self.top_layer.merge_wetting_fronts()
+        self.top_layer.wetting_fronts_cross_layer_boundary()
+        self.top_layer.merge_wetting_fronts()
+        bottom_boundary_flux = (
+            bottom_boundary_flux + self.top_layer.wetting_front_cross_domain_boundary()
+        )
+        infiltration = bottom_boundary_flux
+        mass_change = self.top_layer.fix_dry_over_wet_fronts()
+        if torch.abs(mass_change) > 1e-7:
+            AET_sub = AET_sub - mass_change
+        self.top_layer.update_psi()
+        return infiltration, AET_sub
 
     def update_states(
         self,

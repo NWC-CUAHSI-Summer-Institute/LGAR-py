@@ -626,7 +626,7 @@ class Layer:
             se, self.alpha_layer, current_front.m, self.n_layer
         )
         current_front.k_cm_per_h = calc_k_from_se(
-            se, current_front.ksat_cm_per_h, current_front.m
+            se, self.ksat_layer, current_front.m
         )
         # equivalent to listDeleteFront(next['front_num'])
         self.delete_front(next_front)
@@ -676,7 +676,7 @@ class Layer:
                 current_front.psi_cm = calc_h_from_se(
                     se, self.alpha_layer, m, self.n_layer
                 )
-                current_front.ksat_cm_per_h = calc_k_from_se(se, self.ksat_layer, m)
+                current_front.k_cm_per_h = calc_k_from_se(se, self.ksat_layer, m)
                 (
                     extended_neighbors["current_front"],
                     extended_neighbors["next_front"],
@@ -829,18 +829,6 @@ class Layer:
         else:
             return mass_change
 
-    # def update_fronts(self, popped_front, i):
-    #     neighboring_fronts = self.get_neighboring_fronts(i)
-    #     for i in range(len(self.wetting_fronts)):
-    #
-    #         current_local_front = neighboring_fronts["current_front"]
-    #         if current_local_front.layer_num < popped_front.layer_num:
-    #             se_l = calc_se_from_theta(current_local_front.theta, current_local_front.theta_e, current_local_front.theta_r)
-    #             current_local_front.psi_cm = calc_h_from_se(se_l, self.alpha_layer, current_local_front.m, self.n_layer)
-    #             current_local_front.theta = calc_theta_from_h(popped_front.psi_cm, self.alpha_layer, current_local_front.m, self.n_layer, current_local_front.theta_e, current_local_front.theta_r)
-    #             if neighboring_fronts["next_front"] is not None:
-    #                 self.update_fronts(self, popped_front):
-
     def get_len_layers(self):
         """
         Used to get the number of layers in a wetting front other than the deepest layer
@@ -901,7 +889,7 @@ class Layer:
                             current_front.depth
                             - self.previous_layer.cumulative_layer_thickness
                         )
-                        / current_front.ksat_cm_per_h
+                        / current_front.k_cm_per_h
                     )
                 else:
                     if theta_1 > theta_2:
@@ -926,7 +914,7 @@ class Layer:
                             / delta_theta
                             * (
                                 self.ksat_layer * (geff + h_p) / current_front.depth
-                                + current_front.ksat_cm_per_h
+                                + current_front.k_cm_per_h
                             )
                         )
                     else:
@@ -1000,7 +988,7 @@ class Layer:
         delta_theta = (
             current_front.theta_e - current_front.theta
         )  # water content of the first (most surficial) existing wetting front
-        tau = subtimestep * current_front.ksat_cm_per_h / delta_theta
+        tau = subtimestep * self.ksat_layer / delta_theta
         geff = calc_geff(
             self.global_params,
             self.attributes,
@@ -1090,7 +1078,7 @@ class Layer:
             se, self.alpha_layer, new_front.m, self.n_layer
         )
         new_front.k_cm_per_h = (
-            calc_k_from_se(se, new_front.ksat_cm_per_h, new_front.m)
+            calc_k_from_se(se, self.ksat_layer, new_front.m)
             * self.global_params.frozen_factor
         )  # // AJ - K_temp in python version for 1st layer
         new_front.dzdt = torch.tensor(0.0, device=self.global_params.device)
@@ -1114,17 +1102,16 @@ class Layer:
         self,
         subtimestep,
         precip,
-        wf_free_drainage_demand,
         ponded_depth,
         infiltration,
     ):
-        wf_that_supplies_free_drainage_demand = wf_free_drainage_demand
+        wf_that_supplies_free_drainage_demand = self.wf_free_drainage_demand
 
         f_p = torch.tensor(0.0, device=self.global_params.device)
         runoff = torch.tensor(0.0, device=self.global_params.device)
 
         # water ponded on the surface
-        h_p_ = ponded_depth - precip * subtimestep
+        h_p_ = (ponded_depth - precip) * subtimestep
         h_p = torch.clamp(h_p_, min=0.0)
 
         head_index = 0
@@ -1157,12 +1144,13 @@ class Layer:
             )
         # if the free_drainage wetting front is the top most, then the potential infiltration capacity has the following simple form
         if layer_num_fp == 0:
-            f_p = current_front.ksat_cm_per_h * (
+            f_p = self.ksat_layer * (
                 1 + (geff + h_p) / current_free_drainage.depth
             )
         else:
-            # This condition has yet to be seen. Leaving this here for last
-            raise NotImplementedError
+            bottom_sum = (current_free_drainage.depth - self.previous_layer.cumulative_layer_thickness)/self.ksat_layer
+            bottom_sum = self.find_front_layer().calc_bottom_sum(bottom_sum)
+
         theta_e1 = current_front.theta
         layer_nums_equal = layer_num_fp == self.num_layers
         thetas_equal = current_free_drainage.theta == theta_e1
@@ -1205,6 +1193,10 @@ class Layer:
 
         return runoff, infiltration, ponded_depth
 
+    def calc_bottom_sum(self, bottom_sum):
+        raise NotImplementedError
+
+
     def get_drainage_neighbors(self, i):
         current_front = self.wetting_fronts[i]
         current_free_drainage = self.wf_free_drainage_demand
@@ -1242,11 +1234,9 @@ class Layer:
 
     def print(self, first=True):
         if first:
-            log.info(f"[  Depth   Theta          Layer_num   dzdt       ksat      psi   ]")
+            log.info(f"[  Depth   Theta          Layer_num   dzdt       k_cm_hr      psi   ]")
         for wf in self.wetting_fronts:
-            log.info(
-                f"[{wf.depth.item():.4f}, {wf.theta.item():.10f},      {wf.layer_num},     {wf.dzdt.item():.6f}, {wf.ksat_cm_per_h.item():.6f}, {wf.psi_cm:.4f}]"
-            )
+            wf.print()
         if self.next_layer is not None:
             return self.next_layer.print(first=False)
         else:

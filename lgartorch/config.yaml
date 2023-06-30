@@ -2,8 +2,8 @@ defaults:
   - _self_
   - data: config/Phillipsburg
   - models: config/base
-cwd: /mnt/sdb1/tkb5476/dpLGAR/
-#cwd: /Users/taddbindas/projects/dpLGAR
+#cwd: /mnt/sdb1/tkb5476/dpLGAR/
+cwd: /Users/taddbindas/projects/dpLGAR
 save_name: debugger
 output_dir: ${cwd}/output
 device: cpu
