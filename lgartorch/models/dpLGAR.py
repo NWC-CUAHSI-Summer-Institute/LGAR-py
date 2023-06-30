@@ -238,6 +238,7 @@ class dpLGAR(nn.Module):
                 infiltration_sub = infiltration_temp
             # Prepping the loop for the next subtimestep
             self.top_layer.calc_dzdt(ponded_depth_sub)
+            # TODO FIX PSI/MASS BALANCE FROM INSERT WATER TO HERE!
             ending_volume_sub = self.calc_mass_balance()
             # -----------------------------------------------------------------------------------------------------------
             # compute giuh runoff for the subtimestep
