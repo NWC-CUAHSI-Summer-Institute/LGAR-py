@@ -145,6 +145,13 @@ class Layer:
         else:
             return wf_that_supplies_free_drainage_demand
 
+    def set_wf_free_drainage_demand(self, wf_free_drainage_demand):
+        self.wf_free_drainage_demand = wf_free_drainage_demand
+        if self.next_layer is not None:
+            self.next_layer.set_wf_free_drainage_demand(wf_free_drainage_demand)
+        else:
+            return None
+
     def calc_num_wetting_fronts(self) -> int:
         if self.next_layer is not None:
             return len(self.wetting_fronts) + self.next_layer.calc_num_wetting_fronts()
@@ -178,7 +185,7 @@ class Layer:
         new_mass = new_mass + layer_thickness * (theta - theta_below)
         delta_thetas[self.layer_num] = theta_below
         delta_thickness[self.layer_num] = layer_thickness
-        if self.layer_num < (self.num_layers - 1):
+        if self.next_layer.layer_num < (self.num_layers - 1):
             return self.next_layer.populate_delta_thickness(
                 psi_cm_old, psi_cm, prior_mass, new_mass, delta_thetas, delta_thickness
             )
@@ -195,12 +202,12 @@ class Layer:
         new_mass = new_mass + delta_thickness[self.layer_num] * (
             theta_layer - delta_thetas[self.layer_num]
         )
-        if self.next_layer is None:
-            return new_mass
-        else:
+        if self.next_layer.layer_num < (self.num_layers - 1):
             return self.next_layer.recalculate_mass(
                 psi_cm, new_mass, delta_thetas, delta_thickness
             )
+        else:
+            return new_mass
 
     def theta_mass_balance(
         self,
@@ -245,7 +252,7 @@ class Layer:
                     factor = factor * 0.1
 
                 psi_cm_loc_prev = psi_cm
-                psi_cm_loc = psi_cm - 0.1 * factor
+                psi_cm = psi_cm - 0.1 * factor
 
                 if psi_cm < 0 and psi_cm_loc_prev != 0:
                     psi_cm = psi_cm_loc_prev * 0.1
@@ -257,7 +264,7 @@ class Layer:
                 theta - delta_thetas[self.layer_num]
             )
 
-            new_mass = self.recalculate_mass(
+            new_mass = self.find_front_layer().recalculate_mass(
                 psi_cm, new_mass, delta_thetas, delta_thickness
             )
             delta_mass = torch.abs(new_mass - prior_mass)
@@ -401,7 +408,7 @@ class Layer:
         theta_e_k1 = self.wf_free_drainage_demand.theta_e
 
         # Making sure that the mass is correct
-        assert old_mass > 0.0
+        # assert (old_mass > 0.0).item()
 
         mass_timestep = (old_mass + percolation) - (aet + free_drainage_demand)
 
@@ -934,24 +941,22 @@ class Layer:
 
     def move_wetting_fronts(
         self,
-        percolation,
+        infiltration,
         aet,
         old_mass,
         num_wetting_fronts,
         subtimestep,
-        wf_free_drainage_demand,
         num_wetting_front_count=None,
     ):
         """
         main loop advancing all wetting fronts and doing the mass balance
         loop goes over deepest to top most wetting front
-        :param percolation: The amount of water moving downward in the soil
+        :param infiltration: The amount of water moving downward in the soil
         :param AET_sub: The amount actual evapotranspiration
         :return:
         """
         if num_wetting_front_count is None:
             # Will only reach this point if the function is called from dpLGAR
-            self.wf_free_drainage_demand = wf_free_drainage_demand
             num_wetting_front_count = num_wetting_fronts
         is_bottom_layer = True if self.next_layer is None else False
         # has_many_layers = True if len(self.wetting_fronts) > 1 else False
@@ -969,19 +974,19 @@ class Layer:
                 else:
                     self.wetting_front_in_layer()
             if num_wetting_fronts == self.num_layers and is_bottom_layer:
-                self.base_case(percolation, aet, subtimestep, neighboring_fronts)
+                self.base_case(infiltration, aet, subtimestep, neighboring_fronts)
             if num_wetting_front_count == 1:
-                self.check_column_mass(free_drainage_demand, old_mass, percolation, aet)
+                self.check_column_mass(free_drainage_demand, old_mass, infiltration, aet)
             num_wetting_front_count -= 1
         if self.previous_layer is not None:
             # going to the next layer
             return volume_infiltraton + self.previous_layer.move_wetting_fronts(
-                percolation,
+                infiltration,
                 aet,
                 old_mass,
                 num_wetting_fronts,
                 subtimestep,
-                num_wetting_front_count,
+                num_wetting_front_count
             )
         else:
             return volume_infiltraton

@@ -135,7 +135,7 @@ class dpLGAR(nn.Module):
         if self.global_params.sft_coupled:
             frozen_factor_hydraulic_conductivity()
         subtimestep_h = self.cfg.models.subcycle_length_h
-        for j in range(self.cfg.models.num_subcycles):
+        for _ in range(self.cfg.models.num_subcycles):
             self.top_layer.copy_states()
             precip_sub = precip * subtimestep_h
             ponded_depth_sub = precip_sub + self.ponded_water
@@ -147,6 +147,7 @@ class dpLGAR(nn.Module):
                 previous_precip, precip_sub
             )
             self.wf_free_drainage_demand = self.calc_wetting_front_free_drainage()
+            self.top_layer.set_wf_free_drainage_demand(self.wf_free_drainage_demand)
             is_top_layer_saturated = self.top_layer.is_saturated()
             if pet > 0.0:
                 # TODO MAKE SURE THE PRIOR MASS IS CORRECT
@@ -165,7 +166,6 @@ class dpLGAR(nn.Module):
                         ending_volume_sub,
                         self.num_wetting_fronts,
                         subtimestep_h,
-                        self.wf_free_drainage_demand,
                     )
                     # depth of the surficial front to be created
                     dry_depth = self.top_layer.calc_dry_depth(
@@ -232,7 +232,6 @@ class dpLGAR(nn.Module):
                     ending_volume_sub,
                     self.num_wetting_fronts,
                     subtimestep_h,
-                    self.wf_free_drainage_demand,
                 )
                 self.top_layer.merge_wetting_fronts()
                 self.top_layer.wetting_fronts_cross_layer_boundary()
