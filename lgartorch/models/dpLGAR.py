@@ -150,7 +150,6 @@ class dpLGAR(nn.Module):
             self.top_layer.set_wf_free_drainage_demand(self.wf_free_drainage_demand)
             is_top_layer_saturated = self.top_layer.is_saturated()
             if pet > 0.0:
-                # TODO MAKE SURE THE PRIOR MASS IS CORRECT
                 AET_sub = self.top_layer.calc_aet(pet, subtimestep_h)
             starting_volume_sub = self.calc_mass_balance()
             if create_surficial_front:

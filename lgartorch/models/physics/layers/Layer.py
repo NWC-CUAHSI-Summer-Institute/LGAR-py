@@ -967,8 +967,7 @@ class Layer:
             neighboring_fronts = self.get_neighboring_fronts(i)
             if num_wetting_front_count < num_wetting_fronts:
                 if (
-                    neighboring_fronts["current_front"].depth
-                    == self.cumulative_layer_thickness
+                    neighboring_fronts["current_front"].is_equal(self.wetting_fronts[-1])
                 ):
                     self.deepest_layer_front(neighboring_fronts)
                 else:
@@ -1243,10 +1242,10 @@ class Layer:
 
     def print(self, first=True):
         if first:
-            log.info(f"[  Depth   Theta    Layer_num   dzdt       ksat      psi   ]")
+            log.info(f"[  Depth   Theta          Layer_num   dzdt       ksat      psi   ]")
         for wf in self.wetting_fronts:
             log.info(
-                f"[{wf.depth.item():.4f}, {wf.theta.item():.4f},      {wf.layer_num},     {wf.dzdt.item():.6f}, {wf.ksat_cm_per_h.item():.6f}, {wf.psi_cm:.4f}]"
+                f"[{wf.depth.item():.4f}, {wf.theta.item():.10f},      {wf.layer_num},     {wf.dzdt.item():.6f}, {wf.ksat_cm_per_h.item():.6f}, {wf.psi_cm:.4f}]"
             )
         if self.next_layer is not None:
             return self.next_layer.print(first=False)
