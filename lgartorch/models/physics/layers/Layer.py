@@ -395,7 +395,8 @@ class Layer:
         /*************************************************************************************/
         :return:
         """
-        pass
+        if self.layer_num == 1:
+
 
     def check_column_mass(self, free_drainage_demand, old_mass, percolation, aet):
         """

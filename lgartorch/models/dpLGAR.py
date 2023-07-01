@@ -201,7 +201,7 @@ class dpLGAR(nn.Module):
                     self.runoff = self.runoff + runoff_sub
                     percolation_sub = infiltration_sub  # this gets updated later, probably not needed here
 
-                    ponded_depth_sub = ponded_depth_sub
+                    ponded_water_sub = ponded_depth_sub
 
                     if runoff_sub < 0:
                         log.error("There is a mass balance problem")
@@ -211,6 +211,7 @@ class dpLGAR(nn.Module):
                         ponded_water_sub = ponded_depth_sub
                         runoff_sub = torch.tensor(0.0, device=self.cfg.device)
                         ponded_depth_sub = torch.tensor(0.0, device=self.cfg.device)
+                        runoff_timestep = runoff_timestep + runoff_sub
                     else:
                         # There is some runoff here
                         runoff_sub = (
@@ -218,7 +219,7 @@ class dpLGAR(nn.Module):
                         )
                         ponded_depth_sub = self.global_params.ponded_depth_max_cm
                         ponded_water_sub = ponded_depth_sub
-                runoff_timestep = runoff_timestep + runoff_sub
+                        runoff_timestep = runoff_timestep + runoff_sub
                 # -------------------------------------------------------------------------------------------------------
                 # /* move wetting fronts if no new wetting front is created. Otherwise, movement
                 #    of wetting fronts has already happened at the time of creating surficial front,
@@ -238,7 +239,6 @@ class dpLGAR(nn.Module):
                 infiltration_sub = infiltration_temp
             # Prepping the loop for the next subtimestep
             self.top_layer.calc_dzdt(ponded_depth_sub)
-            # TODO FIX PSI/MASS BALANCE FROM INSERT WATER TO HERE!
             ending_volume_sub = self.calc_mass_balance()
             # -----------------------------------------------------------------------------------------------------------
             # compute giuh runoff for the subtimestep
@@ -305,6 +305,7 @@ class dpLGAR(nn.Module):
         subtimestep_h,
         bottom_boundary_flux,
     ):
+        self.num_wetting_fronts = self.calc_num_wetting_fronts()
         infiltration = self.bottom_layer.move_wetting_fronts(
             infiltration,
             AET_sub,
