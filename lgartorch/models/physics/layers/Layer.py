@@ -386,7 +386,7 @@ class Layer:
         )
         current_front.psi_cm = next_front.psi_cm
 
-    def wetting_front_in_layer(self):
+    def wetting_front_in_layer(self, infiltration, aet, neighboring_fronts, subtimestep, index):
         """
         // case to check if the 'current' wetting front is within the layer and not at the layer's interface
         // layer_num == layer_num_below means there is another wetting front below the current wetting front
@@ -395,8 +395,174 @@ class Layer:
         /*************************************************************************************/
         :return:
         """
-        if self.layer_num == 1:
+        current_front = neighboring_fronts["current_front"]
+        next_front = neighboring_fronts["next_front"]
+        previous_next_front = neighboring_fronts["previous_next_front"]
+        previous_current_front = neighboring_fronts["previous_current_front"]
+        # if wetting front is the most surficial wetting front
+        if self.layer_num == 0:
+            free_drainage_demand = 0
+            # prior mass = mass contained in the current old wetting front
+            prior_mass = previous_current_front.depth * (
+                    previous_current_front.theta - previous_next_front.theta
+            )
+            # Checking if this is the top wetting_front
+            if self.wf_free_drainage_demand.layer_num == 0:
+                prior_mass = (
+                        prior_mass
+                        + infiltration
+                        - (free_drainage_demand + aet)
+                )
 
+            current_front.depth = current_front.depth + (current_front.dzdt * subtimestep)
+
+            # / * condition to bound the wetting front depth, if depth of a wf, at this timestep,
+            # gets greater than the domain depth, it will be merge anyway as it is passing
+            # the layer depth * /
+            column_depth = self.global_params.cum_layer_thickness[-1]
+            current_front.depth_cm = torch.min(current_front.depth_cm, column_depth)
+            zero_dzdt = torch.isclose(current_front.dzdt, torch.tensor(0.0), 1e-8)
+            if zero_dzdt and current_front.to_bottom is False:  # a new front was just created, so don't update it.
+                current_front.theta = current_front.theta
+                # TODO MAKE THIS JUST A PASS. THIS statement EQUALS NOTHING
+            else:
+                potential_theta = prior_mass / (current_front.depth + next_front.theta)
+                current_front.theta = torch.min(current_front.theta_e, potential_theta)
+        else:
+              # this note is copied from Python version:
+              # "However, calculation of theta via mass balance is a bit trickier. This is because each wetting front
+              # in deeper layers can be thought of as extending all the way to the surface, in terms of psi values.
+              # For example, a wetting front in layer 2 with a theta value of 0.4 will in reality extend to layer
+              # 1 with a theta value that is different (usually smaller) due to different soil hydraulic properties.
+              # But, the theta value of this extended wetting front is not recorded in current or previous states.
+              #     So, simply from states, the mass balance of a wetting front that, in terms of psi, extends between
+              # multiple layers cannot be calculated. Therefore, the theta values that the current wetting front *would*
+              # have in above layers is calculated from the psi value of the current wetting front, with the assumption
+              # that the hydraulic head of this wetting front is the same all the way up to the surface.
+              #
+              # - LGAR paper (currently under review) has a better description, using diagrams, of the mass balance of wetting fronts
+
+            next_layer_thickness = self.next_layer.cumulative_layer_thickness
+            current_front.depth = current_front.depth + (current_front.dzdt * subtimestep)
+
+            psi_cm_old = previous_current_front.psi_cm
+            psi_cm_below_old = previous_next_front.psi_cm
+
+            psi_cm = current_front.psi_cm
+            psi_cm_below = next_front.psi_cm
+
+            # mass = delta(depth) * delta(theta)
+            # Not subtracting the cum_layer thickness since we checked that this is the top layer
+            # top layer cum_total_depth is always 0
+            # = difference in current and next wetting front thetas times depth of the current wetting front
+            prior_mass = (previous_current_front.depth - next_layer_thickness) * (previous_current_front.theta - previous_next_front.theta)
+            new_mass = (current_front.depth_cm - next_layer_thickness) * (current_front.theta - next_front.theta)
+
+            wetting_fronts_above = self.get_wetting_fronts_above(index)
+            delta_thetas = torch.zeros([wetting_fronts_above + 1], device=self.global_params.device)
+            delta_thickness = torch.zeros(
+                [wetting_fronts_above + 1], device=self.global_params.device
+            )
+            self.compute_wetting_front_mass(
+                wetting_fronts_above,
+                psi_cm,
+                psi_cm_old,
+                psi_cm_below,
+                psi_cm_below_old,
+                prior_mass,
+                new_mass,
+                delta_thetas,
+                delta_thickness,
+            )
+
+            delta_thetas[-1] = next_front.theta
+            delta_thickness[-1] = current_front.depth_cm
+
+            free_drainage_demand = 0
+
+            if self.wf_free_drainage_demand.is_equal(current_front):
+                prior_mass = (
+                        prior_mass
+                        + infiltration
+                        - (free_drainage_demand + aet)
+                )
+            # theta mass balance computes new theta that conserves the mass; new theta is assigned to the current wetting front
+            theta_new = self.theta_mass_balance(
+                psi_cm,
+                new_mass,
+                prior_mass,
+                delta_thetas,
+                delta_thickness,
+            )
+            current_front.theta = torch.min(theta_new, current_front.theta_e)
+
+        se = calc_se_from_theta(current_front.theta, current_front.theta_e, current_front.theta_r)
+        current_front.psi_cm = calc_h_from_se(se, self.alpha_layer, current_front.m, self.n_layer)
+
+    def get_wetting_fronts_above(self, index=None):
+        current_layers_above = 0
+        if self.previous_layer is not None:
+            if index is not None:
+                # This gets the layers above the current layer.
+                current_layers_above = ((len(self.wetting_fronts) - 1) - index + (len(self.wetting_fronts) - 1))
+            return current_layers_above + self.get_wetting_fronts_above()
+        else:
+            return len(self.wetting_fronts) - 1
+
+    def compute_wetting_front_mass(
+        self,
+        wetting_fronts_above,
+        psi_cm,
+        psi_cm_old,
+        psi_cm_below,
+        psi_cm_below_old,
+        prior_mass,
+        new_mass,
+        delta_thetas,
+        delta_thickness,
+    ):
+        """
+        compute mass in the layers above the current wetting front
+        use the psi of the current wetting front and van Genuchten parameters of
+        the respective layers to get the total mass above the current wetting front
+        :return:
+        """
+        for i in range(len(self.wetting_fronts)):
+            if wetting_fronts_above != 0:
+                current_front = self.wetting_fronts[i]
+                theta_old = calc_theta_from_h(psi_cm_old, self.alpha_layer, current_front.m, self.n_layer, current_front.theta_e, current_front.theta_r)
+                theta_below_old = calc_theta_from_h(psi_cm_below_old, self.alpha_layer, current_front.m, self.n_layer, current_front.theta_e, current_front.theta_r);
+                local_delta_theta_old = theta_old - theta_below_old
+                layer_thickness = (self.cumulative_layer_thickness - self.previous_layer.cum_layer_thickness_cm);
+
+                prior_mass = prior_mass + (layer_thickness * local_delta_theta_old)
+
+                # // -------------------------------------------
+                # // do the same for the current state
+                theta = calc_theta_from_h(psi_cm, self.alpha_layer, current_front.m, self.n_layer, current_front.theta_e, current_front.theta_r)
+
+                theta_below = calc_theta_from_h(psi_cm_below, self.alpha_layer, current_front.m, self.n_layer, current_front.theta_e, current_front.theta_r)
+
+                new_mass = new_mass + (layer_thickness * (theta - theta_below))
+
+                delta_thetas[wetting_fronts_above - 1] = theta_below
+                delta_thickness[wetting_fronts_above - 1] = layer_thickness
+                wetting_fronts_above = wetting_fronts_above - 1
+            else:
+                return prior_mass, new_mass, delta_thetas, delta_thickness
+            return self.compute_wetting_front_mass(
+                wetting_fronts_above,
+                psi_cm,
+                psi_cm_old,
+                psi_cm_below,
+                psi_cm_below_old,
+                prior_mass,
+                new_mass,
+                delta_thetas,
+                delta_thickness,
+            )
+        else:
+            return prior_mass, new_mass, delta_thetas, delta_thickness
 
     def check_column_mass(self, free_drainage_demand, old_mass, percolation, aet):
         """
@@ -960,7 +1126,7 @@ class Layer:
                 ):
                     self.deepest_layer_front(neighboring_fronts)
                 else:
-                    self.wetting_front_in_layer()
+                    self.wetting_front_in_layer(infiltration, aet, neighboring_fronts, subtimestep, i)
             if num_wetting_fronts == self.num_layers and is_bottom_layer:
                 self.base_case(infiltration, aet, subtimestep, neighboring_fronts)
             if num_wetting_front_count == 1:
@@ -1230,6 +1396,16 @@ class Layer:
         """
         if self.previous_layer is not None:
             return self.previous_layer.find_front_layer()
+        else:
+            return self
+
+    def find_bottom_layer(self):
+        """
+        Traverses the soil layers to determine the front layer
+        :return: a self obj
+        """
+        if self.next_layer is not None:
+            return self.next_layer.find_bottom_layer()
         else:
             return self
 
