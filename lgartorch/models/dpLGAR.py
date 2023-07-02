@@ -138,6 +138,7 @@ class dpLGAR(nn.Module):
         for _ in range(int(self.cfg.models.num_subcycles)):
             self.top_layer.copy_states()
             precip_sub = precip * subtimestep_h
+            pet_sub = pet * subtimestep_h
             ponded_depth_sub = precip_sub + self.ponded_water
             ponded_water_sub = torch.tensor(0.0, device=self.cfg.device)
             percolation_sub = torch.tensor(0.0, device=self.cfg.device)
@@ -153,6 +154,8 @@ class dpLGAR(nn.Module):
             is_top_layer_saturated = self.top_layer.is_saturated()
             if pet > 0.0:
                 AET_sub = self.top_layer.calc_aet(pet, subtimestep_h)
+            self.precip = self.precip + precip_sub
+            self.PET = self.PET + torch.max(pet_sub, torch.tensor(0.0))
             starting_volume_sub = self.calc_mass_balance()
             if create_surficial_front:
                 # -------------------------------------------------------------------------------------------------------
@@ -356,7 +359,6 @@ class dpLGAR(nn.Module):
         Running the local mass balance, updating timestep vars, resetting variables
         :return:
         """
-        self.precip = self.precip + precip_sub
         self.ending_volume = ending_volume_sub
         self.AET += AET_sub
         self.giuh_runoff = self.giuh_runoff + giuh_runoff_sub

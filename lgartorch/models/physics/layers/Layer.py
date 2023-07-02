@@ -409,8 +409,7 @@ class Layer:
                 previous_current_front.theta - previous_next_front.theta
             )
             # Checking if this is the top wetting_front
-            # we know this is the top layer, so we're hardcoding the 0
-            if self.wf_free_drainage_demand.is_equal(self.wetting_fronts[0]):
+            if self.wf_free_drainage_demand.is_equal(current_front):
                 prior_mass = prior_mass + (infiltration - (free_drainage_demand + aet))
 
             current_front.depth = current_front.depth + (
@@ -721,7 +720,7 @@ class Layer:
         ONLY CALLED FROM TOP LAYER
         Calculates the Actual Evapotranspiration for each layer
         :param pet: Potential evapotranspiration
-        :param subcycle_length_h: the length of each subcycle step (in hours)
+        :param subtimestep_h: the length of each subcycle step (in hours)
         :return:
         """
         top_wetting_front = self.wetting_fronts[0]
