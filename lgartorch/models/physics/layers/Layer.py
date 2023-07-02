@@ -420,7 +420,7 @@ class Layer:
             # gets greater than the domain depth, it will be merge anyway as it is passing
             # the layer depth * /
             column_depth = self.global_params.cum_layer_thickness[-1]
-            current_front.depth_cm = torch.min(current_front.depth, column_depth)
+            current_front.depth = torch.min(current_front.depth, column_depth)
             zero_dzdt = torch.isclose(current_front.dzdt, torch.tensor(0.0), 1e-8)
             if (
                 zero_dzdt and current_front.to_bottom is False
@@ -462,7 +462,7 @@ class Layer:
             prior_mass = (previous_current_front.depth - next_layer_thickness) * (
                 previous_current_front.theta - previous_next_front.theta
             )
-            new_mass = (current_front.depth_cm - next_layer_thickness) * (
+            new_mass = (current_front.depth - next_layer_thickness) * (
                 current_front.theta - next_front.theta
             )
 
@@ -486,7 +486,7 @@ class Layer:
             )
 
             delta_thetas[-1] = next_front.theta
-            delta_thickness[-1] = current_front.depth_cm
+            delta_thickness[-1] = current_front.depth
 
             free_drainage_demand = 0
 
@@ -649,7 +649,7 @@ class Layer:
                         torch.tensor(0.01, device=self.global_params.device) * factor
                     )
 
-                self.wf_free_drainage_demand.depth_cm = depth_new
+                self.wf_free_drainage_demand.depth = depth_new
 
                 current_mass = self.mass_balance()
                 mass_balance_error = torch.abs(current_mass - mass_timestep)
@@ -814,8 +814,9 @@ class Layer:
                 extended_neighbors["current_front"], extended_neighbors["next_front"]
             )
             if is_passing:
-                # TODO THE PSI GOING HERE ISN'T RIGHT! Make sure this isn't premature
                 self.pass_front(extended_neighbors)
+                # we deleted a layer, so this for loop is no longer accurate
+                break
         if self.next_layer is not None:
             self.next_layer.merge_wetting_fronts()
         else:
@@ -824,12 +825,12 @@ class Layer:
 
     def pass_front(self, extended_neighbors):
         current_front = extended_neighbors["current_front"]
-        next_front = extended_neighbors["current_front"]
-        next_to_next_front = extended_neighbors["current_front"]
-        current_mass_this_layer = current_front.depth_cm * (
+        next_front = extended_neighbors["next_front"]
+        next_to_next_front = extended_neighbors["next_to_next_front"]
+        current_mass_this_layer = current_front.depth * (
             current_front.theta - next_front.theta
-        ) + next_front.depth_cm * (next_front.theta - next_to_next_front.theta)
-        current_front.depth_cm = current_mass_this_layer / (
+        ) + next_front.depth * (next_front.theta - next_to_next_front.theta)
+        current_front.depth = current_mass_this_layer / (
             current_front.theta - next_to_next_front.theta
         )
         se = calc_se_from_theta(
@@ -843,16 +844,10 @@ class Layer:
         self.delete_front(next_front)
 
     def delete_front(self, front):
-        if front.layer_num == self.layer_num:
-            for i in range(len(self.wetting_fronts)):
-                if self.wetting_fronts[i].is_equal(front):
-                    self.wetting_fronts.pop(i)
-        else:
-            if self.next_layer is not None:
-                self.next_layer.delete_front(front)
-            else:
-                log.error("There is a problem deleting this front")
-                raise IndexError
+        for i in range(len(self.wetting_fronts)):
+            if self.wetting_fronts[i].is_equal(front):
+                self.wetting_fronts.pop(i)
+                return None
 
     def wetting_fronts_cross_layer_boundary(self):
         """
@@ -1413,7 +1408,7 @@ class Layer:
                 runoff = torch.tensor(0.0, device=self.global_params.device)
             else:
                 runoff = ponded_depth - infiltration
-            ponded_depth_cm = 0.0
+            ponded_depth = 0.0
 
         return runoff, infiltration, ponded_depth
 
