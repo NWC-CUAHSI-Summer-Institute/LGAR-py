@@ -102,7 +102,7 @@ class dpLGAR(nn.Module):
         self.ending_volume = self.starting_volume.clone()
         # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
         self.ponded_water = torch.tensor(0.0, device=self.cfg.device)
-        self.precip_previous_timestep_cm = torch.tensor(0.0, device=self.cfg.device)
+        self.previous_precip = torch.tensor(0.0, device=self.cfg.device)
         self.infiltration = torch.tensor(0.0, device=self.cfg.device)
         self.runoff = torch.tensor(0.0, device=self.cfg.device)
         self.giuh_runoff = torch.tensor(0.0, device=self.cfg.device)
@@ -127,7 +127,6 @@ class dpLGAR(nn.Module):
         # TODO implement the LGAR functions for if there is precip or PET
         precip = x[0][0]
         pet = x[0][1]
-        previous_precip = torch.tensor(0.0, device=self.cfg.device)
         groundwater_discharge_sub = torch.tensor(0.0, device=self.cfg.device)
         runoff_timestep = torch.tensor(0.0, device=self.cfg.device)
         bottom_boundary_flux = torch.tensor(0.0, device=self.cfg.device)
@@ -139,6 +138,7 @@ class dpLGAR(nn.Module):
             self.top_layer.copy_states()
             precip_sub = precip * subtimestep_h
             pet_sub = pet * subtimestep_h
+            previous_precip_sub = self.previous_precip.clone()
             ponded_depth_sub = precip_sub + self.ponded_water
             ponded_water_sub = torch.tensor(0.0, device=self.cfg.device)
             percolation_sub = torch.tensor(0.0, device=self.cfg.device)
@@ -147,7 +147,7 @@ class dpLGAR(nn.Module):
             AET_sub = torch.tensor(0.0, device=self.cfg.device)
             # Determining wetting cases
             create_surficial_front = self.create_surficial_front(
-                previous_precip, precip_sub
+                previous_precip_sub, precip_sub
             )
             self.wf_free_drainage_demand = self.calc_wetting_front_free_drainage()
             self.top_layer.set_wf_free_drainage_demand(self.wf_free_drainage_demand)
@@ -244,7 +244,7 @@ class dpLGAR(nn.Module):
             # -----------------------------------------------------------------------------------------------------------
             # compute giuh runoff for the subtimestep
             giuh_runoff_sub = calc_giuh(self.global_params, runoff_sub)
-            previous_precip = precip_sub
+            self.previous_precip = precip_sub
             self.update_states(
                 starting_volume_sub,
                 precip_sub,
