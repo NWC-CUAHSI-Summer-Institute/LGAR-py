@@ -85,9 +85,9 @@ def generate_soil_metrics(
         #     single_n
         # )  # Commenting out temporarily so that our test cases match
         theta_wp[i] = calc_theta_from_h(
-            h, single_alpha, single_n, m[i], theta_e[i], theta_r[i]
+            h, single_alpha, m[i], single_n, theta_e[i], theta_r[i]
         )
-        theta_init[i] = calc_theta_from_h(initial_psi, single_alpha, single_n, m[i], theta_e[i], theta_r[i])
+        theta_init[i] = calc_theta_from_h(initial_psi, single_alpha, m[i], single_n, theta_e[i], theta_r[i])
         bc_lambda[i] = calc_bc_lambda(m[i])
         bc_psib_cm[i] = calc_bc_psib(single_alpha, m[i])
         h_min_cm[i] = calc_h_min_cm(bc_lambda[i], bc_psib_cm[i])

@@ -8,7 +8,7 @@ log = logging.getLogger("physics.utils")
 
 
 def calc_theta_from_h(
-    h: Tensor, alpha: Tensor, n: Tensor, m: Tensor, theta_e: Tensor, theta_r: Tensor
+    h: Tensor, alpha: Tensor, m: Tensor, n: Tensor, theta_e: Tensor, theta_r: Tensor
 ) -> torch.Tensor():
     """
     function to calculate theta from h

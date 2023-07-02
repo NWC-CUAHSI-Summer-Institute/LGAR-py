@@ -171,14 +171,14 @@ class Layer:
         theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
         theta_old = calc_theta_from_h(
-            psi_cm_old, self.alpha_layer, self.n_layer, m, theta_e, theta_r
+            psi_cm_old, self.alpha_layer, m, self.n_layer, theta_e, theta_r
         )
         theta_below_old = torch.tensor(0.0, device=self.global_params.device)
         local_delta_theta_old = theta_old - theta_below_old
         layer_thickness = self.global_params.layer_thickness_cm[self.layer_num]
         prior_mass = prior_mass + layer_thickness * local_delta_theta_old
         theta = calc_theta_from_h(
-            psi_cm, self.alpha_layer, self.n_layer, m, theta_e, theta_r
+            psi_cm, self.alpha_layer, m, self.n_layer, theta_e, theta_r
         )
         theta_below = 0.0
 
@@ -197,7 +197,7 @@ class Layer:
         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
         m = self.attributes[self.global_params.soil_index["m"]]
         theta_layer = calc_theta_from_h(
-            psi_cm, self.alpha_layer, self.n_layer, m, theta_e, theta_r
+            psi_cm, self.alpha_layer, m, self.n_layer, theta_e, theta_r
         )
         new_mass = new_mass + delta_thickness[self.layer_num] * (
             theta_layer - delta_thetas[self.layer_num]
@@ -236,7 +236,7 @@ class Layer:
         # check if the difference is less than the tolerance
         if delta_mass <= self.tolerance:
             theta = calc_theta_from_h(
-                psi_cm, self.alpha_layer, self.n_layer, m, theta_e, theta_r
+                psi_cm, self.alpha_layer, m, self.n_layer, theta_e, theta_r
             )
             return theta
 
@@ -258,7 +258,7 @@ class Layer:
                     psi_cm = psi_cm_loc_prev * 0.1
 
             theta = calc_theta_from_h(
-                psi_cm, self.alpha_layer, self.n_layer, m, theta_e, theta_r
+                psi_cm, self.alpha_layer, m, self.n_layer, theta_e, theta_r
             )
             new_mass = delta_thickness[self.layer_num] * (
                 theta - delta_thetas[self.layer_num]
@@ -382,7 +382,7 @@ class Layer:
         theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
         current_front.theta = calc_theta_from_h(
-            next_front.psi_cm, self.alpha_layer, self.n_layer, m, theta_e, theta_r
+            next_front.psi_cm, self.alpha_layer, m, self.n_layer, theta_e, theta_r
         )
         current_front.psi_cm = next_front.psi_cm
 
@@ -916,7 +916,7 @@ class Layer:
         next_theta_e = self.next_layer.attributes[
             self.global_params.soil_index["theta_e"]
         ]
-        next_m = self.next_layer.attributes[self.global_params.soil_index["theta_m"]]
+        next_m = self.next_layer.attributes[self.global_params.soil_index["m"]]
         next_alpha = self.next_layer.alpha_layer
         next_n = self.next_layer.n_layer
         theta_new = calc_theta_from_h(
@@ -933,9 +933,9 @@ class Layer:
         next_front.theta = theta_new
         next_front.psi_cm = current_front.psi_cm
         next_front.depth = depth_new
-        next_front.layer_num = current_front.layer_num + 1
+        # next_front.layer_num = next_front.layer_num
         next_front.dzdt = current_front.dzdt
-        current_front.dzdt = torch.tensor(0.0, self.global_params.device)
+        current_front.dzdt = torch.tensor(0.0, device=self.global_params.device)
         current_front.to_bottom = True
         next_front.to_bottom = False
         return current_front, next_front
