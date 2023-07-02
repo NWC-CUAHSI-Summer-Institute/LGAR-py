@@ -178,6 +178,12 @@ class dpLGAR(nn.Module):
                     )
                     self.top_layer.copy_states()
                     self.infiltration = self.infiltration + infiltration_sub
+                    if ponded_depth_sub <= 0:
+                        (
+                            ponded_depth_sub,
+                            ponded_water_sub,
+                            runoff_sub,
+                        ) = self.update_ponded_depth(ponded_depth_sub)
             else:
                 # -------------------------------------------------------------------------------------------------------
                 # /*----------------------------------------------------------------------*/
@@ -207,19 +213,11 @@ class dpLGAR(nn.Module):
                         log.error("There is a mass balance problem")
                         raise ValueError
                 else:
-                    if ponded_depth_sub < self.global_params.ponded_depth_max_cm:
-                        ponded_water_sub = ponded_depth_sub
-                        runoff_sub = torch.tensor(0.0, device=self.cfg.device)
-                        ponded_depth_sub = torch.tensor(0.0, device=self.cfg.device)
-                        runoff_timestep = runoff_timestep + runoff_sub
-                    else:
-                        # There is some runoff here
-                        runoff_sub = (
-                            ponded_depth_sub - self.global_params.ponded_depth_max_cm
-                        )
-                        ponded_depth_sub = self.global_params.ponded_depth_max_cm
-                        ponded_water_sub = ponded_depth_sub
-                        runoff_timestep = runoff_timestep + runoff_sub
+                    (
+                        ponded_depth_sub,
+                        ponded_water_sub,
+                        runoff_sub,
+                    ) = self.update_ponded_depth(ponded_depth_sub)
                 # -------------------------------------------------------------------------------------------------------
                 # /* move wetting fronts if no new wetting front is created. Otherwise, movement
                 #    of wetting fronts has already happened at the time of creating surficial front,
@@ -296,6 +294,21 @@ class dpLGAR(nn.Module):
             wf_that_supplies_free_drainage_demand.psi_cm,
             wf_that_supplies_free_drainage_demand,
         )
+
+    def update_ponded_depth(self, ponded_depth_sub):
+        if ponded_depth_sub < self.global_params.ponded_depth_max_cm:
+            runoff_sub = torch.tensor(0.0, device=self.cfg.device)
+            self.runoff = self.runoff + runoff_sub
+            ponded_water_sub = ponded_depth_sub
+            ponded_depth_sub = torch.tensor(0.0, device=self.cfg.device)
+
+        else:
+            # There is some runoff here
+            runoff_sub = ponded_depth_sub - self.global_params.ponded_depth_max_cm
+            ponded_depth_sub = self.global_params.ponded_depth_max_cm
+            ponded_water_sub = ponded_depth_sub
+            self.runoff = self.runoff + runoff_sub
+        return ponded_depth_sub, ponded_water_sub, runoff_sub
 
     def move_wetting_front(
         self,

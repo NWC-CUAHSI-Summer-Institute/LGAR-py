@@ -815,6 +815,7 @@ class Layer:
                 extended_neighbors["current_front"], extended_neighbors["next_front"]
             )
             if is_passing:
+                # TODO THE PSI GOING HERE ISN'T RIGHT! Make sure this isn't premature
                 self.pass_front(extended_neighbors)
         if self.next_layer is not None:
             self.next_layer.merge_wetting_fronts()
@@ -1088,6 +1089,7 @@ class Layer:
             theta_2 = current_front.theta
             if current_front.to_bottom:
                 current_front.dzdt = torch.tensor(0.0, device=self.global_params.device)
+                continue
             else:
                 if current_front.layer_num > 0:
                     bottom_sum = (
@@ -1113,7 +1115,7 @@ class Layer:
                     self.ksat_layer,
                 )
                 delta_theta = current_front.theta - next_front.theta
-                if i == 0 and current_front.layer_num == 0:
+                if current_front.layer_num == 0:
                     # This is the top wetting front
                     if delta_theta > 0:
                         dzdt = (
@@ -1421,7 +1423,7 @@ class Layer:
             if wetting_fronts_above != 0:
                 current_front = self.wetting_fronts[i]
                 theta_prev_loc = calc_theta_from_h(
-                    current_front.psi,
+                    current_front.psi_cm,
                     self.alpha_layer,
                     current_front.m,
                     self.n_layer,
