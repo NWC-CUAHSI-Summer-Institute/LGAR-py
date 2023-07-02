@@ -1127,7 +1127,18 @@ class Layer:
                     else:
                         dzdt = torch.tensor(0.0, device=self.global_params.device)
                 else:  # we are in the second or greater layer
-                    raise NotImplementedError
+                    denominator = bottom_sum
+                    wetting_fronts_above = self.get_wetting_fronts_above(i)
+                    denominator = self.calc_bottom_sum(
+                        denominator, wetting_fronts_above
+                    )
+                    numerator = current_front.depth
+
+                    if (delta_theta > 0):
+                        dzdt = (1.0 / delta_theta) * ((numerator / denominator) + self.ksat_layer * (geff + h_p) / current_front.depth)
+                    else:
+                        dzdt = torch.tensor(0.0, device=self.global_params.device)
+
                 current_front.dzdt = dzdt
         if self.next_layer is not None:
             self.next_layer.calc_dzdt(h_p)
@@ -1361,7 +1372,7 @@ class Layer:
                 current_free_drainage.depth
                 - self.previous_layer.cumulative_layer_thickness
             ) / self.ksat_layer
-            bottom_sum = self.find_front_layer().calc_bottom_sum(bottom_sum)
+            raise NotImplementedError
 
         theta_e1 = current_front.theta
         layer_nums_equal = layer_num_fp == self.num_layers
@@ -1405,8 +1416,43 @@ class Layer:
 
         return runoff, infiltration, ponded_depth
 
-    def calc_bottom_sum(self, bottom_sum):
-        raise NotImplementedError
+    def calc_bottom_sum(self, bottom_sum, wetting_fronts_above):
+        for i in range(len(self.wetting_fronts)):
+            if wetting_fronts_above != 0:
+                current_front = self.wetting_fronts[i]
+                theta_prev_loc = calc_theta_from_h(
+                    current_front.psi,
+                    self.alpha_layer,
+                    current_front.m,
+                    self.n_layer,
+                    current_front.theta_e,
+                    current_front.theta_r,
+                )
+                se_prev_loc = calc_se_from_theta(
+                    theta_prev_loc, current_front.theta_e, current_front.theta_r
+                )
+
+                k_cm_per_h_prev_loc = calc_k_from_se(
+                    se_prev_loc, self.ksat_layer, current_front.m
+                )
+                previous_layer_thickness = torch.tensor(
+                    0.0, device=self.global_params.device
+                )
+                if self.layer_num != 0:
+                    if i == 0:
+                        previous_layer_thickness = (
+                            self.previous_layer.cumulative_layer_thickness
+                        )
+                    else:
+                        previous_layer_thickness = self.cumulative_layer_thickness
+                bottom_sum = bottom_sum + (
+                    (self.cumulative_layer_thickness - previous_layer_thickness)
+                    / k_cm_per_h_prev_loc
+                )
+                wetting_fronts_above = wetting_fronts_above - 1
+            else:
+                return bottom_sum
+        return self.next_layer.calc_bottom_sum(self, bottom_sum, wetting_fronts_above)
 
     def get_drainage_neighbors(self, i):
         current_front = self.wetting_fronts[i]
