@@ -76,7 +76,7 @@ class WettingFront:
 
     def print(self):
         log.info(
-            f"[{self.depth.item():.4f}, {self.theta.item():.10f},      {self.layer_num},     {self.dzdt.item():.6f}, {self.k_cm_per_h.item():.6f}, {self.psi_cm:.4f}]"
+            f"[{self.depth.item():.4f}, {self.theta.item():.10f}, {self.layer_num}, {self.dzdt.item():.6f}, {self.k_cm_per_h.item():.6f}, {self.psi_cm:.4f}]"
         )
 
 

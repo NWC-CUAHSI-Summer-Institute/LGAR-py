@@ -124,7 +124,6 @@ class dpLGAR(nn.Module):
         :param x: Precip and PET forcings
         :return: runoff to be used for validation
         """
-        # TODO implement the LGAR functions for if there is precip or PET
         precip = x[0][0]
         pet = x[0][1]
         groundwater_discharge_sub = torch.tensor(0.0, device=self.cfg.device)

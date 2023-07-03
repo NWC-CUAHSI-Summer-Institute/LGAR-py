@@ -815,7 +815,8 @@ class Layer:
             )
             if is_passing:
                 self.pass_front(extended_neighbors)
-                # we deleted a layer, so this for loop is no longer accurate
+                # we deleted a layer, so this for loop is no longer accurate.
+                # Thus, we need to break
                 break
         if self.next_layer is not None:
             self.next_layer.merge_wetting_fronts()
@@ -867,7 +868,6 @@ class Layer:
             next_depth_equal_to_thickness = (
                 next_front.depth == self.cumulative_layer_thickness
             )
-            # TODO VERIFY THAT THIS WORKS!
             # Supposed to not work if the last layer, but that's taken care of before the loop
             if depth_greater_than_layer and next_depth_equal_to_thickness:
                 theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
@@ -893,7 +893,30 @@ class Layer:
         if self.next_layer is not None:
             self.next_layer.wetting_fronts_cross_layer_boundary()
         else:
+            self.find_front_layer().update_wetting_fronts()
             return None
+
+    def update_wetting_fronts(self):
+        """
+        Checks the wetting front arrays to make sure that the wetting fronts in each layer
+        belong to said layer
+        :return:
+        """
+        self.check_wetting_front()
+        if self.next_layer is not None:
+            self.next_layer.update_wetting_fronts()
+        else:
+            return None
+
+    def check_wetting_front(self):
+        for i in range(len(self.wetting_fronts)):
+            current_front = self.wetting_fronts[i]
+            if current_front.layer_num > self.layer_num:
+                popped_front = self.wetting_fronts.pop(i)
+                self.next_layer.wetting_fronts.insert(0, popped_front)
+                # Making sure I didn't miss any layers
+                self.check_wetting_front()
+                break
 
     def recalibrate(
         self,
@@ -933,7 +956,7 @@ class Layer:
         next_front.theta = theta_new
         next_front.psi_cm = current_front.psi_cm
         next_front.depth = depth_new
-        # next_front.layer_num = next_front.layer_num
+        next_front.layer_num = self.next_layer.layer_num
         next_front.dzdt = current_front.dzdt
         current_front.dzdt = torch.tensor(0.0, device=self.global_params.device)
         current_front.to_bottom = True
@@ -1026,6 +1049,9 @@ class Layer:
                     # back to AET after deleting the drier front */
                     mass_after = self.mass_balance()
                     mass_change = mass_change + torch.abs(mass_after - mass_before)
+                    # since we're popping we need to break
+                    # TODO TEST THIS
+                    break
         if self.next_layer is not None:
             return mass_change + self.next_layer.fix_dry_over_wet_fronts()
         else:
@@ -1498,7 +1524,7 @@ class Layer:
     def print(self, first=True):
         if first:
             log.info(
-                f"[  Depth   Theta          Layer_num   dzdt       k_cm_hr      psi   ]"
+                f"[     Depth   Theta       Layer_num   dzdt     k_cm_hr    psi   ]"
             )
         for wf in self.wetting_fronts:
             wf.print()
