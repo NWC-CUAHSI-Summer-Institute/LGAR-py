@@ -35,12 +35,12 @@ class WettingFront:
         # self.attributes = attributes
         self.theta = attributes[global_params.soil_index["theta_init"]]
         self.dzdt = torch.tensor(0.0, device=global_params.device)
-        self.theta_r = attributes[global_params.soil_index["theta_r"]]
-        self.theta_e = attributes[global_params.soil_index["theta_e"]]
-        self.m = attributes[global_params.soil_index["m"]]
-        self.se = calc_se_from_theta(self.theta, self.theta_e, self.theta_r)
+        theta_r = attributes[global_params.soil_index["theta_r"]]
+        theta_e = attributes[global_params.soil_index["theta_e"]]
+        m = attributes[global_params.soil_index["m"]]
+        self.se = calc_se_from_theta(self.theta, theta_e, theta_r)
         self.psi_cm = global_params.initial_psi
-        self.k_cm_per_h = calc_k_from_se(self.se, ksat, self.m)
+        self.k_cm_per_h = calc_k_from_se(self.se, ksat, m)
         self.to_bottom = bottom_flag
 
     def deepcopy(self, wf):
@@ -52,11 +52,7 @@ class WettingFront:
         # TODO, we may need to detach the tensors here so the gradient is not tracked?? Making copies is annoying
         wf.depth = self.depth.clone()
         wf.layer_num = self.layer_num
-        # wf.attributes = self.attributes
         wf.theta = self.theta.clone()
-        wf.theta_r = self.theta_r
-        wf.theta_e = self.theta_e
-        wf.m = self.m
         wf.dzdt = self.dzdt.clone()
         wf.se = self.se.clone()
         wf.psi_cm = self.psi_cm.clone()
