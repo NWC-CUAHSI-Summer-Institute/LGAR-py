@@ -515,14 +515,12 @@ class Layer:
         if self.previous_layer is not None:
             if index is not None:
                 # This gets the layers above the current layer.
-                current_layers_above = (
-                    (len(self.wetting_fronts) - 1)
-                    - index
-                    + (len(self.wetting_fronts) - 1)
-                )
-            return current_layers_above + self.get_wetting_fronts_above()
+                current_layers_above = index
+            else:
+                current_layers_above = len(self.wetting_fronts)
+            return current_layers_above + self.previous_layer.get_wetting_fronts_above()
         else:
-            return len(self.wetting_fronts) - 1
+            return len(self.wetting_fronts)
 
     def compute_wetting_front_mass(
         self,
@@ -1173,10 +1171,8 @@ class Layer:
                         dzdt = torch.tensor(0.0, device=self.global_params.device)
                 else:  # we are in the second or greater layer
                     denominator = bottom_sum
-                    wetting_fronts_above = self.get_wetting_fronts_above(i)
-                    denominator = self.calc_bottom_sum(
-                        denominator, wetting_fronts_above
-                    )
+                    # wetting_fronts_above = self.get_wetting_fronts_above(i)
+                    denominator = self.find_front_layer().calc_bottom_sum(denominator, current_front)
                     numerator = current_front.depth
 
                     if (delta_theta > 0):
@@ -1470,13 +1466,14 @@ class Layer:
 
         return runoff, infiltration, ponded_depth
 
-    def calc_bottom_sum(self, bottom_sum, wetting_fronts_above):
+    def calc_bottom_sum(self, bottom_sum, current_front):
         theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
         m = self.attributes[self.global_params.soil_index["m"]]
         for i in range(len(self.wetting_fronts)):
-            if wetting_fronts_above != 0:
-                current_front = self.wetting_fronts[i]
+            layer_front = self.wetting_fronts[i]
+            is_equal_front = layer_front.is_equal(current_front)
+            if is_equal_front is False:
                 theta_prev_loc = calc_theta_from_h(
                     current_front.psi_cm,
                     self.alpha_layer,
@@ -1496,20 +1493,14 @@ class Layer:
                     0.0, device=self.global_params.device
                 )
                 if self.layer_num != 0:
-                    if i == 0:
-                        previous_layer_thickness = (
-                            self.previous_layer.cumulative_layer_thickness
-                        )
-                    else:
-                        previous_layer_thickness = self.cumulative_layer_thickness
+                    previous_layer_thickness = self.previous_layer.cumulative_layer_thickness
                 bottom_sum = bottom_sum + (
                     (self.cumulative_layer_thickness - previous_layer_thickness)
                     / k_cm_per_h_prev_loc
                 )
-                wetting_fronts_above = wetting_fronts_above - 1
             else:
                 return bottom_sum
-        return self.next_layer.calc_bottom_sum(self, bottom_sum, wetting_fronts_above)
+        return self.next_layer.calc_bottom_sum(bottom_sum, current_front)
 
     def get_drainage_neighbors(self, i):
         current_front = self.wetting_fronts[i]
