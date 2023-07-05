@@ -1491,35 +1491,31 @@ class Layer:
         theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
         m = self.attributes[self.global_params.soil_index["m"]]
-        for i in range(len(self.wetting_fronts)):
-            neighboring_fronts = self.get_neighboring_fronts(i)
-            next_front = neighboring_fronts["next_front"]
-            is_equal_front = next_front.is_equal(current_front)
-            if is_equal_front is False:
-                theta_prev_loc = calc_theta_from_h(
-                    current_front.psi_cm,
-                    self.alpha_layer,
-                    m,
-                    self.n_layer,
-                    theta_e,
-                    theta_r,
-                )
-                se_prev_loc = calc_se_from_theta(theta_prev_loc, theta_e, theta_r)
+        theta_prev_loc = calc_theta_from_h(
+            current_front.psi_cm,
+            self.alpha_layer,
+            m,
+            self.n_layer,
+            theta_e,
+            theta_r,
+        )
+        se_prev_loc = calc_se_from_theta(theta_prev_loc, theta_e, theta_r)
 
-                k_cm_per_h_prev_loc = calc_k_from_se(se_prev_loc, self.ksat_layer, m)
-                previous_layer_thickness = torch.tensor(
-                    0.0, device=self.global_params.device
-                )
-                if self.layer_num != 0:
-                    previous_layer_thickness = (
-                        self.previous_layer.cumulative_layer_thickness
-                    )
-                bottom_sum = bottom_sum + (
-                    (self.cumulative_layer_thickness - previous_layer_thickness)
-                    / k_cm_per_h_prev_loc
-                )
-            else:
-                return bottom_sum
+        k_cm_per_h_prev_loc = calc_k_from_se(se_prev_loc, self.ksat_layer, m)
+        previous_layer_thickness = torch.tensor(
+            0.0, device=self.global_params.device
+        )
+        if self.layer_num != 0:
+            previous_layer_thickness = (
+                self.previous_layer.cumulative_layer_thickness
+            )
+        bottom_sum = bottom_sum + (
+            (self.cumulative_layer_thickness - previous_layer_thickness)
+            / k_cm_per_h_prev_loc
+        )
+        is_equal_layer = self.next_layer.layer_num == current_front.layer_num
+        if is_equal_layer:
+            return bottom_sum
         return self.next_layer.calc_bottom_sum(bottom_sum, current_front)
 
     def get_drainage_neighbors(self, i):
