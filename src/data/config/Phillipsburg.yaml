@@ -5,16 +5,24 @@ layer_thickness: #[cm]
   - 131.0
   - 25.0
 initial_psi: 2000.0 #[cm]
-timestep: 300 #[sec]
-num_time_step: 90001  # total simulation time is this number times the time_step_s
-endtime: 7500.0 #[hr]
-forcing_resolution: 3600
 ponded_depth_max: 2 #[cm]
 use_closed_form_G: False
 layer_soil_type:
   - 13
   - 14
   - 15
+num_soil_types: 15  # must be less than or equal to MAX_NUM_SOIL_TYPES
+num_soil_layers: 3  # must be less than or equal to MAX_NUM_SOIL_LAYERS
+num_fronts: 0  # must be less than MAX_NUM_FRONTS
+root_zone_bottom_layer: 2  # example, if set to 2, then the root zone is in layer 1 and 2
+AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET
+ET_expon: 1.0  # exponent that allows curvature of the rising portion of the Budyko curve
+wilting_point_psi_cm: 154950.0  # AJ-correction
+soil_type_by_layer:
+  - 13  # Sand
+  - 14  # Sandy Loam
+  - 15  # Clay
+soil_index: ???
 max_soil_types: 25
 wilting_point_psi: 15495.0 #[cm]
 giuh_ordinates:
@@ -23,8 +31,4 @@ giuh_ordinates:
   - 0.28
   - 0.12
   - 0.03
-units:
-  endtime_s: [hr]
-  forcing_resolution_h: [ sec ]
-  timestep_h: [s]
 
