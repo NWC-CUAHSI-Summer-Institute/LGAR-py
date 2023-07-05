@@ -244,18 +244,11 @@ class dpLGAR(nn.Module):
             # compute giuh runoff for the subtimestep
             giuh_runoff_sub = calc_giuh(self.global_params, runoff_sub)
             self.previous_precip = precip_sub
-            self.update_states(
-                starting_volume_sub,
-                precip_sub,
-                runoff_sub,
-                AET_sub,
-                ponded_water_sub,
-                percolation_sub,
-                ending_volume_sub,
-                infiltration_sub,
-                groundwater_discharge_sub,
-                giuh_runoff_sub,
-            )
+            self.ending_volume = ending_volume_sub
+            self.AET += AET_sub
+            self.giuh_runoff = self.giuh_runoff + giuh_runoff_sub
+            self.discharge = self.discharge + giuh_runoff_sub
+            self.groundwater_discharge = groundwater_discharge_sub
         return self.runoff, self.percolation
 
     def calc_mass_balance(self) -> Tensor:
@@ -297,21 +290,6 @@ class dpLGAR(nn.Module):
             wf_that_supplies_free_drainage_demand,
         )
 
-    def update_ponded_depth(self, ponded_depth_sub):
-        if ponded_depth_sub < self.global_params.ponded_depth_max_cm:
-            runoff_sub = torch.tensor(0.0, device=self.cfg.device)
-            self.runoff = self.runoff + runoff_sub
-            ponded_water_sub = ponded_depth_sub
-            ponded_depth_sub = torch.tensor(0.0, device=self.cfg.device)
-
-        else:
-            # There is some runoff here
-            runoff_sub = ponded_depth_sub - self.global_params.ponded_depth_max_cm
-            ponded_depth_sub = self.global_params.ponded_depth_max_cm
-            ponded_water_sub = ponded_depth_sub
-            self.runoff = self.runoff + runoff_sub
-        return ponded_depth_sub, ponded_water_sub, runoff_sub
-
     def move_wetting_front(
         self,
         infiltration,
@@ -341,39 +319,20 @@ class dpLGAR(nn.Module):
         self.top_layer.update_psi()
         return infiltration, AET_sub
 
-    def update_states(
-        self,
-        starting_volume_sub,
-        precip_sub,
-        runoff_sub,
-        AET_sub,
-        ponded_water_sub,
-        percolation_sub,
-        ending_volume_sub,
-        infiltration_sub,
-        groundwater_discharge_sub,
-        giuh_runoff_sub,
-    ):
-        """
-        Running the local mass balance, updating timestep vars, resetting variables
-        :return:
-        """
-        self.ending_volume = ending_volume_sub
-        self.AET += AET_sub
-        self.giuh_runoff = self.giuh_runoff + giuh_runoff_sub
-        self.discharge = self.discharge + giuh_runoff_sub
-        self.groundwater_discharge = groundwater_discharge_sub
+    def update_ponded_depth(self, ponded_depth_sub):
+        if ponded_depth_sub < self.global_params.ponded_depth_max_cm:
+            runoff_sub = torch.tensor(0.0, device=self.cfg.device)
+            self.runoff = self.runoff + runoff_sub
+            ponded_water_sub = ponded_depth_sub
+            ponded_depth_sub = torch.tensor(0.0, device=self.cfg.device)
 
-        # self.print_local_mass_balance(
-        #     starting_volume_sub,
-        #     precip_sub,
-        #     runoff_sub,
-        #     AET_sub,
-        #     ponded_water_sub,
-        #     percolation_sub,
-        #     ending_volume_sub,
-        #     infiltration_sub,
-        # )
+        else:
+            # There is some runoff here
+            runoff_sub = ponded_depth_sub - self.global_params.ponded_depth_max_cm
+            ponded_depth_sub = self.global_params.ponded_depth_max_cm
+            ponded_water_sub = ponded_depth_sub
+            self.runoff = self.runoff + runoff_sub
+        return ponded_depth_sub, ponded_water_sub, runoff_sub
 
     def print_local_mass_balance(
         self,
@@ -407,3 +366,14 @@ class dpLGAR(nn.Module):
         log.info(f"AET           = {AET_sub.item():14.10f}")
         log.info(f"Percolation   = {percolation_sub.item():14.10f}")
         log.info(f"Final water   = {ending_volume_sub.item():14.10f}")
+
+        # self.print_local_mass_balance(
+        #     starting_volume_sub,
+        #     precip_sub,
+        #     runoff_sub,
+        #     AET_sub,
+        #     ponded_water_sub,
+        #     percolation_sub,
+        #     ending_volume_sub,
+        #     infiltration_sub,
+        # )

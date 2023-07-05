@@ -1045,13 +1045,9 @@ class Layer:
             current_front = neighboring_fronts["current_front"]
             next_front = neighboring_fronts["next_front"]
             if next_front is not None:
-                """
-                // this part fixes case of upper theta less than lower theta due to AET extraction
-                // also handles the case when the current and next wetting fronts have the same theta
-                // and are within the same layer
-                /***************************************************/
-                """
-                #  TODO: TEST THIS!
+                # // this part fixes case of upper theta less than lower theta due to AET extraction
+                # // also handles the case when the current and next wetting fronts have the same theta
+                # // and are within the same layer
                 theta_less = current_front.theta <= next_front.theta
                 same_layer = current_front.layer_num == next_front.layer_num
                 if theta_less and same_layer:
@@ -1060,14 +1056,16 @@ class Layer:
                     # replacing current = listDeleteFront(current->front_num);
                     popped_front = self.wetting_fronts.pop(i)
 
-                    # if the dry wetting front is the most surficial then simply track the mass change
-                    # due to the deletion of the wetting front;
-                    # this needs to be revised
                     if popped_front.layer_num > 0:
-                        raise NotImplementedError
-                        # se_k = calc_se_from_theta(popped_front.theta, popped_front.theta_e, popped_front.theta_r)
-                        # popped_front.psi_cm = calc_h_from_se(se_k, self.alpha_layer, popped_front.m, self.n_layer)
-                        # self.update_fronts(popped_front, i)
+                        # if the dry wetting front is the most surficial then simply track the mass change
+                        # due to the deletion of the wetting front;
+                        # TODO TEST
+                        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
+                        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
+                        m = self.attributes[self.global_params.soil_index["m"]]
+                        se_k = calc_se_from_theta(popped_front.theta, theta_e, theta_r)
+                        popped_front.psi = calc_h_from_se(se_k, self.alpha_layer, m, self.n_layer)
+                        self.find_front_layer().update_layer_fronts(popped_front)
 
                     # /* note: mass_before is less when we have wetter front over drier front condition,
                     #  however, lgar_calc_mass_bal returns mass_before > mass_after due to fabs(theta_current - theta_next);
@@ -1083,6 +1081,25 @@ class Layer:
             return mass_change + self.next_layer.fix_dry_over_wet_fronts()
         else:
             return mass_change
+
+    def update_layer_fronts(self, popped_front):
+        """
+        update psi and theta for all wetting fronts above the current wetting front
+        :param popped_front: The deleted front popped from the list
+        :return:
+        """
+        if self.layer_num < popped_front:
+            for i in range(len(self.wetting_fronts)):
+                current_front = self.wetting_fronts[i]
+                theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
+                theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
+                m = self.attributes[self.global_params.soil_index["m"]]
+                se_l = calc_se_from_theta(popped_front.theta, theta_e, theta_r)
+                current_front.psi = calc_h_from_se(se_l, self.alpha_layer, m, self.n_layer)
+                current_front.theta = calc_theta_from_h(popped_front.psi_cm, self.alpha_layer, m, self.n_layer, theta_e, theta_r)
+            return self.next_layer.update_layer_fronts(popped_front)
+        else:
+            return None
 
     def get_len_layers(self):
         """
