@@ -191,6 +191,7 @@ class Layer:
             return new_mass, prior_mass, delta_thetas, delta_thickness
 
     def recalculate_mass(self, psi_cm, new_mass, delta_thetas, delta_thickness):
+        # TODO MAKE SURE THIS WORKS FOR THE LATEST CASE! NEW MASS ISN't UPDATED RIGHT
         theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
         m = self.attributes[self.global_params.soil_index["m"]]
@@ -228,8 +229,8 @@ class Layer:
         )  # this will be updated and returned
         psi_cm_loc_prev = psi_cm
         delta_mass_prev = delta_mass
-        count_no_mass_change = torch.tensor(0.0, device=self.global_params.device)
-        break_no_mass_change = torch.tensor(5.0, device=self.global_params.device)
+        count_no_mass_change = 0
+        break_no_mass_change = 5
 
         # check if the difference is less than the tolerance
         if delta_mass <= self.tolerance:
@@ -242,7 +243,7 @@ class Layer:
         # the new and prior is within the tolerance
         while delta_mass > self.tolerance:
             if new_mass > prior_mass:
-                psi_cm = psi_cm + 0.1 * factor
+                psi_cm = psi_cm + (0.1 * factor)
                 switched = False
             else:
                 if not switched:
@@ -250,7 +251,7 @@ class Layer:
                     factor = factor * 0.1
 
                 psi_cm_loc_prev = psi_cm
-                psi_cm = psi_cm - 0.1 * factor
+                psi_cm = psi_cm - (0.1 * factor)
 
                 if psi_cm < 0 and psi_cm_loc_prev != 0:
                     psi_cm = psi_cm_loc_prev * 0.1
@@ -445,7 +446,7 @@ class Layer:
             #
             # - LGAR paper (currently under review) has a better description, using diagrams, of the mass balance of wetting fronts
 
-            next_layer_thickness = self.next_layer.cumulative_layer_thickness
+            previous_layer_thickness = self.previous_layer.cumulative_layer_thickness
             current_front.depth = current_front.depth + (
                 current_front.dzdt * subtimestep
             )
@@ -460,22 +461,22 @@ class Layer:
             # Not subtracting the cum_layer thickness since we checked that this is the top layer
             # top layer cum_total_depth is always 0
             # = difference in current and next wetting front thetas times depth of the current wetting front
-            prior_mass = (previous_current_front.depth - next_layer_thickness) * (
+            prior_mass = (previous_current_front.depth - previous_layer_thickness) * (
                 previous_current_front.theta - previous_next_front.theta
             )
-            new_mass = (current_front.depth - next_layer_thickness) * (
+            new_mass = (current_front.depth - previous_layer_thickness) * (
                 current_front.theta - next_front.theta
             )
 
-            wetting_fronts_above = self.get_wetting_fronts_above(index)
+            wetting_layers_above = self.get_wetting_layers_above(index)
             delta_thetas = torch.zeros(
-                [wetting_fronts_above + 1], device=self.global_params.device
+                [wetting_layers_above + 1], device=self.global_params.device
             )
             delta_thickness = torch.zeros(
-                [wetting_fronts_above + 1], device=self.global_params.device
+                [wetting_layers_above + 1], device=self.global_params.device
             )
-            self.compute_wetting_front_mass(
-                wetting_fronts_above,
+            prior_mass, new_mass, delta_thetas, delta_thickness = self.find_front_layer().compute_wetting_front_mass(
+                wetting_layers_above,
                 psi_cm,
                 psi_cm_old,
                 psi_cm_below,
@@ -487,7 +488,7 @@ class Layer:
             )
 
             delta_thetas[-1] = next_front.theta
-            delta_thickness[-1] = current_front.depth
+            delta_thickness[-1] = current_front.depth - self.previous_layer.cumulative_layer_thickness
 
             free_drainage_demand = 0
 
@@ -510,21 +511,21 @@ class Layer:
             se, self.alpha_layer, m, self.n_layer
         )
 
-    def get_wetting_fronts_above(self, index=None):
+    def get_wetting_layers_above(self, index=None):
         current_layers_above = 0
         if self.previous_layer is not None:
             if index is not None:
                 # This gets the layers above the current layer.
                 current_layers_above = index
             else:
-                current_layers_above = len(self.wetting_fronts)
-            return current_layers_above + self.previous_layer.get_wetting_fronts_above()
+                current_layers_above = 1
+            return current_layers_above + self.previous_layer.get_wetting_layers_above()
         else:
-            return len(self.wetting_fronts)
+            return 1
 
     def compute_wetting_front_mass(
         self,
-        wetting_fronts_above,
+        wetting_layers_above,
         psi_cm,
         psi_cm_old,
         psi_cm_below,
@@ -543,62 +544,62 @@ class Layer:
         theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
         m = self.attributes[self.global_params.soil_index["m"]]
-        for i in range(len(self.wetting_fronts)):
-            if wetting_fronts_above != 0:
-                current_front = self.wetting_fronts[i]
-                theta_old = calc_theta_from_h(
-                    psi_cm_old,
-                    self.alpha_layer,
-                    m,
-                    self.n_layer,
-                    theta_e,
-                    theta_r,
-                )
-                theta_below_old = calc_theta_from_h(
-                    psi_cm_below_old,
-                    self.alpha_layer,
-                    m,
-                    self.n_layer,
-                    theta_e,
-                    theta_r,
-                )
-                local_delta_theta_old = theta_old - theta_below_old
-                layer_thickness = (
-                    self.cumulative_layer_thickness
-                    - self.previous_layer.cum_layer_thickness_cm
-                )
+        previous_layer_thickness = torch.tensor(0.0)
+        if self.previous_layer is not None:
+            previous_layer_thickness = self.previous_layer.cumulative_layer_thickness
+        if wetting_layers_above > 0:
+            theta_old = calc_theta_from_h(
+                psi_cm_old,
+                self.alpha_layer,
+                m,
+                self.n_layer,
+                theta_e,
+                theta_r,
+            )
+            theta_below_old = calc_theta_from_h(
+                psi_cm_below_old,
+                self.alpha_layer,
+                m,
+                self.n_layer,
+                theta_e,
+                theta_r,
+            )
+            local_delta_theta_old = theta_old - theta_below_old
+            previous_layer_thickness = torch.tensor(0.0)
+            layer_thickness = (
+                self.cumulative_layer_thickness
+                - previous_layer_thickness
+            )
 
-                prior_mass = prior_mass + (layer_thickness * local_delta_theta_old)
+            prior_mass = prior_mass + (layer_thickness * local_delta_theta_old)
 
-                # // -------------------------------------------
-                # // do the same for the current state
-                theta = calc_theta_from_h(
-                    psi_cm,
-                    self.alpha_layer,
-                    m,
-                    self.n_layer,
-                    theta_e,
-                    theta_r,
-                )
+            # // -------------------------------------------
+            # // do the same for the current state
+            theta = calc_theta_from_h(
+                psi_cm,
+                self.alpha_layer,
+                m,
+                self.n_layer,
+                theta_e,
+                theta_r,
+            )
 
-                theta_below = calc_theta_from_h(
-                    psi_cm_below,
-                    self.alpha_layer,
-                    m,
-                    self.n_layer,
-                    theta_e,
-                    theta_r,
-                )
+            theta_below = calc_theta_from_h(
+                psi_cm_below,
+                self.alpha_layer,
+                m,
+                self.n_layer,
+                theta_e,
+                theta_r,
+            )
 
-                new_mass = new_mass + (layer_thickness * (theta - theta_below))
+            new_mass = new_mass + (layer_thickness * (theta - theta_below))
 
-                delta_thetas[wetting_fronts_above - 1] = theta_below
-                delta_thickness[wetting_fronts_above - 1] = layer_thickness
-                wetting_fronts_above = wetting_fronts_above - 1
-            else:
-                return prior_mass, new_mass, delta_thetas, delta_thickness
-            return self.compute_wetting_front_mass(
-                wetting_fronts_above,
+            delta_thetas[self.layer_num] = theta_below
+            delta_thickness[self.layer_num] = layer_thickness
+            wetting_layers_above = wetting_layers_above - 1
+            return self.next_layer.compute_wetting_front_mass(
+                wetting_layers_above,
                 psi_cm,
                 psi_cm_old,
                 psi_cm_below,
@@ -1171,7 +1172,6 @@ class Layer:
                         dzdt = torch.tensor(0.0, device=self.global_params.device)
                 else:  # we are in the second or greater layer
                     denominator = bottom_sum
-                    # wetting_fronts_above = self.get_wetting_fronts_above(i)
                     denominator = self.find_front_layer().calc_bottom_sum(denominator, current_front)
                     numerator = current_front.depth
 
@@ -1471,8 +1471,9 @@ class Layer:
         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
         m = self.attributes[self.global_params.soil_index["m"]]
         for i in range(len(self.wetting_fronts)):
-            layer_front = self.wetting_fronts[i]
-            is_equal_front = layer_front.is_equal(current_front)
+            neighboring_fronts = self.get_neighboring_fronts(i)
+            next_front = neighboring_fronts["next_front"]
+            is_equal_front = next_front.is_equal(current_front)
             if is_equal_front is False:
                 theta_prev_loc = calc_theta_from_h(
                     current_front.psi_cm,
