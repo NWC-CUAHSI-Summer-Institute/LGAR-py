@@ -1095,7 +1095,7 @@ class Layer:
                 theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
                 m = self.attributes[self.global_params.soil_index["m"]]
                 se_l = calc_se_from_theta(popped_front.theta, theta_e, theta_r)
-                current_front.psi = calc_h_from_se(se_l, self.alpha_layer, m, self.n_layer)
+                current_front.psi_cm = calc_h_from_se(se_l, self.alpha_layer, m, self.n_layer)
                 current_front.theta = calc_theta_from_h(popped_front.psi_cm, self.alpha_layer, m, self.n_layer, theta_e, theta_r)
             return self.next_layer.update_layer_fronts(popped_front)
         else:
