@@ -1088,7 +1088,7 @@ class Layer:
         :param popped_front: The deleted front popped from the list
         :return:
         """
-        if self.layer_num < popped_front:
+        if self.layer_num < popped_front.layer_num:
             for i in range(len(self.wetting_fronts)):
                 current_front = self.wetting_fronts[i]
                 theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
