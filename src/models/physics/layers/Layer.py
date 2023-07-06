@@ -1059,7 +1059,7 @@ class Layer:
                     if popped_front.layer_num > 0:
                         # if the dry wetting front is the most surficial then simply track the mass change
                         # due to the deletion of the wetting front;
-                        # TODO TEST
+                        # TODO Look into Mass Sometime before step 757
                         theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
                         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
                         m = self.attributes[self.global_params.soil_index["m"]]

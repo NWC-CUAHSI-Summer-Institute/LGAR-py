@@ -100,6 +100,7 @@ class DifferentiableLGAR(BaseAgent):
             # Updating the total mass of the system
             self.mass_balance.change_mass(self.model)
         self.validate(y_hat, self.data.y)
+
     def validate(self, y_hat_: Tensor, y_t_: Tensor) -> None:
         """
         One cycle of model validation

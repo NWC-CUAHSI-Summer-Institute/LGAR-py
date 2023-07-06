@@ -1,15 +1,16 @@
 defaults:
   - _self_
   - data: config/Phillipsburg
-  - models: config/base
-cwd: /mnt/sdb1/tkb5476/dpLGAR/
-#cwd: /Users/taddbindas/projects/dpLGAR
+  - models: config/shorter_subcycle
+#cwd: /mnt/sdb1/tkb5476/dpLGAR/
+cwd: /Users/taddbindas/projects/dpLGAR
 save_name: debugger
 output_dir: ${cwd}/output
 device: cpu
 print_output: False # Not supported rn
 save_paths:
-  precip: ${cwd}/data/save_files/precip.csv
+#  precip: ${cwd}/data/save_files/precip.csv
+  precip: ${cwd}/data/save_files/test.csv
   pet: ${cwd}/data/save_files/PET.csv
   soil_moisture: ${cwd}/data/save_files/soil_moisture.csv
   soil_thickness: ${cwd}/data/save_files/soil_thickness.csv
