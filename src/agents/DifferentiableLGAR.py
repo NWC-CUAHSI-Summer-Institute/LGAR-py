@@ -53,7 +53,7 @@ class DifferentiableLGAR(BaseAgent):
         # Defining the model and output variables to save
         self.model = dpLGAR(self.cfg)
         self.percolation_output = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
-        self.mass_balance = MassBalance(cfg)
+        self.mass_balance = MassBalance(cfg, self.model.ending_volume)
 
         self.criterion = torch.nn.MSELoss()
         self.optimizer = torch.optim.Adam(
@@ -99,6 +99,7 @@ class DifferentiableLGAR(BaseAgent):
             self.percolation_output[i] = percolation
             # Updating the total mass of the system
             self.mass_balance.change_mass(self.model)
+        self.mass_balance.report_mass(self.model)
         self.validate(y_hat, self.data.y)
 
     def validate(self, y_hat_: Tensor, y_t_: Tensor) -> None:

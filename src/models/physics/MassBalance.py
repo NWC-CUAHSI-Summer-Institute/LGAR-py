@@ -8,13 +8,13 @@ log = logging.getLogger("models.physics.lgar.green_ampt")
 
 
 class MassBalance:
-    def __init__(self, cfg: DictConfig):
+    def __init__(self, cfg: DictConfig, starting_volume):
         super().__init__()
         self.device = cfg.device
 
         self.precip = torch.tensor(0.0, device=self.device)
         self.infiltration = torch.tensor(0.0, device=self.device)
-        self.starting_volume = torch.tensor(0.0, device=self.device)
+        self.starting_volume = starting_volume.clone()
         self.ending_volume = torch.tensor(0.0, device=self.device)
         self.AET = torch.tensor(0.0, device=self.device)
         self.percolation = torch.tensor(0.0, device=self.device)
@@ -33,15 +33,13 @@ class MassBalance:
     def change_mass(self, model):
         self.precip = self.precip + model.precip
         self.infiltration = self.infiltration + model.infiltration
-        self.starting_volume = self.starting_volume + model.precip
-        self.ending_volume = self.ending_volume + model.ending_volume
         self.AET = self.AET + model.AET
         self.percolation = self.percolation + model.percolation
         self.runoff = self.runoff + model.runoff
         self.giuh_runoff = self.giuh_runoff + model.giuh_runoff
         self.discharge = self.discharge + model.discharge
         self.PET = self.PET + model.PET
-        self.ponded_water = self.ponded_water + model.ponded_water
+        self.ponded_water = model.ponded_water
         self.groundwater_discharge = (
             self.groundwater_discharge + model.groundwater_discharge
         )
@@ -56,7 +54,8 @@ class MassBalance:
         model.discharge = torch.tensor(0.0, device=self.device)
         model.groundwater_discharge = torch.tensor(0.0, device=self.device)
 
-    def report_mass(self, global_params):
+    def report_mass(self, model):
+        global_params = model.global_params
         for i in range(global_params.num_giuh_ordinates):
             self.giuh_runoff = self.giuh_runoff + global_params.giuh_runoff[i]
 

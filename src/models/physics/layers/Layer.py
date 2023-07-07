@@ -1412,11 +1412,14 @@ class Layer:
         h_p = torch.clamp(h_p_, min=0.0)
 
         head_index = 0
-        (
-            current_front,
-            current_free_drainage,
-            next_free_drainage,
-        ) = self.get_drainage_neighbors(0)
+        try:
+            (
+                current_front,
+                current_free_drainage,
+                next_free_drainage,
+            ) = self.get_drainage_neighbors(0)
+        except TypeError:
+            log.error("here")
 
         number_of_wetting_fronts = self.calc_num_wetting_fronts()
 
@@ -1427,28 +1430,31 @@ class Layer:
             geff = torch.tensor(0.0, device=self.global_params.device)
             # i.e., case of no capillary suction, dz/dt is also zero for all wetting fronts
         else:
-            theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-            # double theta = current_free_drainage->theta;
+            free_drainage_layer = self.find_layer(layer_num_fp)
+            theta_e = free_drainage_layer.attributes[self.global_params.soil_index["theta_e"]]
             theta_1 = next_free_drainage.theta  # theta_below
             theta_2 = theta_e
+            free_drainage_ksat = free_drainage_layer.ksat_layer * self.global_params.frozen_factor
             geff = calc_geff(
                 self.global_params,
-                self.attributes,
+                free_drainage_layer.attributes,
                 theta_1,
                 theta_2,
-                self.alpha_layer,
-                self.n_layer,
-                self.ksat_layer,
+                free_drainage_layer.alpha_layer,
+                free_drainage_layer.n_layer,
+                free_drainage_layer.ksat_layer,
             )
         # if the free_drainage wetting front is the top most, then the potential infiltration capacity has the following simple form
         if layer_num_fp == 0:
             f_p = self.ksat_layer * (1 + (geff + h_p) / current_free_drainage.depth)
         else:
+            previous_layer_thickness = self.global_params.cum_layer_thickness[layer_num_fp - 1]
             bottom_sum = (
                 current_free_drainage.depth
-                - self.previous_layer.cumulative_layer_thickness
-            ) / self.ksat_layer
-            raise NotImplementedError
+                - previous_layer_thickness
+            ) / free_drainage_ksat
+            bottom_sum = self.find_front_layer().calc_bottom_sum_f_p(bottom_sum, current_free_drainage)
+            f_p = (current_free_drainage.depth / bottom_sum) + ((geff + h_p) * free_drainage_ksat / current_free_drainage.depth)
 
         theta_e1 = current_front.theta
         layer_nums_equal = layer_num_fp == self.num_layers
@@ -1491,6 +1497,28 @@ class Layer:
             ponded_depth = 0.0
 
         return runoff, infiltration, ponded_depth
+
+    def calc_bottom_sum_f_p(self, bottom_sum, current_free_drainage):
+        """
+        Calculates the bottom sum for when you're inserting water into a layer that's not the first one
+        :param bottom_sum:
+        :param current_free_drainage:
+        :return:
+        """
+        k_cm_per_h = self.ksat_layer * self.global_params.frozen_factor
+        previous_layer_thickness = torch.tensor(0.0, device=self.global_params.device)
+        if self.layer_num != 0:
+            previous_layer_thickness = (
+                self.previous_layer.cumulative_layer_thickness
+            )
+        bottom_sum = bottom_sum + (
+                (self.cumulative_layer_thickness - previous_layer_thickness)
+                / k_cm_per_h
+        )
+        is_equal_layer = self.next_layer.layer_num == current_free_drainage.layer_num
+        if is_equal_layer:
+            return bottom_sum
+        return self.next_layer.calc_bottom_sum(bottom_sum, current_free_drainage)
 
     def calc_bottom_sum(self, bottom_sum, current_front):
         theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
@@ -1567,6 +1595,14 @@ class Layer:
             return self.next_layer.find_bottom_layer()
         else:
             return self
+
+    def find_layer(self, layer_num):
+        if self.layer_num == layer_num:
+            return self
+        if self.layer_num < layer_num:
+            return self.next_layer.find_layer(layer_num)
+        else:
+            return self.previous_layer.find_layer(layer_num)
 
     def print(self, first=True):
         if first:

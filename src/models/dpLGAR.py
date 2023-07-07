@@ -156,7 +156,7 @@ class dpLGAR(nn.Module):
             self.PET = self.PET + torch.max(pet_sub, torch.tensor(0.0))
             starting_volume_sub = self.calc_mass_balance()
             if create_surficial_front and is_top_layer_saturated is False:
-                # -------------------------------------------------------------------------------------------------------
+                # ------------------------------------------------------------------------------------------------------
                 # /* create a new wetting front if the following is true. Meaning there is no
                 #    wetting front in the top layer to accept the water, must create one. */
                 if is_top_layer_saturated is False:
@@ -180,7 +180,7 @@ class dpLGAR(nn.Module):
                     self.top_layer.copy_states()
                     self.infiltration = self.infiltration + infiltration_sub
             if create_surficial_front is False and ponded_depth_sub > 0:
-                # -------------------------------------------------------------------------------------------------------
+                # ------------------------------------------------------------------------------------------------------
                 # /* infiltrate water based on the infiltration capacity given no new wetting front
                 #    is created and that there is water on the surface (or raining). */
                 # TODO LOOK INTO WHY THE BOTTOM SUM IS MESSED UP AND WHAT THE MYSTERY ERROR IS AT STEP 1639-1640
@@ -207,7 +207,7 @@ class dpLGAR(nn.Module):
                     runoff_sub,
                 ) = self.update_ponded_depth(ponded_depth_sub)
             if create_surficial_front is False:
-                # -------------------------------------------------------------------------------------------------------
+                # ------------------------------------------------------------------------------------------------------
                 # /* move wetting fronts if no new wetting front is created. Otherwise, movement
                 #    of wetting fronts has already happened at the time of creating surficial front,
                 #    so no need to move them here. */
@@ -224,14 +224,30 @@ class dpLGAR(nn.Module):
                         self.percolation + percolation_sub
                 )  # Make sure the values aren't getting lost
                 infiltration_sub = infiltration_temp
-            # Prepping the loop for the next subtimestep
+
+            # ----------------------------------------------------------------------------------------------------------
+            # calculate derivative (dz/dt) for all wetting fronts
             self.top_layer.calc_dzdt(ponded_depth_sub)
             ending_volume_sub = self.calc_mass_balance()
             self.previous_precip = precip_sub
             self.ending_volume = ending_volume_sub
+
+            # ----------------------------------------------------------------------------------------------------------
+            # mass balance at the subtimestep (local mass balance)
+            local_mb = (
+                    starting_volume_sub
+                    + precip_sub
+                    + self.ponded_water
+                    - runoff_sub
+                    - AET_sub
+                    - ponded_water_sub
+                    - percolation_sub
+                    - ending_volume_sub
+            )
             self.AET = self.AET + AET_sub
             self.ponded_water = ponded_water_sub
-            # -----------------------------------------------------------------------------------------------------------
+
+            # ----------------------------------------------------------------------------------------------------------
             # compute giuh runoff for the subtimestep
             giuh_runoff_sub = calc_giuh(self.global_params, runoff_sub)
             self.giuh_runoff = self.giuh_runoff + giuh_runoff_sub
@@ -324,6 +340,7 @@ class dpLGAR(nn.Module):
 
     def print_local_mass_balance(
         self,
+        local_mb,
         starting_volume_sub,
         precip_sub,
         runoff_sub,
@@ -333,16 +350,6 @@ class dpLGAR(nn.Module):
         ending_volume_sub,
         infiltration_sub,
     ):
-        local_mb = (
-            starting_volume_sub
-            + precip_sub
-            + self.ponded_water
-            - runoff_sub
-            - AET_sub
-            - ponded_water_sub
-            - percolation_sub
-            - ending_volume_sub
-        )
         self.top_layer.print()
         log.info(f"Local mass balance at this timestep...")
         log.info(f"Error         = {local_mb.item():14.10f}")
@@ -356,6 +363,7 @@ class dpLGAR(nn.Module):
         log.info(f"Final water   = {ending_volume_sub.item():14.10f}")
 
         # self.print_local_mass_balance(
+        #     local_mb,
         #     starting_volume_sub,
         #     precip_sub,
         #     runoff_sub,
