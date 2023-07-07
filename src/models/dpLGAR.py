@@ -155,7 +155,7 @@ class dpLGAR(nn.Module):
             self.precip = self.precip + precip_sub
             self.PET = self.PET + torch.max(pet_sub, torch.tensor(0.0))
             starting_volume_sub = self.calc_mass_balance()
-            if create_surficial_front:
+            if create_surficial_front and is_top_layer_saturated is False:
                 # -------------------------------------------------------------------------------------------------------
                 # /* create a new wetting front if the following is true. Meaning there is no
                 #    wetting front in the top layer to accept the water, must create one. */
@@ -179,46 +179,34 @@ class dpLGAR(nn.Module):
                     )
                     self.top_layer.copy_states()
                     self.infiltration = self.infiltration + infiltration_sub
-                    if ponded_depth_sub <= 0:
-                        (
-                            ponded_depth_sub,
-                            ponded_water_sub,
-                            runoff_sub,
-                        ) = self.update_ponded_depth(ponded_depth_sub)
-            else:
+            if create_surficial_front is False and ponded_depth_sub > 0:
                 # -------------------------------------------------------------------------------------------------------
-                # /*----------------------------------------------------------------------*/
                 # /* infiltrate water based on the infiltration capacity given no new wetting front
                 #    is created and that there is water on the surface (or raining). */
-                if ponded_depth_sub > 0:
-                    #  infiltrate water based on the infiltration capacity given no new wetting front
-                    #  is created and that there is water on the surface (or raining).
-                    (
-                        runoff_sub,
-                        infiltration_sub,
-                        ponded_depth_sub,
-                    ) = self.top_layer.insert_water(
-                        subtimestep_h,
-                        precip_sub,
-                        ponded_depth_sub,
-                        infiltration_sub,
-                    )
+                # TODO LOOK INTO WHY THE BOTTOM SUM IS MESSED UP AND WHAT THE MYSTERY ERROR IS AT STEP 1639-1640
+                (
+                    runoff_sub,
+                    infiltration_sub,
+                    ponded_depth_sub,
+                ) = self.top_layer.insert_water(
+                    subtimestep_h,
+                    precip_sub,
+                    ponded_depth_sub,
+                    infiltration_sub,
+                )
 
-                    self.infiltration = self.infiltration + infiltration_sub
-                    self.runoff = self.runoff + runoff_sub
-                    percolation_sub = infiltration_sub  # this gets updated later, probably not needed here
+                self.infiltration = self.infiltration + infiltration_sub
+                self.runoff = self.runoff + runoff_sub
+                percolation_sub = infiltration_sub  # this gets updated later, probably not needed here
 
-                    ponded_water_sub = ponded_depth_sub
-
-                    if runoff_sub < 0:
-                        log.error("There is a mass balance problem")
-                        raise ValueError
-                else:
-                    (
-                        ponded_depth_sub,
-                        ponded_water_sub,
-                        runoff_sub,
-                    ) = self.update_ponded_depth(ponded_depth_sub)
+                ponded_water_sub = ponded_depth_sub
+            else:
+                (
+                    ponded_depth_sub,
+                    ponded_water_sub,
+                    runoff_sub,
+                ) = self.update_ponded_depth(ponded_depth_sub)
+            if create_surficial_front is False:
                 # -------------------------------------------------------------------------------------------------------
                 # /* move wetting fronts if no new wetting front is created. Otherwise, movement
                 #    of wetting fronts has already happened at the time of creating surficial front,
@@ -233,7 +221,7 @@ class dpLGAR(nn.Module):
                 )
                 percolation_sub = infiltration_sub.clone()
                 self.percolation = (
-                    self.percolation + percolation_sub
+                        self.percolation + percolation_sub
                 )  # Make sure the values aren't getting lost
                 infiltration_sub = infiltration_temp
             # Prepping the loop for the next subtimestep
