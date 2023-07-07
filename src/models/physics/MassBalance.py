@@ -49,16 +49,12 @@ class MassBalance:
         model.precip = torch.tensor(0.0, device=self.device)
         model.PET = torch.tensor(0.0, device=self.device)
         model.AET = torch.tensor(0.0, device=self.device)
-        model.ending_volume = self.starting_volume.clone()
-        model.ponded_water = torch.tensor(0.0, device=self.device)
-        model.precip_previous_timestep_cm = torch.tensor(0.0, device=self.device)
         model.infiltration = torch.tensor(0.0, device=self.device)
-        model.surface_runoff_timestep_cm = torch.tensor(0.0, device=self.device)
+        model.runoff = torch.tensor(0.0, device=self.device)
+        model.percolation = torch.tensor(0.0, device=self.device)
         model.giuh_runoff = torch.tensor(0.0, device=self.device)
         model.discharge = torch.tensor(0.0, device=self.device)
         model.groundwater_discharge = torch.tensor(0.0, device=self.device)
-        model.percolation = torch.tensor(0.0, device=self.device)
-        model.runoff = torch.tensor(0.0, device=self.device)
 
     def report_mass(self, global_params):
         for i in range(global_params.num_giuh_ordinates):

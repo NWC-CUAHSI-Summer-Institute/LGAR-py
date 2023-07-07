@@ -93,13 +93,12 @@ class dpLGAR(nn.Module):
         self.wf_free_drainage_demand = None
 
         # Running the initial mass balance check
-        self.starting_volume = self.calc_mass_balance()
+        self.ending_volume = self.calc_mass_balance()
 
         # Setting output tracking params
         self.precip = torch.tensor(0.0, device=self.cfg.device)
         self.PET = torch.tensor(0.0, device=self.cfg.device)
         self.AET = torch.tensor(0.0, device=self.cfg.device)
-        self.ending_volume = self.starting_volume.clone()
         # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
         self.ponded_water = torch.tensor(0.0, device=self.cfg.device)
         self.previous_precip = torch.tensor(0.0, device=self.cfg.device)
@@ -240,12 +239,13 @@ class dpLGAR(nn.Module):
             # Prepping the loop for the next subtimestep
             self.top_layer.calc_dzdt(ponded_depth_sub)
             ending_volume_sub = self.calc_mass_balance()
+            self.previous_precip = precip_sub
+            self.ending_volume = ending_volume_sub
+            self.AET = self.AET + AET_sub
+            self.ponded_water = ponded_water_sub
             # -----------------------------------------------------------------------------------------------------------
             # compute giuh runoff for the subtimestep
             giuh_runoff_sub = calc_giuh(self.global_params, runoff_sub)
-            self.previous_precip = precip_sub
-            self.ending_volume = ending_volume_sub
-            self.AET += AET_sub
             self.giuh_runoff = self.giuh_runoff + giuh_runoff_sub
             self.discharge = self.discharge + giuh_runoff_sub
             self.groundwater_discharge = groundwater_discharge_sub

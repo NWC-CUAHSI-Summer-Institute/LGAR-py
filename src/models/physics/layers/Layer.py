@@ -1346,7 +1346,7 @@ class Layer:
             # // not all ponded depth fits in
             infiltration = dry_depth * delta_theta
             ponded_depth = ponded_depth - (dry_depth * delta_theta)
-            theta_new = current_front.theta
+            theta_new = theta_e
             if dry_depth < self.cumulative_layer_thickness:
                 # checking against the first layer
                 new_front = WettingFront(
@@ -1372,10 +1372,6 @@ class Layer:
                 new_front.to_bottom = True
             self.wetting_fronts.insert(0, new_front)
 
-        layer_attributes = self.get_layer_attributes(new_front.layer_num)
-        theta_e = layer_attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = layer_attributes[self.global_params.soil_index["theta_r"]]
-        m = layer_attributes[self.global_params.soil_index["m"]]
         # These calculations are allowed as we're creating a dry layer of the same soil type
         se = calc_se_from_theta(theta_new, theta_e, theta_r)
         new_front.psi_cm = calc_h_from_se(se, self.alpha_layer, m, self.n_layer)

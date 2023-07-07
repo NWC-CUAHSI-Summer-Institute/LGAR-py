@@ -37,7 +37,7 @@ class Data(Dataset):
         self.x = x_tr * cfg.conversions.mm_to_cm
         # Creating a time interval
         time_values = self.forcing_df["Time"].values
-        self.timestep_map = {time: idx for idx, time in enumerate(time_values)}
+        self.timestep_map = {idx: time for idx, time in enumerate(time_values)}
 
         # TODO FIND OBSERVATION DATA TO TRAIN AGAINST
         self.y = torch.zeros([self.x.shape[0]], device=cfg.device).unsqueeze(1)
