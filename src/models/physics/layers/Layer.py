@@ -482,12 +482,11 @@ class Layer:
                 current_front.theta - next_front.theta
             )
 
-            wetting_layers_above = self.get_wetting_layers_above(index)
             delta_thetas = torch.zeros(
-                [wetting_layers_above + 1], device=self.global_params.device
+                [self.layer_num + 1], device=self.global_params.device
             )
             delta_thickness = torch.zeros(
-                [wetting_layers_above + 1], device=self.global_params.device
+                [self.layer_num + 1], device=self.global_params.device
             )
             (
                 prior_mass,
@@ -495,7 +494,7 @@ class Layer:
                 delta_thetas,
                 delta_thickness,
             ) = self.find_front_layer().compute_wetting_front_mass(
-                wetting_layers_above,
+                self.layer_num,
                 psi_cm,
                 psi_cm_old,
                 psi_cm_below,
@@ -542,7 +541,7 @@ class Layer:
 
     def compute_wetting_front_mass(
         self,
-        wetting_layers_above,
+        stop_layer,
         psi_cm,
         psi_cm_old,
         psi_cm_below,
@@ -564,7 +563,7 @@ class Layer:
         previous_layer_thickness = torch.tensor(0.0)
         if self.previous_layer is not None:
             previous_layer_thickness = self.previous_layer.cumulative_layer_thickness
-        if wetting_layers_above > 0:
+        if self.layer_num < stop_layer:
             theta_old = calc_theta_from_h(
                 psi_cm_old,
                 self.alpha_layer,
@@ -611,9 +610,8 @@ class Layer:
 
             delta_thetas[self.layer_num] = theta_below
             delta_thickness[self.layer_num] = layer_thickness
-            wetting_layers_above = wetting_layers_above - 1
             return self.next_layer.compute_wetting_front_mass(
-                wetting_layers_above,
+                stop_layer,
                 psi_cm,
                 psi_cm_old,
                 psi_cm_below,
@@ -734,9 +732,10 @@ class Layer:
                                 "next_to_next_front"
                             ] = self.next_layer.next_layer.wetting_fronts[0]
                 else:
-                    neighboring_fronts[
-                        "next_to_next_front"
-                    ] = self.next_layer.wetting_fronts[0]
+                    if self.next_layer is not None:
+                        neighboring_fronts[
+                            "next_to_next_front"
+                        ] = self.next_layer.wetting_fronts[0]
         return neighboring_fronts
 
     def calc_aet(self, pet: Tensor, subtimestep_h: float) -> Tensor:
