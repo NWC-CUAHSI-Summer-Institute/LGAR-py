@@ -110,9 +110,7 @@ class GlobalParams:
         self.soil_depth_cm = self.cum_layer_thickness[-1]
 
         self.initial_psi = torch.tensor(cfg.data.initial_psi, device=cfg.device)
-        self.ponded_depth_max_cm = torch.max(
-            torch.tensor(cfg.data.ponded_depth_max, device=cfg.device)
-        )
+        self.ponded_depth_max_cm = torch.tensor(cfg.data.ponded_depth_max, device=cfg.device, dtype=torch.float64)
 
         self.use_closed_form_G = cfg.data.use_closed_form_G
 

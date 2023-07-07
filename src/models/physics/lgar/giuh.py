@@ -1,18 +1,20 @@
-from omegaconf import DictConfig
 import logging
-import numpy as np
 import torch
 from torch import Tensor
 
-log = logging.getLogger("models.physics.lgar.green_ampt")
+log = logging.getLogger("models.physics.lgar.giuh")
 
 
-def calc_giuh(global_params, runoff_m) -> Tensor:
-    runoff_queue_m_per_timestep = torch.zeros([global_params.num_giuh_ordinates], device= global_params.device)
-    for i in range(global_params.num_giuh_ordinates):
-        runoff_queue_m_per_timestep[i] += global_params.giuh_ordinates[i] * runoff_m
-    runoff_m_now = runoff_queue_m_per_timestep[0]
-    for i in range(1, global_params.num_giuh_ordinates):
-        runoff_queue_m_per_timestep[i - 1] = runoff_queue_m_per_timestep[i]
-    runoff_queue_m_per_timestep[-1] = torch.tensor(0.0, device=global_params.device)
-    return runoff_m_now
+def calc_giuh(global_params, giuh_runoff_queue, runoff) -> (Tensor, Tensor):
+    """
+    Calculates GIUH runoff based on the GIUH parameters given
+    :param global_params:
+    :param giuh_runoff_queue:
+    :param runoff:
+    :return:
+    """
+    giuh_runoff_queue = giuh_runoff_queue + (global_params.giuh_ordinates * runoff)
+    runoff_now = giuh_runoff_queue[0]
+    giuh_runoff_queue = torch.roll(giuh_runoff_queue, shifts=-1)
+    giuh_runoff_queue[-1] = torch.tensor(0.0, device=global_params.device)
+    return runoff_now, giuh_runoff_queue

@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-log = logging.getLogger("models.physics.lgar.green_ampt")
+log = logging.getLogger("models.physics.MassBalance")
 
 
 class MassBalance:
@@ -58,6 +58,8 @@ class MassBalance:
         global_params = model.global_params
         for i in range(global_params.num_giuh_ordinates):
             self.giuh_runoff = self.giuh_runoff + global_params.giuh_runoff[i]
+
+        self.ending_volume = model.ending_volume
 
         global_error_cm = (
             self.starting_volume

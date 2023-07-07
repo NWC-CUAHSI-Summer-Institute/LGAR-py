@@ -70,6 +70,9 @@ class dpLGAR(nn.Module):
         # Creating tensors from config variables
         self.global_params = GlobalParams(cfg)
 
+        self.initialize_layers()
+
+    def initialize_layers(self):
         # Creating initial soil layer stack
         # We're only saving a reference to the top layer as all precip, PET, and runoff deal with it
         layer_index = 0  # This is the top layer
@@ -105,6 +108,9 @@ class dpLGAR(nn.Module):
         self.infiltration = torch.tensor(0.0, device=self.cfg.device)
         self.runoff = torch.tensor(0.0, device=self.cfg.device)
         self.giuh_runoff = torch.tensor(0.0, device=self.cfg.device)
+        self.giuh_runoff_queue = torch.zeros(
+            [self.global_params.num_giuh_ordinates], device=self.cfg.device
+        )
         self.discharge = torch.tensor(0.0, device=self.cfg.device)
         self.groundwater_discharge = torch.tensor(0.0, device=self.cfg.device)
         self.percolation = torch.tensor(0.0, device=self.cfg.device)
@@ -221,7 +227,7 @@ class dpLGAR(nn.Module):
                 )
                 percolation_sub = infiltration_sub.clone()
                 self.percolation = (
-                        self.percolation + percolation_sub
+                    self.percolation + percolation_sub
                 )  # Make sure the values aren't getting lost
                 infiltration_sub = infiltration_temp
 
@@ -235,24 +241,27 @@ class dpLGAR(nn.Module):
             # ----------------------------------------------------------------------------------------------------------
             # mass balance at the subtimestep (local mass balance)
             local_mb = (
-                    starting_volume_sub
-                    + precip_sub
-                    + self.ponded_water
-                    - runoff_sub
-                    - AET_sub
-                    - ponded_water_sub
-                    - percolation_sub
-                    - ending_volume_sub
+                starting_volume_sub
+                + precip_sub
+                + self.ponded_water
+                - runoff_sub
+                - AET_sub
+                - ponded_water_sub
+                - percolation_sub
+                - ending_volume_sub
             )
             self.AET = self.AET + AET_sub
             self.ponded_water = ponded_water_sub
 
             # ----------------------------------------------------------------------------------------------------------
-            # compute giuh runoff for the subtimestep
-            giuh_runoff_sub = calc_giuh(self.global_params, runoff_sub)
-            self.giuh_runoff = self.giuh_runoff + giuh_runoff_sub
-            self.discharge = self.discharge + giuh_runoff_sub
-            self.groundwater_discharge = groundwater_discharge_sub
+            # compute giuh runoff for the subtimestep if there is runoff or runoff recently
+            if self.giuh_runoff_queue.sum() > 0 or runoff_sub > 0:
+                giuh_runoff_sub, self.giuh_runoff_queue = calc_giuh(
+                    self.global_params, self.giuh_runoff_queue, runoff_sub
+                )
+                self.giuh_runoff = self.giuh_runoff + giuh_runoff_sub
+                self.discharge = self.discharge + giuh_runoff_sub
+                self.groundwater_discharge = groundwater_discharge_sub
         return self.runoff, self.percolation
 
     def calc_mass_balance(self) -> Tensor:
@@ -331,7 +340,7 @@ class dpLGAR(nn.Module):
             ponded_depth_sub = torch.tensor(0.0, device=self.cfg.device)
 
         else:
-            # There is some runoff here
+            # This is the timestep that adds runoff
             runoff_sub = ponded_depth_sub - self.global_params.ponded_depth_max_cm
             ponded_depth_sub = self.global_params.ponded_depth_max_cm
             ponded_water_sub = ponded_depth_sub

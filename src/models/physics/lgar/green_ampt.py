@@ -58,11 +58,6 @@ def calc_geff(global_params, attributes, theta_1, theta_2, alpha, n, ksat) -> Te
         # capillary head associated with Se_f [cm]
         h_f = calc_h_from_se(se_f, alpha, m, n)
 
-        # /* if the lower limit of integration is less than h_min FIXME?? */
-        if h_i < h_min_cm:
-            # commenting out as this is not used in the Python version
-            return h_min_cm
-
         # Checkpoint
         se_inverse_i = calc_se_from_h(h_i, alpha, m, n)
         se_inverse_f = calc_se_from_h(h_f, alpha, m, n)
