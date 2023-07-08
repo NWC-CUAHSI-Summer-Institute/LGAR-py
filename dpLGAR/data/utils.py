@@ -5,7 +5,7 @@ from pathlib import Path
 import torch
 from torch import Tensor
 
-from src.models.physics.utils import (
+from dpLGAR.models.physics.utils import (
     calc_theta_from_h,
     calc_bc_lambda,
     calc_bc_psib,

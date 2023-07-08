@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from src.models.physics.utils import (
+from dpLGAR.models.physics.utils import (
     calc_theta_from_h,
     calc_se_from_theta,
     calc_h_from_se,

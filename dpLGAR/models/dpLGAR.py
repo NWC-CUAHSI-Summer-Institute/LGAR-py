@@ -19,13 +19,13 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 
-from src.data.utils import generate_soil_metrics, read_df, read_test_params
-from src.models.physics.GlobalParams import GlobalParams
-from src.models.physics.layers.Layer import Layer
-from src.models.physics.lgar.frozen_factor import (
+from dpLGAR.data.utils import generate_soil_metrics, read_df, read_test_params
+from dpLGAR.models.physics.GlobalParams import GlobalParams
+from dpLGAR.models.physics.layers.Layer import Layer
+from dpLGAR.models.physics.lgar.frozen_factor import (
     frozen_factor_hydraulic_conductivity,
 )
-from src.models.physics.lgar.giuh import calc_giuh
+from dpLGAR.models.physics.lgar.giuh import calc_giuh
 
 log = logging.getLogger("models.dpLGAR")
 

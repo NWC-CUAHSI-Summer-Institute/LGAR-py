@@ -12,7 +12,7 @@ from typing import (
     TypeVar,
 )
 
-from src.data.utils import read_df
+from dpLGAR.data.utils import read_df
 
 log = logging.getLogger("data.Data")
 T_co = TypeVar("T_co", covariant=True)

@@ -5,10 +5,10 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 
-from src.models.physics.layers.WettingFront import WettingFront
-from src.models.physics.lgar.aet import calc_aet
-from src.models.physics.lgar.green_ampt import calc_geff
-from src.models.physics.utils import (
+from dpLGAR.models.physics.layers.WettingFront import WettingFront
+from dpLGAR.models.physics.lgar.aet import calc_aet
+from dpLGAR.models.physics.lgar.green_ampt import calc_geff
+from dpLGAR.models.physics.utils import (
     calc_theta_from_h,
     calc_se_from_theta,
     calc_h_from_se,

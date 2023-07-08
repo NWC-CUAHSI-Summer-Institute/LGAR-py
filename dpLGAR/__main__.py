@@ -3,7 +3,7 @@ import logging
 from omegaconf import DictConfig
 import time
 
-from src.agents.DifferentiableLGAR import DifferentiableLGAR
+from dpLGAR.agents.DifferentiableLGAR import DifferentiableLGAR
 
 log = logging.getLogger(__name__)
 

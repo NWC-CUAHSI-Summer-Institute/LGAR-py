@@ -5,7 +5,7 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 
-from src.models.physics.utils import calc_se_from_theta, calc_k_from_se
+from dpLGAR.models.physics.utils import calc_se_from_theta, calc_k_from_se
 
 log = logging.getLogger("models.physics.layers.WettingFront")
 

@@ -6,11 +6,11 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.agents.base import BaseAgent
-from src.data.Data import Data
-from src.data.metrics import calculate_nse
-from src.models.dpLGAR import dpLGAR
-from src.models.physics.MassBalance import MassBalance
+from dpLGAR.agents.base import BaseAgent
+from dpLGAR.data.Data import Data
+from dpLGAR.data.metrics import calculate_nse
+from dpLGAR.models.dpLGAR import dpLGAR
+from dpLGAR.models.physics.MassBalance import MassBalance
 
 log = logging.getLogger("agents.DifferentiableLGAR")
 

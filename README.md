@@ -1,28 +1,69 @@
-# dpLGAR
+ <h1>dpLGAR</h1>
 
-Foobar is a Python library for dealing with word pluralization.
+  <a href="#">
+    <img src="https://img.shields.io/pypi/l/hydra-core" alt="PyPI - License" />
+  </a>
+  <a href="#">
+    <img src="https://img.shields.io/pypi/pyversions/hydra-core" alt="PyPI - Python Version" />
+  </a>
+  <a href="https://github.com/psf/black">
+    <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black" />
+  </a>
 
+The Differentiable Parameter Learning Layered Green & Ampt with Redistribution (dpLGAR) model is a 
+differentiable implementation of LGAR (see below). All operations of the model are coded using PyTorch to track gradients
+and tune model parameters. 
+### Lumped Arid/Semi-arid Model (LASAM) for infiltration and surface runoff
+
+The LASAM simulates infiltration and runoff based on Layered Green & Ampt with redistribution (LGAR) model. 
+LGAR is a model which partitions precipitation into infiltration and runoff, 
+and is designed for use in arid or semi arid climates. LGAR closely mimics precipitation partitioning results simulated 
+by the famous Richards/Richardson equation (RRE), without the inherent reliability and stability challenges the RRE poses. 
+Therefore, this model is useful when accurate, stable precipitation partitioning simulations are desired in arid or semi arid areas. 
+
+LGAR has its C version that is available [here](https://github.com/NOAA-OWP/LGAR-C). 
+
+**Published Papers:**
+- _Layered Green & Ampt Infiltration with Redistribution_ https://doi.org/10.1029/2022WR033742
+
+BibTeX:
+```BibTeX
+@article{La Follette_Ogden_Jan_2023, 
+    title={Layered green & AMPT infiltration with redistribution},
+    DOI={10.1029/2022wr033742}, 
+    journal={Water Resources Research}, 
+    author={La Follette, Peter and Ogden, Fred L. and Jan, Ahmad}, 
+    year={2023}
+} 
+```
 ## Installation
 
-Use the package manager [pip](https://pip.pypa.io/en/stable/) to install foobar.
-
+Use conda to create your own env based on our `environment.yml` file
 ```bash
-pip install foobar
+conda env create -f environment.yml
+conda activate lgar
 ```
 
 ## Running this code
 
+We are using [Hydra](https://github.com/facebookresearch/hydra) to store/manage configuration files. 
+
+The main branch code is currently configured to run the Phillipsburg, KS
+test case. If you want to use your own case, you will need to manage three config 
+files located here:
+
+- `dpLGAR/config.yaml`
+  - The main config file. I recommend looking at the Hydra config docs [here](https://hydra.cc/docs/1.3/intro/)
+  to learn how this file is structured. 
+- `dpLGAR/models/config/base.yaml`
+  - This holds all config values for the models
+- `dpLGAR/data/config/<site_name>.yaml`
+  - This holds all config values for the dataset you're working on.
+
+To run the code, just run the following command inside the `dpLGAR/` folder:
+
 ```python
-import foobar
-
-# returns 'words'
-foobar.pluralize('word')
-
-# returns 'geese'
-foobar.pluralize('goose')
-
-# returns 'phenomenon'
-foobar.singularize('phenomena')
+python -m dpLGAR
 ```
 
 ## Contributing
