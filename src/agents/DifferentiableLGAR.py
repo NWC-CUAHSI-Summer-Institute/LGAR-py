@@ -53,7 +53,7 @@ class DifferentiableLGAR(BaseAgent):
         # Defining the model and output variables to save
         self.model = dpLGAR(self.cfg)
         self.percolation_output = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
-        self.mass_balance = MassBalance(cfg, self.model.ending_volume)
+        self.mass_balance = MassBalance(cfg, self.model)
 
         self.criterion = torch.nn.MSELoss()
         self.optimizer = torch.optim.Adam(
@@ -81,6 +81,11 @@ class DifferentiableLGAR(BaseAgent):
         for epoch in range(1, self.cfg.models.hyperparameters.epochs + 1):
             self.train_one_epoch()
             self.current_epoch += 1
+
+            # Resetting the internal states (soil layers) for the next run
+            self.model.set_internal_states()
+            # Resetting the mass
+            self.mass_balance.reset_mass(self.model)
 
     def train_one_epoch(self):
         """

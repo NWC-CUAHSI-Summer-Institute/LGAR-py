@@ -8,27 +8,25 @@ log = logging.getLogger("models.physics.MassBalance")
 
 
 class MassBalance:
-    def __init__(self, cfg: DictConfig, starting_volume):
+    def __init__(self, cfg: DictConfig, model):
         super().__init__()
         self.device = cfg.device
 
-        self.precip = torch.tensor(0.0, device=self.device)
-        self.infiltration = torch.tensor(0.0, device=self.device)
-        self.starting_volume = starting_volume.clone()
-        self.ending_volume = torch.tensor(0.0, device=self.device)
-        self.AET = torch.tensor(0.0, device=self.device)
-        self.percolation = torch.tensor(0.0, device=self.device)
-        self.runoff = torch.tensor(0.0, device=self.device)
-        self.giuh_runoff = torch.tensor(0.0, device=self.device)
-        self.discharge = torch.tensor(0.0, device=self.device)
-        self.PET = torch.tensor(0.0, device=self.device)
-        self.ponded_depth = torch.tensor(0.0, device=self.device)
+        self.precip = None
+        self.infiltration = None
+        self.starting_volume = None
+        self.ending_volume = None
+        self.AET = None
+        self.percolation = None
+        self.runoff = None
+        self.giuh_runoff = None
+        self.discharge = None
+        self.PET = None
+        self.ponded_depth = None
+        self.ponded_water = None
+        self.groundwater_discharge = None
 
-        # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
-        self.ponded_water = torch.tensor(0.0, device=self.device)
-
-        # setting flux from groundwater_reservoir_to_stream to zero, will be non-zero when groundwater reservoir is added/simulated
-        self.groundwater_discharge = torch.tensor(0.0, device=self.device)
+        self.set_internal_states(model)
 
     def change_mass(self, model):
         self.precip = self.precip + model.precip
@@ -53,6 +51,28 @@ class MassBalance:
         model.giuh_runoff = torch.tensor(0.0, device=self.device)
         model.discharge = torch.tensor(0.0, device=self.device)
         model.groundwater_discharge = torch.tensor(0.0, device=self.device)
+
+    def reset_mass(self, model):
+        self.set_internal_states(model)
+
+    def set_internal_states(self, model):
+        self.precip = torch.tensor(0.0, device=self.device)
+        self.infiltration = torch.tensor(0.0, device=self.device)
+        self.starting_volume = model.ending_volume.clone()
+        self.ending_volume = torch.tensor(0.0, device=self.device)
+        self.AET = torch.tensor(0.0, device=self.device)
+        self.percolation = torch.tensor(0.0, device=self.device)
+        self.runoff = torch.tensor(0.0, device=self.device)
+        self.giuh_runoff = torch.tensor(0.0, device=self.device)
+        self.discharge = torch.tensor(0.0, device=self.device)
+        self.PET = torch.tensor(0.0, device=self.device)
+        self.ponded_depth = torch.tensor(0.0, device=self.device)
+
+        # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
+        self.ponded_water = torch.tensor(0.0, device=self.device)
+
+        # setting flux from groundwater_reservoir_to_stream to zero, will be non-zero when groundwater reservoir is added/simulated
+        self.groundwater_discharge = torch.tensor(0.0, device=self.device)
 
     def report_mass(self, model):
         global_params = model.global_params

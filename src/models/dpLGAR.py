@@ -70,9 +70,29 @@ class dpLGAR(nn.Module):
         # Creating tensors from config variables
         self.global_params = GlobalParams(cfg)
 
-        self.initialize_layers()
+        # Initializing Values
+        self.top_layer = None
+        self.bottom_layer = None
+        self.num_wetting_fronts = None
+        self.wf_free_drainage_demand = None
+        self.ending_volume = None
+        self.precip = None
+        self.PET = None
+        self.AET = None
+        self.ponded_water = None
+        self.previous_precip = None
+        self.infiltration = None
+        self.runoff = None
+        self.giuh_runoff = None
+        self.giuh_runoff_queue = None
+        self.discharge = None
+        self.groundwater_discharge = None
+        self.percolation = None
 
-    def initialize_layers(self):
+        # Setting internal states (soil layers)
+        self.set_internal_states()
+
+    def set_internal_states(self):
         # Creating initial soil layer stack
         # We're only saving a reference to the top layer as all precip, PET, and runoff deal with it
         layer_index = 0  # This is the top layer
@@ -102,7 +122,8 @@ class dpLGAR(nn.Module):
         self.precip = torch.tensor(0.0, device=self.cfg.device)
         self.PET = torch.tensor(0.0, device=self.cfg.device)
         self.AET = torch.tensor(0.0, device=self.cfg.device)
-        # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
+
+        # setting volon and precip at the initial time to 0.0 as they determine the creation of surficial wetting front
         self.ponded_water = torch.tensor(0.0, device=self.cfg.device)
         self.previous_precip = torch.tensor(0.0, device=self.cfg.device)
         self.infiltration = torch.tensor(0.0, device=self.cfg.device)
@@ -189,7 +210,6 @@ class dpLGAR(nn.Module):
                 # ------------------------------------------------------------------------------------------------------
                 # /* infiltrate water based on the infiltration capacity given no new wetting front
                 #    is created and that there is water on the surface (or raining). */
-                # TODO LOOK INTO WHY THE BOTTOM SUM IS MESSED UP AND WHAT THE MYSTERY ERROR IS AT STEP 1639-1640
                 (
                     runoff_sub,
                     infiltration_sub,
@@ -285,7 +305,7 @@ class dpLGAR(nn.Module):
         # This enusures we don't add extra mass from a previous storm event
         has_previous_precip = (previous_precip == 0.0).item()
         is_it_raining = (precip_sub > 0.0).item()
-        is_there_ponded_water = self.ponded_water == 0
+        is_there_ponded_water = (self.ponded_water == 0).item()
         return has_previous_precip and is_it_raining and is_there_ponded_water
 
     def calc_num_wetting_fronts(self):
