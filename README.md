@@ -28,7 +28,7 @@ LGAR has its C version that is available [here](https://github.com/NOAA-OWP/LGAR
 
 BibTeX:
 ```BibTeX
-@article{La Follette_Ogden_Jan_2023, 
+@article{LaFollette_Ogden_Jan_2023, 
     title={Layered green & AMPT infiltration with redistribution},
     DOI={10.1029/2022wr033742}, 
     journal={Water Resources Research}, 
