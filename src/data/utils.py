@@ -67,12 +67,12 @@ def generate_soil_metrics(
     )
     # alpha = torch.tensor(self.soils_df["alpha(cm^-1)"], device=cfg.device) this is a nn.param. Commenting out to not pull from the .dat file
     # n = torch.tensor(self.soils_df["n"], device=cfg.device) this is a nn.param. Commenting out to not pull from the .dat file
-    m = torch.tensor(soils_df["m"], device=cfg.device)  # TODO We're calculating this through n
+    # m = torch.tensor(soils_df["m"], device=cfg.device)  # TODO We're calculating this through n
     theta_e = torch.tensor(soils_df["theta_e"], device=cfg.device)
     theta_r = torch.tensor(soils_df["theta_r"], device=cfg.device)
     # k_sat = torch.tensor(self.soils_df["Ks(cm/h)"] device=cfg.device) this is a nn.param. Commenting out to not pull from the .dat file
     # ksat_cm_per_h = k_sat * cfg.constants.frozen_factor
-    # m = torch.zeros(len(alpha), device=cfg.device)
+    m = torch.zeros(len(alpha), device=cfg.device)
     theta_wp = torch.zeros(len(alpha), device=cfg.device)
     theta_init = torch.zeros(len(alpha), device=cfg.device)
     bc_lambda = torch.zeros(len(alpha), device=cfg.device)
@@ -81,9 +81,9 @@ def generate_soil_metrics(
     for i in range(len(alpha)):
         single_alpha = alpha[i]
         single_n = n[i]
-        # m[i] = calc_m(
-        #     single_n
-        # )  # Commenting out temporarily so that our test cases match
+        m[i] = calc_m(
+            single_n
+        )
         theta_wp[i] = calc_theta_from_h(
             h, single_alpha, m[i], single_n, theta_e[i], theta_r[i]
         )
