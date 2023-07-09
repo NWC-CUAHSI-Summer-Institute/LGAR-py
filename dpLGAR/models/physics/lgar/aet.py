@@ -8,6 +8,7 @@ from dpLGAR.models.physics.utils import (
     calc_theta_from_h,
     calc_se_from_theta,
     calc_h_from_se,
+    safe_pow
 )
 
 log = logging.getLogger("models.physics.lgar.aet")
@@ -42,8 +43,8 @@ def calc_aet(global_params, subtimestep_h, pet, psi_cm, theta_e, theta_r, m, alp
     theta_wp = (theta_fc - wp_head_theta) * 0.5 + wp_head_theta  # theta_50 in python
     se = calc_se_from_theta(theta_wp, theta_e, theta_r)
     psi_wp_cm = calc_h_from_se(se, alpha, m, n)
-
-    h_ratio = 1.0 + torch.pow((psi_cm / psi_wp_cm), 3.0)
+    exponent = torch.tensor(3.0)
+    h_ratio = 1.0 + safe_pow((psi_cm / psi_wp_cm), exponent)
     actual_ET_demand_ = pet * (1 / h_ratio) * subtimestep_h
     # Actual ET cannot be higher than PET nor negative
     actual_ET_demand = torch.clamp(actual_ET_demand_, min=0.0, max=pet)

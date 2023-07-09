@@ -7,6 +7,28 @@ from torch import Tensor
 log = logging.getLogger("physics.utils")
 
 
+def safe_pow(base, exponent):
+    # Check inputs for NaN values
+    if torch.any(torch.isnan(base)) or torch.any(torch.isnan(exponent)):
+        log.error("NaN values found in inputs of pow operation")
+        raise ValueError
+
+    zero = torch.tensor(0.0)
+    if torch.isclose(base, zero, 1e-7):
+        log.error("base is too small")
+        raise ValueError
+
+    # Perform the pow operation
+    result = torch.pow(base, exponent)
+
+    # Check result for NaN values
+    if torch.any(torch.isnan(result)):
+        log.error("NaN values found in result of pow operation")
+        raise ValueError
+
+    return result
+
+
 def calc_theta_from_h(
     h: Tensor, alpha: Tensor, m: Tensor, n: Tensor, theta_e: Tensor, theta_r: Tensor
 ) -> torch.Tensor():
@@ -18,8 +40,8 @@ def calc_theta_from_h(
     :parameter device: the device that we're using
     :return thickness of individual layers
     """
-    alpha_pow = torch.pow(alpha * h, n)
-    outer_alpha_pow = (torch.pow(1.0 + alpha_pow, m))
+    alpha_pow = safe_pow(alpha * h, n)
+    outer_alpha_pow = (safe_pow(1.0 + alpha_pow, m))
     result = (
         1.0 / outer_alpha_pow * (theta_e - theta_r)
     ) + theta_r
@@ -77,6 +99,7 @@ def calc_bc_psib(alpha: Tensor, m: Tensor) -> Tensor:
 def calc_se_from_theta(theta: Tensor, theta_e: Tensor, theta_r: Tensor) -> Tensor:
     """
     function to calculate Se from theta
+    ((theta-r)/(e-r));
     :param theta_init: the calculated inital theta
     :param theta_e: theta_e
     :param theta_r: theta_r
@@ -100,25 +123,32 @@ def calc_se_from_h(h, alpha, m, n):
         return torch.tensor(
             1.0
         )  # TODO EXPLORE A CLAMP (this function doesn't work well for tiny h)
-    internal_state = torch.pow(alpha * h, n)
-    result = 1.0 / (torch.pow(1.0 + internal_state, m))
+    internal_state = safe_pow(alpha * h, n)
+    result = 1.0 / (safe_pow(1.0 + internal_state, m))
     return error_check(result)
 
 
 def calc_k_from_se(se: Tensor, ksat: Tensor, m: Tensor) -> Tensor:
     """
     function to calculate K from Se
+    (Ksat * sqrt(Se) * pow(1.0 - pow(1.0 - pow(Se,1.0/m), m), 2.0));
     :param se: this is the relative (scaled 0-1) water content, like Theta
     :param ksat: saturated hydraulic conductivity
     :param m: Van Genuchten
     :return: hydraulic conductivity (K)
     """
-    se_pow = torch.pow(se, 1.0 / m)
-    outside_se_pow = torch.pow(1.0 - se_pow, m)
+    se_pow = safe_pow(se, 1.0 / m)
+    base = 1.0 - se_pow
+    zero = torch.tensor(0.0)
+    threshold = torch.tensor(1e-6)
+    if torch.isclose(base, zero, threshold):
+        base = base + threshold
+    outside_se_pow = safe_pow(base, m)
+    exponent = torch.tensor(2.0)
     result = (
         ksat
         * torch.sqrt(se)
-        * torch.pow(1.0 - outside_se_pow, 2.0)
+        * safe_pow(1.0 - outside_se_pow, exponent)
     )
     return error_check(result)
 
@@ -127,10 +157,16 @@ def calc_h_from_se(
     se: torch.Tensor, alpha: torch.Tensor, m: torch.Tensor, n: torch.Tensor
 ):
     """
-    function to calculate h from Se
+    function to calculate h from Se using:
+    1.0/alpha*pow(pow(Se,-1.0/m)-1.0,1.0/n))
     """
-    se_pow = torch.pow(se, (-1.0 / m))
-    outside_se_pow = torch.pow(se_pow - 1.0, (1.0 / n))
+    se_pow = safe_pow(se, (-1.0 / m))
+    base = se_pow - 1.0
+    zero = torch.tensor(0.0)
+    threshold = torch.tensor(1e-6)
+    if torch.isclose(base, zero, threshold):
+        base = base + threshold
+    outside_se_pow = safe_pow(base, (1.0 / n))
     result = 1.0 / alpha * outside_se_pow
     return error_check(result)
 

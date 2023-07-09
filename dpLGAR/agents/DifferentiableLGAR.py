@@ -24,7 +24,6 @@ class DifferentiableLGAR(BaseAgent):
         :param cfg:
         """
         super().__init__()
-        # torch.autograd.set_detect_anomaly(True)  # Temp
 
         # Setting the cfg object and manual seed for reproducibility
         self.cfg = cfg
