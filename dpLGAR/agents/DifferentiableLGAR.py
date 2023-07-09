@@ -4,7 +4,7 @@ import time
 import torch
 from torch import Tensor
 from torch.utils.data import DataLoader
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
 from dpLGAR.agents.base import BaseAgent
 from dpLGAR.data.Data import Data
@@ -34,7 +34,9 @@ class DifferentiableLGAR(BaseAgent):
         self.cfg.models.endtime_s = (
             self.cfg.models.endtime * self.cfg.conversions.hr_to_sec
         )
-        self.cfg.models.subcycle_length_h = self.cfg.models.subcycle_length * (1 / self.cfg.conversions.hr_to_sec)
+        self.cfg.models.subcycle_length_h = self.cfg.models.subcycle_length * (
+            1 / self.cfg.conversions.hr_to_sec
+        )
         self.cfg.models.forcing_resolution_h = (
             self.cfg.models.forcing_resolution / self.cfg.conversions.hr_to_sec
         )
@@ -44,15 +46,24 @@ class DifferentiableLGAR(BaseAgent):
         self.cfg.models.nsteps = int(
             self.cfg.models.endtime_s / self.cfg.models.time_per_step
         )
-        self.cfg.models.num_subcycles = int(self.cfg.models.forcing_resolution_h / self.cfg.models.subcycle_length_h)
+        self.cfg.models.num_subcycles = int(
+            self.cfg.models.forcing_resolution_h / self.cfg.models.subcycle_length_h
+        )
 
+        self.hourly_mini_batch = (
+            cfg.models.hyperparameters.minibatch * 24
+        )  # daily to hourly
         # Defining the torch Dataset and Dataloader
         self.data = Data(self.cfg)
-        self.data_loader = DataLoader(self.data, batch_size=1, shuffle=False)
+        self.data_loader = DataLoader(
+            self.data, batch_size=self.hourly_mini_batch, shuffle=False
+        )
 
         # Defining the model and output variables to save
         self.model = dpLGAR(self.cfg)
-        self.percolation_output = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
+        self.percolation_output = torch.zeros(
+            [self.cfg.models.nsteps], device=self.cfg.device
+        )
         self.mass_balance = MassBalance(cfg, self.model)
 
         self.criterion = torch.nn.MSELoss()
@@ -92,22 +103,28 @@ class DifferentiableLGAR(BaseAgent):
         One epoch of training
         :return:
         """
-        self.optimizer.zero_grad()
+        use_warmup = True
+        for i, (x, y_t) in enumerate(self.data_loader):
+            self.optimizer.zero_grad()
+            # Resetting output vars
+            y_hat = torch.zeros([x.shape[0]], device=self.cfg.device)  # runoff
+            self.percolation_output = torch.zeros([x.shape[0]], device=self.cfg.device)
+            for j in trange(x.shape[0], desc=f"Running Minibatch {i+1}", leave=True):
+                # Minibatch loop
+                inputs = x[j]
+                runoff, percolation = self.model(inputs)
+                y_hat[j] = runoff
+                self.percolation_output[j] = percolation
+                # Updating the total mass of the system
+                self.mass_balance.change_mass(self.model)
+                time.sleep(0.01)
+            # self.mass_balance.report_mass(self.model)
+            if y_hat.requires_grad:
+                # If there is no gradient (i.e. no runoff, then we shouldn't validate
+                self.validate(y_hat, y_t, use_warmup)
+            use_warmup = False
 
-        # Resetting output vars
-        y_hat = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)  # runoff
-        self.percolation_output = torch.zeros([self.cfg.models.nsteps], device=self.cfg.device)
-
-        for i, (x, y_t) in enumerate(tqdm(self.data_loader, desc="Processing data")):
-            runoff, percolation = self.model(i, x)
-            y_hat[i] = runoff
-            self.percolation_output[i] = percolation
-            # Updating the total mass of the system
-            self.mass_balance.change_mass(self.model)
-        self.mass_balance.report_mass(self.model)
-        self.validate(y_hat, self.data.y)
-
-    def validate(self, y_hat_: Tensor, y_t_: Tensor) -> None:
+    def validate(self, y_hat_, y_t_, use_warmup) -> None:
         """
         One cycle of model validation
         This function calculates the loss for the given predicted and actual values,
@@ -117,9 +134,13 @@ class DifferentiableLGAR(BaseAgent):
         - y_hat_ : The tensor containing predicted values
         - y_t_ : The tensor containing actual values.
         """
-        warmup = self.cfg.data.hyperparameters.warmup
-        y_hat = y_hat_[warmup:]
-        y_t = y_t_[warmup:]
+        if use_warmup:
+            warmup = self.cfg.models.hyperparameters.warmup
+            y_hat = y_hat_[warmup:]
+            y_t = y_t_[warmup:]
+        else:
+            y_hat = y_hat_
+            y_t = y_t_
 
         # Outputting trained Nash-Sutcliffe efficiency (NSE) coefficient
         log.info(
@@ -140,7 +161,6 @@ class DifferentiableLGAR(BaseAgent):
 
         # Update the model parameters
         self.optimizer.step()
-
 
     def finalize(self):
         """

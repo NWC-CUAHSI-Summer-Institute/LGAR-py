@@ -1,14 +1,6 @@
- <h1>dpLGAR</h1>
+# dpLGAR
 
-  <a href="#">
-    <img src="https://img.shields.io/pypi/l/hydra-core" alt="PyPI - License" />
-  </a>
-  <a href="#">
-    <img src="https://img.shields.io/pypi/pyversions/hydra-core" alt="PyPI - Python Version" />
-  </a>
-  <a href="https://github.com/psf/black">
-    <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black" />
-  </a>
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) ![versions](https://img.shields.io/pypi/pyversions/hydra-core.svg) [![CodeStyle](https://img.shields.io/badge/code%20style-Black-black)]()
 
 The Differentiable Parameter Learning Layered Green & Ampt with Redistribution (dpLGAR) model is a 
 differentiable implementation of LGAR (see below). All operations of the model are coded using PyTorch to track gradients

@@ -89,6 +89,24 @@ class Layer:
             )
         self.previous_state = self.deepcopy()
 
+    def update_soil_parameters(self, c, alpha, n, ksat):
+        """
+        Updating the soil parameters stored inside the Layers
+        """
+        self.attributes = c[self.soil_type]
+        for wf in self.wetting_fronts:
+            wf.update_soil_parameters(
+                self.global_params,
+                self.attributes,
+                self.alpha_layer,
+                self.n_layer,
+                self.ksat_layer,
+            )
+        if self.next_layer is not None:
+            self.next_layer.update_soil_parameters(c, alpha, n, ksat)
+        else:
+            return None
+
     def deepcopy(self):
         """
         Creating a persisted copy of the previous wetting fronts and states
@@ -1082,7 +1100,9 @@ class Layer:
                 theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
                 m = self.attributes[self.global_params.soil_index["m"]]
                 se_k = calc_se_from_theta(current_front.theta, theta_e, theta_r)
-                current_front.psi_cm = calc_h_from_se(se_k, self.alpha_layer, m, self.n_layer)
+                current_front.psi_cm = calc_h_from_se(
+                    se_k, self.alpha_layer, m, self.n_layer
+                )
                 self.find_front_layer().update_layer_fronts(current_front)
                 return None
         if self.next_layer is not None:
@@ -1104,8 +1124,17 @@ class Layer:
                 theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
                 m = self.attributes[self.global_params.soil_index["m"]]
                 se_l = calc_se_from_theta(dry_front.theta, theta_e, theta_r)
-                current_front.psi_cm = calc_h_from_se(se_l, self.alpha_layer, m, self.n_layer)
-                current_front.theta = calc_theta_from_h(dry_front.psi_cm, self.alpha_layer, m, self.n_layer, theta_e, theta_r)
+                current_front.psi_cm = calc_h_from_se(
+                    se_l, self.alpha_layer, m, self.n_layer
+                )
+                current_front.theta = calc_theta_from_h(
+                    dry_front.psi_cm,
+                    self.alpha_layer,
+                    m,
+                    self.n_layer,
+                    theta_e,
+                    theta_r,
+                )
             return self.next_layer.update_layer_fronts(dry_front)
         else:
             return None
@@ -1431,10 +1460,14 @@ class Layer:
             # i.e., case of no capillary suction, dz/dt is also zero for all wetting fronts
         else:
             free_drainage_layer = self.find_layer(layer_num_fp)
-            theta_e = free_drainage_layer.attributes[self.global_params.soil_index["theta_e"]]
+            theta_e = free_drainage_layer.attributes[
+                self.global_params.soil_index["theta_e"]
+            ]
             theta_1 = next_free_drainage.theta  # theta_below
             theta_2 = theta_e
-            free_drainage_ksat = free_drainage_layer.ksat_layer * self.global_params.frozen_factor
+            free_drainage_ksat = (
+                free_drainage_layer.ksat_layer * self.global_params.frozen_factor
+            )
             geff = calc_geff(
                 self.global_params,
                 free_drainage_layer.attributes,
@@ -1448,13 +1481,18 @@ class Layer:
         if layer_num_fp == 0:
             f_p = self.ksat_layer * (1 + (geff + h_p) / current_free_drainage.depth)
         else:
-            previous_layer_thickness = self.global_params.cum_layer_thickness[layer_num_fp - 1]
+            previous_layer_thickness = self.global_params.cum_layer_thickness[
+                layer_num_fp - 1
+            ]
             bottom_sum = (
-                current_free_drainage.depth
-                - previous_layer_thickness
+                current_free_drainage.depth - previous_layer_thickness
             ) / free_drainage_ksat
-            bottom_sum = self.find_front_layer().calc_bottom_sum_f_p(bottom_sum, current_free_drainage)
-            f_p = (current_free_drainage.depth / bottom_sum) + ((geff + h_p) * free_drainage_ksat / current_free_drainage.depth)
+            bottom_sum = self.find_front_layer().calc_bottom_sum_f_p(
+                bottom_sum, current_free_drainage
+            )
+            f_p = (current_free_drainage.depth / bottom_sum) + (
+                (geff + h_p) * free_drainage_ksat / current_free_drainage.depth
+            )
 
         theta_e1 = current_front.theta
         layer_nums_equal = layer_num_fp == self.num_layers
@@ -1494,7 +1532,7 @@ class Layer:
                 runoff = torch.tensor(0.0, device=self.global_params.device)
             else:
                 runoff = ponded_depth - infiltration
-            ponded_depth = 0.0
+            ponded_depth = torch.tensor(0.0, device=self.global_params.device)
 
         return runoff, infiltration, ponded_depth
 
@@ -1508,12 +1546,9 @@ class Layer:
         k_cm_per_h = self.ksat_layer * self.global_params.frozen_factor
         previous_layer_thickness = torch.tensor(0.0, device=self.global_params.device)
         if self.layer_num != 0:
-            previous_layer_thickness = (
-                self.previous_layer.cumulative_layer_thickness
-            )
+            previous_layer_thickness = self.previous_layer.cumulative_layer_thickness
         bottom_sum = bottom_sum + (
-                (self.cumulative_layer_thickness - previous_layer_thickness)
-                / k_cm_per_h
+            (self.cumulative_layer_thickness - previous_layer_thickness) / k_cm_per_h
         )
         is_equal_layer = self.next_layer.layer_num == current_free_drainage.layer_num
         if is_equal_layer:
@@ -1535,13 +1570,9 @@ class Layer:
         se_prev_loc = calc_se_from_theta(theta_prev_loc, theta_e, theta_r)
 
         k_cm_per_h_prev_loc = calc_k_from_se(se_prev_loc, self.ksat_layer, m)
-        previous_layer_thickness = torch.tensor(
-            0.0, device=self.global_params.device
-        )
+        previous_layer_thickness = torch.tensor(0.0, device=self.global_params.device)
         if self.layer_num != 0:
-            previous_layer_thickness = (
-                self.previous_layer.cumulative_layer_thickness
-            )
+            previous_layer_thickness = self.previous_layer.cumulative_layer_thickness
         bottom_sum = bottom_sum + (
             (self.cumulative_layer_thickness - previous_layer_thickness)
             / k_cm_per_h_prev_loc

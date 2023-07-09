@@ -136,7 +136,11 @@ class dpLGAR(nn.Module):
         self.groundwater_discharge = torch.tensor(0.0, device=self.cfg.device)
         self.percolation = torch.tensor(0.0, device=self.cfg.device)
 
-    def forward(self, i, x) -> (Tensor, Tensor):
+    def update_soil_parameters(self):
+        self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
+        self.top_layer.update_soil_parameters(self.c, self.alpha, self.n, self.ksat)
+
+    def forward(self, x) -> (Tensor, Tensor):
         """
         The forward function to model Precip/PET through LGAR functions
         /* Note unit conversion:
@@ -150,8 +154,8 @@ class dpLGAR(nn.Module):
         :param x: Precip and PET forcings
         :return: runoff to be used for validation
         """
-        precip = x[0][0]
-        pet = x[0][1]
+        precip = x[0]
+        pet = x[1]
         groundwater_discharge_sub = torch.tensor(0.0, device=self.cfg.device)
         runoff_timestep = torch.tensor(0.0, device=self.cfg.device)
         bottom_boundary_flux = torch.tensor(0.0, device=self.cfg.device)
