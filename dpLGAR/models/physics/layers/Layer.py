@@ -89,7 +89,7 @@ class Layer:
             )
         self.previous_state = self.deepcopy()
 
-    def update_soil_parameters(self, c, alpha, n, ksat):
+    def update_soil_parameters(self, c):
         """
         Updating the soil parameters stored inside the Layers
         """
@@ -103,7 +103,7 @@ class Layer:
                 self.ksat_layer,
             )
         if self.next_layer is not None:
-            self.next_layer.update_soil_parameters(c, alpha, n, ksat)
+            self.next_layer.update_soil_parameters(c)
         else:
             return None
 

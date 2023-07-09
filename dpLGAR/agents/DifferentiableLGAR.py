@@ -71,6 +71,9 @@ class DifferentiableLGAR(BaseAgent):
             self.model.parameters(), lr=cfg.models.hyperparameters.learning_rate
         )
 
+        self.y_hat = None
+        self.y_t = None
+
         self.current_epoch = 0
 
     def run(self):
@@ -103,41 +106,32 @@ class DifferentiableLGAR(BaseAgent):
         One epoch of training
         :return:
         """
-        use_warmup = True
         for i, (x, y_t) in enumerate(self.data_loader):
             self.optimizer.zero_grad()
             # Resetting output vars
-            y_hat = torch.zeros([x.shape[0]], device=self.cfg.device)  # runoff
+            self.y_hat = torch.zeros([x.shape[0]], device=self.cfg.device)  # runoff
+            self.y_t = y_t
             self.percolation_output = torch.zeros([x.shape[0]], device=self.cfg.device)
-            if i == 2:
-                for j in trange(x.shape[0], desc=f"Running Minibatch {i+1}", leave=True):
-                    # Minibatch loop
-                    inputs = x[j]
-                    runoff, percolation = self.model(inputs)
-                    y_hat[j] = runoff
-                    if runoff > 0:
-                        # Compute the overall loss
-                        loss = self.criterion(y_hat[j], y_t[j])
-                        # Backpropagate the error
-                        start = time.perf_counter()
-                        loss.backward()
-                        end = time.perf_counter()
-                        # Log the time taken for backpropagation and the calculated loss
-                        log.info(f"Back prop took : {(end - start):.6f} seconds")
-                        log.info(f"Loss: {loss}")
-                        # Update the model parameters
-                        self.optimizer.step()
-                    self.percolation_output[j] = percolation
-                    # Updating the total mass of the system
-                    self.mass_balance.change_mass(self.model)
-                    time.sleep(0.01)
-                # self.mass_balance.report_mass(self.model)
-                if y_hat.requires_grad:
-                    # If there is no gradient (i.e. no runoff, then we shouldn't validate
-                    self.validate(y_hat, y_t, use_warmup)
-                use_warmup = False
+            for j in trange(x.shape[0], desc=f"Running Minibatch {i+1}", leave=True):
+                # Minibatch loop
+                inputs = x[j]
+                runoff, percolation = self.model(inputs)
+                self.y_hat[j] = runoff
+                self.percolation_output[j] = percolation
+                # Updating the total mass of the system
+                self.mass_balance.change_mass(self.model)
+                time.sleep(0.01)
+            self.mass_balance.report_mass(self.model)
+            if self.y_hat.requires_grad:
+                if i == 0:
+                    warmup = self.cfg.models.hyperparameters.warmup
+                    self.y_hat = self.y_hat[warmup:]
+                    self.y_t = self.y_t[warmup:]
+                # If there is no gradient (i.e. no runoff), then we shouldn't validate
+                self.validate()
 
-    def validate(self, y_hat_, y_t_, use_warmup) -> None:
+
+    def validate(self) -> None:
         """
         One cycle of model validation
         This function calculates the loss for the given predicted and actual values,
@@ -147,21 +141,15 @@ class DifferentiableLGAR(BaseAgent):
         - y_hat_ : The tensor containing predicted values
         - y_t_ : The tensor containing actual values.
         """
-        if use_warmup:
-            warmup = self.cfg.models.hyperparameters.warmup
-            y_hat = y_hat_[warmup:]
-            y_t = y_t_[warmup:]
-        else:
-            y_hat = y_hat_
-            y_t = y_t_
-
         # Outputting trained Nash-Sutcliffe efficiency (NSE) coefficient
+        y_hat_np = self.y_hat.detach().squeeze().numpy()
+        y_t_np = self.y_t.detach().squeeze().numpy()
         log.info(
-            f"trained NSE: {calculate_nse(y_hat.detach().squeeze().numpy(), y_t.detach().squeeze().numpy()):.4}"
+            f"trained NSE: {calculate_nse(y_hat_np, y_t_np):.4}"
         )
 
         # Compute the overall loss
-        loss = self.criterion(y_hat, y_t)
+        loss = self.criterion(self.y_hat, self.y_t)
 
         # Backpropagate the error
         start = time.perf_counter()

@@ -138,7 +138,7 @@ class dpLGAR(nn.Module):
 
     def update_soil_parameters(self):
         self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
-        self.top_layer.update_soil_parameters(self.c, self.alpha, self.n, self.ksat)
+        self.top_layer.update_soil_parameters(self.c)
 
     def forward(self, x) -> (Tensor, Tensor):
         """
@@ -157,7 +157,6 @@ class dpLGAR(nn.Module):
         precip = x[0]
         pet = x[1]
         groundwater_discharge_sub = torch.tensor(0.0, device=self.cfg.device)
-        # runoff_timestep = torch.tensor(0.0, device=self.cfg.device)
         bottom_boundary_flux = torch.tensor(0.0, device=self.cfg.device)
         ending_volume_sub = self.ending_volume.clone()
         if self.global_params.sft_coupled:
