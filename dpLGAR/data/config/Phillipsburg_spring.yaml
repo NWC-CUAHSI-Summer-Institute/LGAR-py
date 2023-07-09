@@ -5,7 +5,7 @@ layer_thickness: #[cm]
   - 131.0
   - 25.0
 initial_psi: 2000.0 #[cm]
-ponded_depth_max: 2 #[cm]
+ponded_depth_max: 0.0 #[cm]
 use_closed_form_G: False
 layer_soil_type:
   - 13

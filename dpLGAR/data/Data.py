@@ -40,7 +40,7 @@ class Data(Dataset):
         self.timestep_map = {idx: time for idx, time in enumerate(time_values)}
 
         # TODO FIND OBSERVATION DATA TO TRAIN AGAINST
-        self.y = torch.zeros([self.x.shape[0]], device=cfg.device).unsqueeze(1)
+        self.y = torch.rand([self.x.shape[0]], device=cfg.device)
 
     def __getitem__(self, index) -> T_co:
         """

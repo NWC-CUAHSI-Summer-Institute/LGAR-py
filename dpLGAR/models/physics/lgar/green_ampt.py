@@ -10,6 +10,7 @@ from dpLGAR.models.physics.utils import (
     calc_se_from_h,
     calc_se_from_theta,
     calc_h_from_se,
+    safe_pow
 )
 
 log = logging.getLogger("models.physics.lgar.green_ampt")

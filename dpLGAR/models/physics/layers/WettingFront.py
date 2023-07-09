@@ -5,7 +5,11 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 
-from dpLGAR.models.physics.utils import calc_se_from_theta, calc_k_from_se
+from dpLGAR.models.physics.utils import (
+    calc_se_from_theta,
+    calc_k_from_se,
+    calc_theta_from_h,
+)
 
 log = logging.getLogger("models.physics.layers.WettingFront")
 
@@ -43,6 +47,14 @@ class WettingFront:
         self.k_cm_per_h = calc_k_from_se(self.se, ksat, m)
         self.to_bottom = bottom_flag
 
+    def update_soil_parameters(self, global_params, attributes, alpha, n, ksat):
+        theta_r = attributes[global_params.soil_index["theta_r"]]
+        theta_e = attributes[global_params.soil_index["theta_e"]]
+        m = attributes[global_params.soil_index["m"]]
+        calc_theta_from_h(self.psi_cm, alpha, m, n, theta_e, theta_r)
+        self.se = calc_se_from_theta(self.theta, theta_e, theta_r)
+        self.k_cm_per_h = calc_k_from_se(self.se, ksat, m)
+
     def deepcopy(self, wf):
         """
         Creating a copy of the wf object. The tensors need to be clones to ensure that the objects are not manipulated
@@ -61,9 +73,9 @@ class WettingFront:
         return wf
 
     def is_equal(self, front):
-        depth_equal = (front.depth == self.depth)
-        psi_cm_equal = (front.psi_cm == self.psi_cm)
-        dzdt = (front.dzdt == self.dzdt)
+        depth_equal = front.depth == self.depth
+        psi_cm_equal = front.psi_cm == self.psi_cm
+        dzdt = front.dzdt == self.dzdt
         if depth_equal:
             if psi_cm_equal:
                 if dzdt:
@@ -74,6 +86,3 @@ class WettingFront:
         log.info(
             f"[{self.depth.item():.4f}, {self.theta.item():.10f}, {self.layer_num}, {self.dzdt.item():.6f}, {self.k_cm_per_h.item():.6f}, {self.psi_cm:.4f}]"
         )
-
-
-
