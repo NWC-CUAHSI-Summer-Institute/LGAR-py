@@ -455,7 +455,8 @@ class Layer:
             # the layer depth * /
             column_depth = self.global_params.cum_layer_thickness[-1]
             current_front.depth = torch.min(current_front.depth, column_depth)
-            zero_dzdt = torch.isclose(current_front.dzdt, torch.tensor(0.0), 1e-8)
+            zero = torch.tensor(0.0)
+            zero_dzdt = torch.isclose(current_front.dzdt, zero, 1e-8)
             if (
                 zero_dzdt and current_front.to_bottom is False
             ):  # a new front was just created, so don't update it.

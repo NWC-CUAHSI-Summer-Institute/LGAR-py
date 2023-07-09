@@ -109,20 +109,21 @@ class DifferentiableLGAR(BaseAgent):
             # Resetting output vars
             y_hat = torch.zeros([x.shape[0]], device=self.cfg.device)  # runoff
             self.percolation_output = torch.zeros([x.shape[0]], device=self.cfg.device)
-            for j in trange(x.shape[0], desc=f"Running Minibatch {i+1}", leave=True):
-                # Minibatch loop
-                inputs = x[j]
-                runoff, percolation = self.model(inputs)
-                y_hat[j] = runoff
-                self.percolation_output[j] = percolation
-                # Updating the total mass of the system
-                self.mass_balance.change_mass(self.model)
-                time.sleep(0.01)
-            # self.mass_balance.report_mass(self.model)
-            if y_hat.requires_grad:
-                # If there is no gradient (i.e. no runoff, then we shouldn't validate
-                self.validate(y_hat, y_t, use_warmup)
-            use_warmup = False
+            if i == 2:
+                for j in trange(x.shape[0], desc=f"Running Minibatch {i+1}", leave=True):
+                    # Minibatch loop
+                    inputs = x[j]
+                    runoff, percolation = self.model(inputs)
+                    y_hat[j] = runoff
+                    self.percolation_output[j] = percolation
+                    # Updating the total mass of the system
+                    self.mass_balance.change_mass(self.model)
+                    time.sleep(0.01)
+                # self.mass_balance.report_mass(self.model)
+                if y_hat.requires_grad:
+                    # If there is no gradient (i.e. no runoff, then we shouldn't validate
+                    self.validate(y_hat, y_t, use_warmup)
+                use_warmup = False
 
     def validate(self, y_hat_, y_t_, use_warmup) -> None:
         """
@@ -156,11 +157,12 @@ class DifferentiableLGAR(BaseAgent):
         end = time.perf_counter()
 
         # Log the time taken for backpropagation and the calculated loss
-        log.debug(f"Back prop took : {(end - start):.6f} seconds")
-        log.debug(f"Loss: {loss}")
+        log.info(f"Back prop took : {(end - start):.6f} seconds")
+        log.info(f"Loss: {loss}")
 
         # Update the model parameters
         self.optimizer.step()
+        # self.model.update_soil_parameters()
 
     def finalize(self):
         """
