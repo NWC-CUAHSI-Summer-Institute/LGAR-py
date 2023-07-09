@@ -18,9 +18,12 @@ def calc_theta_from_h(
     :parameter device: the device that we're using
     :return thickness of individual layers
     """
-    return (
-        1.0 / (torch.pow(1.0 + torch.pow(alpha * h, n), m)) * (theta_e - theta_r)
+    alpha_pow = torch.pow(alpha * h, n)
+    outer_alpha_pow = (torch.pow(1.0 + alpha_pow, m))
+    result = (
+        1.0 / outer_alpha_pow * (theta_e - theta_r)
     ) + theta_r
+    return error_check(result)
 
 
 def calc_bc_lambda(m: Tensor) -> Tensor:
@@ -50,7 +53,7 @@ def calc_h_min_cm(bc_lambda, bc_psib_cm) -> pd.DataFrame:
     :return:
     """
     h_min_cm = bc_psib_cm * (2.0 + 3.0 / bc_lambda) / (1.0 + 3.0 / bc_lambda)
-    return h_min_cm
+    return error_check(h_min_cm)
 
 
 def calc_bc_psib(alpha: Tensor, m: Tensor) -> Tensor:
@@ -68,7 +71,7 @@ def calc_bc_psib(alpha: Tensor, m: Tensor) -> Tensor:
         * (147.8 + 8.1 * p_ + 0.092 * p_ * p_)
         / (2.0 * alpha * p_ * (p_ - 1.0) * (55.6 + 7.4 * p_ + p_ * p_))
     )
-    return bc_psib
+    return error_check(bc_psib)
 
 
 def calc_se_from_theta(theta: Tensor, theta_e: Tensor, theta_r: Tensor) -> Tensor:
@@ -79,7 +82,8 @@ def calc_se_from_theta(theta: Tensor, theta_e: Tensor, theta_r: Tensor) -> Tenso
     :param theta_r: theta_r
     :return: Se this is the relative (scaled 0-1) water content, like Theta
     """
-    return (theta - theta_r)/(theta_e - theta_r)
+    result = (theta - theta_r)/(theta_e - theta_r)
+    return error_check(result)
 
 
 def calc_se_from_h(h, alpha, m, n):
@@ -96,7 +100,9 @@ def calc_se_from_h(h, alpha, m, n):
         return torch.tensor(
             1.0
         )  # TODO EXPLORE A CLAMP (this function doesn't work well for tiny h)
-    return 1.0 / (torch.pow(1.0 + torch.pow(alpha * h, n), m))
+    internal_state = torch.pow(alpha * h, n)
+    result = 1.0 / (torch.pow(1.0 + internal_state, m))
+    return error_check(result)
 
 
 def calc_k_from_se(se: Tensor, ksat: Tensor, m: Tensor) -> Tensor:
@@ -107,11 +113,14 @@ def calc_k_from_se(se: Tensor, ksat: Tensor, m: Tensor) -> Tensor:
     :param m: Van Genuchten
     :return: hydraulic conductivity (K)
     """
-    return (
+    se_pow = torch.pow(se, 1.0 / m)
+    outside_se_pow = torch.pow(1.0 - se_pow, m)
+    result = (
         ksat
         * torch.sqrt(se)
-        * torch.pow(1.0 - torch.pow(1.0 - torch.pow(se, 1.0 / m), m), 2.0)
+        * torch.pow(1.0 - outside_se_pow, 2.0)
     )
+    return error_check(result)
 
 
 def calc_h_from_se(
@@ -120,4 +129,18 @@ def calc_h_from_se(
     """
     function to calculate h from Se
     """
-    return 1.0 / alpha * torch.pow(torch.pow(se, (-1.0 / m)) - 1.0, (1.0 / n))
+    se_pow = torch.pow(se, (-1.0 / m))
+    outside_se_pow = torch.pow(se_pow - 1.0, (1.0 / n))
+    result = 1.0 / alpha * outside_se_pow
+    return error_check(result)
+
+
+def error_check(result):
+    """
+    Checks to make sure there are no NaN values
+    """
+    if torch.any(torch.isnan(result)):
+        log.error("NaN values found in result")
+        raise ValueError
+    else:
+        return result

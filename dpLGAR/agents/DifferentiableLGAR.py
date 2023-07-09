@@ -24,6 +24,7 @@ class DifferentiableLGAR(BaseAgent):
         :param cfg:
         """
         super().__init__()
+        # torch.autograd.set_detect_anomaly(True)  # Temp
 
         # Setting the cfg object and manual seed for reproducibility
         self.cfg = cfg
@@ -115,6 +116,18 @@ class DifferentiableLGAR(BaseAgent):
                     inputs = x[j]
                     runoff, percolation = self.model(inputs)
                     y_hat[j] = runoff
+                    if runoff > 0:
+                        # Compute the overall loss
+                        loss = self.criterion(y_hat[j], y_t[j])
+                        # Backpropagate the error
+                        start = time.perf_counter()
+                        loss.backward()
+                        end = time.perf_counter()
+                        # Log the time taken for backpropagation and the calculated loss
+                        log.info(f"Back prop took : {(end - start):.6f} seconds")
+                        log.info(f"Loss: {loss}")
+                        # Update the model parameters
+                        self.optimizer.step()
                     self.percolation_output[j] = percolation
                     # Updating the total mass of the system
                     self.mass_balance.change_mass(self.model)
