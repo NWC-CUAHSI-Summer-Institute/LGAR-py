@@ -121,7 +121,7 @@ class DifferentiableLGAR(BaseAgent):
                 # Updating the total mass of the system
                 self.mass_balance.change_mass(self.model)
                 time.sleep(0.01)
-            self.mass_balance.report_mass(self.model)
+            # self.mass_balance.report_mass(self.model)
             if self.y_hat.requires_grad:
                 if i == 0:
                     warmup = self.cfg.models.hyperparameters.warmup
