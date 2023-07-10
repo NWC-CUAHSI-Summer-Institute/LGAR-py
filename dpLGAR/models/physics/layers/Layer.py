@@ -1413,18 +1413,6 @@ class Layer:
 
         return ponded_depth, infiltration
 
-    # def set_previous_state(self):
-    #     wf = WettingFront(
-    #         self.global_params,
-    #         self.cumulative_layer_thickness,
-    #         self.layer_num,
-    #         self.attributes,
-    #         self.ksat_layer,
-    #     )
-    #     # Copying elements of current node to wf
-    #     self.wetting_fronts[0].deepcopy(wf)
-    #     self.previous_fronts = wf
-
     def insert_water(
         self,
         subtimestep,
@@ -1432,6 +1420,16 @@ class Layer:
         ponded_depth,
         infiltration,
     ):
+        """
+        // ############################################################################################
+        /* The module computes the potential infiltration capacity, fp (in the lgar manuscript),
+           potential infiltration capacity = the maximum amount of water that can be inserted into
+           the soil depending on the availability of water.
+           this module is called when a new superficial wetting front is not created
+           in the current timestep, that is precipitation in the current and previous
+           timesteps was greater than zero */
+        // ############################################################################################
+        """
         wf_that_supplies_free_drainage_demand = self.wf_free_drainage_demand
 
         f_p = torch.tensor(0.0, device=self.global_params.device)
@@ -1442,14 +1440,11 @@ class Layer:
         h_p = torch.clamp(h_p_, min=0.0)
 
         head_index = 0
-        try:
-            (
-                current_front,
-                current_free_drainage,
-                next_free_drainage,
-            ) = self.get_drainage_neighbors(0)
-        except TypeError:
-            log.error("here")
+        (
+            current_front,
+            current_free_drainage,
+            next_free_drainage,
+        ) = self.get_drainage_neighbors(0)
 
         number_of_wetting_fronts = self.calc_num_wetting_fronts()
 
@@ -1528,12 +1523,16 @@ class Layer:
         else:
             # if it got to this point, no ponding is allowed, either infiltrate or runoff
             # order is important here; assign zero to ponded depth once we compute volume in and runoff
+            #TODO TEST THIS MORE
             infiltration = torch.min(ponded_depth, fp_cm)
-            if ponded_depth < fp_cm:
-                runoff = torch.tensor(0.0, device=self.global_params.device)
-            else:
-                runoff = ponded_depth - infiltration
-            ponded_depth = torch.tensor(0.0, device=self.global_params.device)
+            # if ponded_depth < fp_cm:
+            #     runoff = torch.tensor(0.0, device=self.global_params.device)
+            # else:
+            #     runoff = ponded_depth - infiltration
+            # ponded_depth = torch.tensor(0.0, device=self.global_params.device)
+            ponded_depth = ponded_depth_temp
+            _runoff_ = ponded_depth - infiltration
+            runoff = torch.clamp(_runoff_, min=0.0)
 
         return runoff, infiltration, ponded_depth
 

@@ -1,15 +1,12 @@
 """
-        dd         ppp      LL          GGG
-        dd      ppp  ppp    LL        GGG GGG       AAA  A    RR   RRRR
-        dd     pp     ppp   LL       GG    GGG    AAA AAAA     RR RR  RR
-        dd     pp     pp    LL       GG     GG   AA     AA     RRR
-        dd     pp    pp     LL      GGG    GGG  AAA     AA     RR
-    dddddd     pp  pp       LL       GG  GG GG   AA     AAA    RR
-   dd   dd     pppp         LL        GGGG  GG    AAA  AA A    RR
-  dd    dd     pp           LL              GG      AAAA   AA  RR
-  dd    dd     pp           LL              GG
-   ddddddd     pp           LLLLLLLL  GG   GG
-                                       GGGG
+
+       _|            _|          _|_|_|    _|_|    _|_|_|
+   _|_|_|  _|_|_|    _|        _|        _|    _|  _|    _|
+ _|    _|  _|    _|  _|        _|  _|_|  _|_|_|_|  _|_|_|
+ _|    _|  _|    _|  _|        _|    _|  _|    _|  _|    _|
+   _|_|_|  _|_|_|    _|_|_|_|    _|_|_|  _|    _|  _|    _|
+           _|
+           _|
 """
 from omegaconf import DictConfig
 import logging
@@ -41,7 +38,8 @@ class dpLGAR(nn.Module):
         self.cfg = cfg
 
         # Setting NN parameters
-        alpha_, n_, ksat_ = read_test_params(cfg)
+        alpha_, n_, ksat_ = read_test_params(cfg)d
+        self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64))
         self.alpha = nn.ParameterList([])
         self.n = nn.ParameterList([])
         self.ksat = nn.ParameterList([])
@@ -68,7 +66,7 @@ class dpLGAR(nn.Module):
         }
 
         # Creating tensors from config variables
-        self.global_params = GlobalParams(cfg)
+        self.global_params = GlobalParams(cfg, self.ponded_depth_max)
 
         # Initializing Values
         self.top_layer = None

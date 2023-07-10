@@ -1,20 +1,14 @@
-data_dir: {$cwd}
+data_dir: /Users/taddbindas/Google Drive/Shared drives/SI_NextGen_Aridity/data/camELS/gauch_etal_2020/nldas_hourly
 basin_id: 10249300
-forcing_file: ${cwd}/data/forcing_data_resampled_uniform_Phillipsburg.csv
+forcing_file: ${data_dir}/${basin_id}_hourly_nldas.csv
 soil_params_file: ${cwd}/data/vG_default_params.dat
-layer_thickness: #[cm]
-  - 44.0
-  - 131.0
-  - 25.0
+layer_thickness: ??? #[cm]
 initial_psi: 2000.0 #[cm]
-ponded_depth_max: 2 #[cm]
+ponded_depth_max: 0.0 #[cm]
 use_closed_form_G: False
-layer_soil_type:
-  - 13
-  - 14
-  - 15
+layer_soil_type: ???
 num_soil_types: 15  # must be less than or equal to MAX_NUM_SOIL_TYPES
-num_soil_layers: 3  # must be less than or equal to MAX_NUM_SOIL_LAYERS
+num_soil_layers: ???  # must be less than or equal to MAX_NUM_SOIL_LAYERS
 num_fronts: 0  # must be less than MAX_NUM_FRONTS
 root_zone_bottom_layer: 2  # example, if set to 2, then the root zone is in layer 1 and 2
 AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET

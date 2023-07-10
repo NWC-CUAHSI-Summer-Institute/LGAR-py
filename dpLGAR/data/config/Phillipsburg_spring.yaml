@@ -1,3 +1,5 @@
+data_dir: {$cwd}
+basin_id: 10249300
 forcing_file: ${cwd}/data/phillipsburg_spring.csv
 soil_params_file: ${cwd}/data/vG_default_params.dat
 layer_thickness: #[cm]
