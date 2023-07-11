@@ -10,6 +10,7 @@ from dpLGAR.agents.base import BaseAgent
 from dpLGAR.data.Data import Data
 from dpLGAR.data.metrics import calculate_nse
 from dpLGAR.models.dpLGAR import dpLGAR
+from dpLGAR.models.functions.loss import MSE_loss, RangeBoundLoss
 from dpLGAR.models.physics.MassBalance import MassBalance
 
 log = logging.getLogger("agents.DifferentiableLGAR")
@@ -66,10 +67,14 @@ class DifferentiableLGAR(BaseAgent):
         )
         self.mass_balance = MassBalance(cfg, self.model)
 
-        self.criterion = torch.nn.MSELoss()
+        self.criterion = MSE_loss
         self.optimizer = torch.optim.Adam(
             self.model.parameters(), lr=cfg.models.hyperparameters.learning_rate
         )
+
+        lb = cfg.models.hyperparameters.lb
+        ub = cfg.models.hyperparameters.ub
+        self.range_bound_loss = RangeBoundLoss(lb, ub, factor=1.0)
 
         self.y_hat = None
         self.y_t = None
@@ -107,11 +112,11 @@ class DifferentiableLGAR(BaseAgent):
         :return:
         """
         for i, (x, y_t) in enumerate(self.data_loader):
-            self.optimizer.zero_grad()
             # Resetting output vars
             self.y_hat = torch.zeros([x.shape[0]], device=self.cfg.device)  # runoff
             self.y_t = y_t
             percolation_batch = torch.zeros([x.shape[0]], device=self.cfg.device)
+            if i =
             for j in trange(x.shape[0], desc=f"Running Minibatch {i+1}", leave=True):
                 # Minibatch loop
                 inputs = x[j]
@@ -129,8 +134,11 @@ class DifferentiableLGAR(BaseAgent):
                     self.y_t = self.y_t[warmup:]
                 # If there is no gradient (i.e. no runoff), then we shouldn't validate
                 self.validate()
+                self.optimizer.zero_grad()
+                self.model.update_soil_parameters()
+
             starting_index = i * x.shape[0]
-            ending_index = (i+1) * x.shape[0]
+            ending_index = (i + 1) * x.shape[0]
             self.percolation_output[starting_index:ending_index] = percolation_batch
 
     def validate(self) -> None:
@@ -146,12 +154,21 @@ class DifferentiableLGAR(BaseAgent):
         # Outputting trained Nash-Sutcliffe efficiency (NSE) coefficient
         y_hat_np = self.y_hat.detach().squeeze().numpy()
         y_t_np = self.y_t.detach().squeeze().numpy()
-        log.info(
-            f"trained NSE: {calculate_nse(y_hat_np, y_t_np):.4}"
-        )
+        log.info(f"trained NSE: {calculate_nse(y_hat_np, y_t_np):.4}")
 
         # Compute the overall loss
-        loss = self.criterion(self.y_hat, self.y_t)
+        loss_mse = self.criterion(self.y_hat, self.y_t)
+
+        # Compute the range bound loss for the parameters you want to constrain
+        params = [
+            self.model.alpha,
+            self.model.n,
+            self.model.ksat,
+            self.model.ponded_depth_max,
+        ]
+        bound_loss = self.range_bound_loss(params)
+
+        loss = loss_mse + bound_loss
 
         # Backpropagate the error
         start = time.perf_counter()

@@ -17,4 +17,15 @@ hyperparameters:
   epochs: 50
   learning_rate: 0.001
   minibatch: 31 # [days]
-
+  lb:
+    - 0.0015 # alpha
+    - 1.0 # n
+    - 1e-6 # Ksat
+    - 0.001 # ponded_depth_max
+  ub:
+    - 0.015 # alpha
+    - 5.0 # n
+    - 30 # Ksat
+    - 10.0 # ponded_depth_max
+  # https://www.pc-progress.com/Downloads/Public_Lib_H1D/HYDRUS-1D_Tutorial_V1.00_2018.pdf
+  # https://acsess.onlinelibrary.wiley.com/doi/pdf/10.2136/sssaj1980.03615995004400050002x

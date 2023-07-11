@@ -368,6 +368,18 @@ class dpLGAR(nn.Module):
             self.runoff = self.runoff + runoff_sub
         return ponded_depth_sub, ponded_water_sub, runoff_sub
 
+    def print_params(self):
+        for i in range(len(self.alpha)):
+            alpha = self.alpha[i]
+            log.info(f"Alpha for soil {i+1}: {alpha.detach().item():.4f}")
+        for i in range(len(self.n)):
+            n = self.n[i]
+            log.info(f"n for soil {i+1}: {n.detach().item():.4f}")
+        for i in range(len(self.ksat)):
+            ksat = self.ksat[i]
+            log.info(f"Ksat for soil {i+1}: {ksat.detach().item():.4f}")
+        log.info(f"Max Ponded Depth: {self.ponded_depth_max.detach().item():.4f}")
+
     def print_local_mass_balance(
         self,
         local_mb,

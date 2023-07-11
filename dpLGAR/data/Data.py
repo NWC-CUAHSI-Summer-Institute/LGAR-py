@@ -40,6 +40,7 @@ class Data(Dataset):
         self.timestep_map = {idx: time for idx, time in enumerate(time_values)}
 
         # TODO FIND OBSERVATION DATA TO TRAIN AGAINST
+        # self.y = self.read_observations(cfg)
         self.y = torch.rand([self.x.shape[0]], device=cfg.device)
 
     def __getitem__(self, index) -> T_co:
@@ -56,3 +57,10 @@ class Data(Dataset):
         """
         return self.x.shape[0]
 
+    def read_oberservations(self, cfg: DictConfig):
+        """
+        reading observations from NLDAS forcings
+        :param cfg: the DictConfig obj
+        """
+        obs = read_df(cfg.data.observations)
+        return obs

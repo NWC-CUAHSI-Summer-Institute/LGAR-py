@@ -1506,20 +1506,17 @@ class Layer:
 
         if self.global_params.ponded_depth_max > 0.0:
             if ponded_depth_temp < self.global_params.ponded_depth_max:
-                runoff = torch.tensor(0.0, device=self.global_params.device)
+                # Runnoff will clamp to zero in this case
                 infiltration = torch.min(ponded_depth, fp_cm)
                 ponded_depth = ponded_depth - infiltration
                 # PTL: does this code account for the case where volin_this_timestep can not all infiltrate?
-                return runoff, infiltration, ponded_depth
             elif ponded_depth_temp > self.global_params.ponded_depth_max:
-                runoff = ponded_depth_temp - self.global_params.ponded_depth_max
+                # Runoff will be positive in this case
                 ponded_depth = self.global_params.ponded_depth_max
                 infiltration = fp_cm
-                return (
-                    runoff,
-                    infiltration,
-                    ponded_depth,
-                )
+            _runoff_ = ponded_depth_temp - self.global_params.ponded_depth_max
+            runoff = torch.clamp(_runoff_, min=0)  # Ensuring Runoff has a gradient
+            return runoff, infiltration, ponded_depth
         else:
             # if it got to this point, no ponding is allowed, either infiltrate or runoff
             # order is important here; assign zero to ponded depth once we compute volume in and runoff
