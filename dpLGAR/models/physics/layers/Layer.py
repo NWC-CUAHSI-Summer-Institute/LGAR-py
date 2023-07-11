@@ -1504,16 +1504,16 @@ class Layer:
             f_p * subtimestep + free_drainage_demand / subtimestep
         )  # infiltration in cm
 
-        if self.global_params.ponded_depth_max_cm > 0.0:
-            if ponded_depth_temp < self.global_params.ponded_depth_max_cm:
+        if self.global_params.ponded_depth_max > 0.0:
+            if ponded_depth_temp < self.global_params.ponded_depth_max:
                 runoff = torch.tensor(0.0, device=self.global_params.device)
                 infiltration = torch.min(ponded_depth, fp_cm)
                 ponded_depth = ponded_depth - infiltration
                 # PTL: does this code account for the case where volin_this_timestep can not all infiltrate?
                 return runoff, infiltration, ponded_depth
-            elif ponded_depth_temp > self.global_params.ponded_depth_max_cm:
-                runoff = ponded_depth_temp - self.global_params.ponded_depth_max_cm
-                ponded_depth = self.global_params.ponded_depth_max_cm
+            elif ponded_depth_temp > self.global_params.ponded_depth_max:
+                runoff = ponded_depth_temp - self.global_params.ponded_depth_max
+                ponded_depth = self.global_params.ponded_depth_max
                 infiltration = fp_cm
                 return (
                     runoff,

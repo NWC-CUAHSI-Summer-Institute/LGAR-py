@@ -51,7 +51,7 @@ class WettingFront:
         theta_r = attributes[global_params.soil_index["theta_r"]]
         theta_e = attributes[global_params.soil_index["theta_e"]]
         m = attributes[global_params.soil_index["m"]]
-        calc_theta_from_h(self.psi_cm, alpha, m, n, theta_e, theta_r)
+        self.theta = calc_theta_from_h(self.psi_cm, alpha, m, n, theta_e, theta_r)
         self.se = calc_se_from_theta(self.theta, theta_e, theta_r)
         self.k_cm_per_h = calc_k_from_se(self.se, ksat, m)
 

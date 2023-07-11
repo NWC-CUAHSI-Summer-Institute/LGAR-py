@@ -19,7 +19,7 @@ class GlobalParams:
         self.num_layers = None
         self.soil_depth_cm = None
         self.initial_psi = None
-        self.ponded_depth_max_cm = ponded_depth_max
+        self.ponded_depth_max = ponded_depth_max.clone()
         self.layer_soil_type = None
         self.num_soil_types = None
         self.wilting_point_psi_cm = None
@@ -111,7 +111,7 @@ class GlobalParams:
 
         self.initial_psi = torch.tensor(cfg.data.initial_psi, device=cfg.device)
         # Using a nn.Param for this
-        # self.ponded_depth_max_cm = torch.tensor(cfg.data.ponded_depth_max, device=cfg.device, dtype=torch.float64)
+        # self.ponded_depth_max = torch.tensor(cfg.data.ponded_depth_max, device=cfg.device, dtype=torch.float64)
 
         self.use_closed_form_G = cfg.data.use_closed_form_G
 

@@ -38,7 +38,7 @@ class dpLGAR(nn.Module):
         self.cfg = cfg
 
         # Setting NN parameters
-        alpha_, n_, ksat_ = read_test_params(cfg)d
+        alpha_, n_, ksat_ = read_test_params(cfg)
         self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64))
         self.alpha = nn.ParameterList([])
         self.n = nn.ParameterList([])
@@ -354,7 +354,7 @@ class dpLGAR(nn.Module):
         return infiltration, AET_sub
 
     def update_ponded_depth(self, ponded_depth_sub):
-        if ponded_depth_sub < self.global_params.ponded_depth_max_cm:
+        if ponded_depth_sub < self.global_params.ponded_depth_max:
             runoff_sub = torch.tensor(0.0, device=self.cfg.device)
             self.runoff = self.runoff + runoff_sub
             ponded_water_sub = ponded_depth_sub
@@ -362,8 +362,8 @@ class dpLGAR(nn.Module):
 
         else:
             # This is the timestep that adds runoff
-            runoff_sub = ponded_depth_sub - self.global_params.ponded_depth_max_cm
-            ponded_depth_sub = self.global_params.ponded_depth_max_cm
+            runoff_sub = ponded_depth_sub - self.global_params.ponded_depth_max
+            ponded_depth_sub = self.global_params.ponded_depth_max
             ponded_water_sub = ponded_depth_sub
             self.runoff = self.runoff + runoff_sub
         return ponded_depth_sub, ponded_water_sub, runoff_sub
