@@ -45,8 +45,8 @@ class dpLGAR(nn.Module):
         ksat_layer = ksat_[soil_types]
 
         # Setting NN parameters
-        self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64))
-        # self.ponded_depth_max = torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64)
+        # self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64))
+        self.ponded_depth_max = torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64)
         self.alpha = nn.ParameterList([])
         self.n = nn.ParameterList([])
         self.ksat = nn.ParameterList([])
@@ -56,11 +56,10 @@ class dpLGAR(nn.Module):
             # Addressing Frozen Factor
             self.ksat.append(nn.Parameter(ksat_layer[i] * cfg.constants.frozen_factor))
 
-        # Creating static soil params
-        self.soils_df = read_df(cfg.data.soil_params_file)
-        texture_values = self.soils_df["Texture"].values
-        self.texture_map = {idx: texture for idx, texture in enumerate(texture_values)}
-        self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
+        # Initializing Values
+        self.soils_df = None
+        self.texture_map = None
+        self.c = None
         self.cfg.data.soil_index = {
             "theta_r": 0,
             "theta_e": 1,
@@ -72,10 +71,6 @@ class dpLGAR(nn.Module):
             "h_min_cm": 7,
         }
 
-        # Creating tensors from config variables
-        self.global_params = GlobalParams(cfg, self.ponded_depth_max)
-
-        # Initializing Values
         self.top_layer = None
         self.bottom_layer = None
         self.num_wetting_fronts = None
@@ -94,10 +89,20 @@ class dpLGAR(nn.Module):
         self.groundwater_discharge = None
         self.percolation = None
 
+        self.global_params = None
+
         # Setting internal states (soil layers)
         self.set_internal_states()
 
     def set_internal_states(self):
+        # Creating static soil params
+        self.soils_df = read_df(self.cfg.data.soil_params_file)
+        texture_values = self.soils_df["Texture"].values
+        self.texture_map = {idx: texture for idx, texture in enumerate(texture_values)}
+        self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
+
+        self.global_params = GlobalParams(self.cfg, self.ponded_depth_max)
+
         # Creating initial soil layer stack
         # We're only saving a reference to the top layer as all precip, PET, and runoff deal with it
         layer_index = 0  # This is the top layer

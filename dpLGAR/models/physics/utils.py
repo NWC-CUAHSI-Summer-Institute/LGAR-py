@@ -19,7 +19,7 @@ def safe_pow(base, exponent):
         raise ValueError
 
     if torch.isclose(base, zero, threshold * 0.1):
-        log.error("base is too small")
+        log.debug("base is too small")
         # raise ValueError
 
     if base < 0:

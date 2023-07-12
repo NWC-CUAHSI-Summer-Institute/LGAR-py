@@ -6,7 +6,8 @@ subcycle_length: 3600 #[sec]
 subcycle_length_h: ??? #[hr]
 num_subcycles: ???
 #num_time_step: 90000  # total simulation time is this number times the time_step_s
-endtime: 3000.0 #[hr]
+#endtime: 372.0 #[hr]
+endtime: 744.0 #[hr]
 endtime_s: ???
 forcing_resolution_h: ???
 time_per_step: ???
@@ -18,7 +19,7 @@ hyperparameters:
   learning_rate: 0.001
 #  minibatch: 31 # [days]
 #  minibatch: 15 # [days]
-  minibatch: 1/24 # this makes no minibatch
+  minibatch: 0.04166666667 # this makes no minibatch
   lb:
     - 0.0015 # alpha
     - 1.0 # n

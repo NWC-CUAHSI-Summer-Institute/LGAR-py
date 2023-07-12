@@ -75,6 +75,7 @@ class GlobalParams:
         self.relative_moisture_at_which_PET_equals_AET = torch.tensor(0.75, device=self.device)
         self.nint = torch.tensor(cfg.constants.nint, device=self.device)
 
+
     def initialize_config_parameters(self, cfg: DictConfig) -> None:
         """
         Reading variables from the config file specific to each testcase

@@ -24,9 +24,9 @@ class Layer:
         global_params,
         layer_index: int,
         c: Tensor,
-        alpha: torch.nn.Parameter,
-        n: torch.nn.Parameter,
-        ksat: torch.nn.Parameter,
+        alpha: torch.nn.ParameterList,
+        n: torch.nn.ParameterList,
+        ksat: torch.nn.ParameterList,
         texture_map: dict,
         previous_layer=None,
     ):
