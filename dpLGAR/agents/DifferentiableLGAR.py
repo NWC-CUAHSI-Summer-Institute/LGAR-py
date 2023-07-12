@@ -33,7 +33,7 @@ class DifferentiableLGAR(BaseAgent):
 
         # Configuring timesteps
         self.cfg.models.endtime_s = (
-            self.cfg.models.endtime * self.cfg.conversions.hr_to_sec
+            self.cfg.data.endtime * self.cfg.conversions.hr_to_sec
         )
         self.cfg.models.subcycle_length_h = self.cfg.models.subcycle_length * (
             1 / self.cfg.conversions.hr_to_sec

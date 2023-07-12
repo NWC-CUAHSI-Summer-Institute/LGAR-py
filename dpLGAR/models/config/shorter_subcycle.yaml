@@ -6,8 +6,6 @@ subcycle_length: 3600 #[sec]
 subcycle_length_h: ??? #[hr]
 num_subcycles: ???
 #num_time_step: 90000  # total simulation time is this number times the time_step_s
-#endtime: 372.0 #[hr]
-endtime: 3000.0 #[hr]
 endtime_s: ???
 forcing_resolution_h: ???
 time_per_step: ???
