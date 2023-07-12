@@ -10,6 +10,7 @@ from dpLGAR.agents.base import BaseAgent
 from dpLGAR.data.Data import Data
 from dpLGAR.data.metrics import calculate_nse
 from dpLGAR.models.dpLGAR import dpLGAR
+from dpLGAR.models.functions.loss import MSE_loss, RangeBoundLoss
 from dpLGAR.models.physics.MassBalance import MassBalance
 
 log = logging.getLogger("agents.DifferentiableLGAR")
@@ -50,7 +51,7 @@ class DifferentiableLGAR(BaseAgent):
             self.cfg.models.forcing_resolution_h / self.cfg.models.subcycle_length_h
         )
 
-        self.hourly_mini_batch = (
+        self.hourly_mini_batch = int(
             cfg.models.hyperparameters.minibatch * 24
         )  # daily to hourly
         # Defining the torch Dataset and Dataloader
@@ -66,10 +67,14 @@ class DifferentiableLGAR(BaseAgent):
         )
         self.mass_balance = MassBalance(cfg, self.model)
 
-        self.criterion = torch.nn.MSELoss()
+        self.criterion = MSE_loss
         self.optimizer = torch.optim.Adam(
             self.model.parameters(), lr=cfg.models.hyperparameters.learning_rate
         )
+
+        lb = cfg.models.hyperparameters.lb
+        ub = cfg.models.hyperparameters.ub
+        self.range_bound_loss = RangeBoundLoss(lb, ub, factor=1.0)
 
         self.y_hat = None
         self.y_t = None
@@ -106,30 +111,23 @@ class DifferentiableLGAR(BaseAgent):
         One epoch of training
         :return:
         """
-        for i, (x, y_t) in enumerate(self.data_loader):
-            self.optimizer.zero_grad()
+        y_hat_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
+        y_t_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
+        self.optimizer.zero_grad()
+        for i, (x, y_t) in enumerate(tqdm(self.data_loader, desc=f"Epoch {self.current_epoch + 1} Training")):
             # Resetting output vars
-            self.y_hat = torch.zeros([x.shape[0]], device=self.cfg.device)  # runoff
-            self.y_t = y_t
-            self.percolation_output = torch.zeros([x.shape[0]], device=self.cfg.device)
-            for j in trange(x.shape[0], desc=f"Running Minibatch {i+1}", leave=True):
-                # Minibatch loop
-                inputs = x[j]
-                runoff, percolation = self.model(inputs)
-                self.y_hat[j] = runoff
-                self.percolation_output[j] = percolation
-                # Updating the total mass of the system
-                self.mass_balance.change_mass(self.model)
-                time.sleep(0.01)
-            # self.mass_balance.report_mass(self.model)
-            if self.y_hat.requires_grad:
-                if i == 0:
-                    warmup = self.cfg.models.hyperparameters.warmup
-                    self.y_hat = self.y_hat[warmup:]
-                    self.y_t = self.y_t[warmup:]
-                # If there is no gradient (i.e. no runoff), then we shouldn't validate
-                self.validate()
-
+            runoff, percolation = self.model(x.squeeze())
+            y_hat_[i] = runoff
+            y_t_[i] = y_t
+            time.sleep(0.01)
+            # percolation_batch[j] = percolation
+            # Updating the total mass of the system
+            self.mass_balance.change_mass(self.model)  # Updating global balance
+        self.mass_balance.report_mass(self.model)  # Global mass balance
+        warmup = self.cfg.models.hyperparameters.warmup
+        self.y_hat = y_hat_[warmup:]
+        self.y_t = y_t_[warmup:]
+        self.validate()
 
     def validate(self) -> None:
         """
@@ -144,12 +142,21 @@ class DifferentiableLGAR(BaseAgent):
         # Outputting trained Nash-Sutcliffe efficiency (NSE) coefficient
         y_hat_np = self.y_hat.detach().squeeze().numpy()
         y_t_np = self.y_t.detach().squeeze().numpy()
-        log.info(
-            f"trained NSE: {calculate_nse(y_hat_np, y_t_np):.4}"
-        )
+        log.info(f"trained NSE: {calculate_nse(y_hat_np, y_t_np):.4}")
 
         # Compute the overall loss
-        loss = self.criterion(self.y_hat, self.y_t)
+        loss_mse = self.criterion(self.y_hat, self.y_t)
+
+        # Compute the range bound loss for the parameters you want to constrain
+        params = [
+            self.model.alpha,
+            self.model.n,
+            self.model.ksat,
+            self.model.ponded_depth_max,
+        ]
+        bound_loss = self.range_bound_loss(params)
+
+        loss = loss_mse + bound_loss
 
         # Backpropagate the error
         start = time.perf_counter()
@@ -162,7 +169,7 @@ class DifferentiableLGAR(BaseAgent):
 
         # Update the model parameters
         self.optimizer.step()
-        # self.model.update_soil_parameters()
+        # torch.autograd.set_detect_anomaly(True)
 
     def finalize(self):
         """

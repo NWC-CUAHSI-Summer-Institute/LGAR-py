@@ -24,9 +24,9 @@ class Layer:
         global_params,
         layer_index: int,
         c: Tensor,
-        alpha: torch.nn.Parameter,
-        n: torch.nn.Parameter,
-        ksat: torch.nn.Parameter,
+        alpha: torch.nn.ParameterList,
+        n: torch.nn.ParameterList,
+        ksat: torch.nn.ParameterList,
         texture_map: dict,
         previous_layer=None,
     ):
@@ -51,10 +51,10 @@ class Layer:
         ]
         self.soil_type = self.global_params.layer_soil_type[self.layer_num]
         self.texture = texture_map[self.soil_type]
-        self.attributes = c[self.soil_type]
-        self.alpha_layer = alpha[self.soil_type]
-        self.n_layer = n[self.soil_type]
-        self.ksat_layer = ksat[self.soil_type]
+        self.attributes = c[self.layer_num]
+        self.alpha_layer = alpha[self.layer_num]
+        self.n_layer = n[self.layer_num]
+        self.ksat_layer = ksat[self.layer_num]
 
         # For mass balance
         self.tolerance = torch.tensor(1e-12, device=self.global_params.device)
@@ -93,7 +93,7 @@ class Layer:
         """
         Updating the soil parameters stored inside the Layers
         """
-        self.attributes = c[self.soil_type]
+        self.attributes = c[self.layer_num]
         for wf in self.wetting_fronts:
             wf.update_soil_parameters(
                 self.global_params,
@@ -1413,18 +1413,6 @@ class Layer:
 
         return ponded_depth, infiltration
 
-    # def set_previous_state(self):
-    #     wf = WettingFront(
-    #         self.global_params,
-    #         self.cumulative_layer_thickness,
-    #         self.layer_num,
-    #         self.attributes,
-    #         self.ksat_layer,
-    #     )
-    #     # Copying elements of current node to wf
-    #     self.wetting_fronts[0].deepcopy(wf)
-    #     self.previous_fronts = wf
-
     def insert_water(
         self,
         subtimestep,
@@ -1432,6 +1420,16 @@ class Layer:
         ponded_depth,
         infiltration,
     ):
+        """
+        // ############################################################################################
+        /* The module computes the potential infiltration capacity, fp (in the lgar manuscript),
+           potential infiltration capacity = the maximum amount of water that can be inserted into
+           the soil depending on the availability of water.
+           this module is called when a new superficial wetting front is not created
+           in the current timestep, that is precipitation in the current and previous
+           timesteps was greater than zero */
+        // ############################################################################################
+        """
         wf_that_supplies_free_drainage_demand = self.wf_free_drainage_demand
 
         f_p = torch.tensor(0.0, device=self.global_params.device)
@@ -1442,14 +1440,11 @@ class Layer:
         h_p = torch.clamp(h_p_, min=0.0)
 
         head_index = 0
-        try:
-            (
-                current_front,
-                current_free_drainage,
-                next_free_drainage,
-            ) = self.get_drainage_neighbors(0)
-        except TypeError:
-            log.error("here")
+        (
+            current_front,
+            current_free_drainage,
+            next_free_drainage,
+        ) = self.get_drainage_neighbors(0)
 
         number_of_wetting_fronts = self.calc_num_wetting_fronts()
 
@@ -1509,31 +1504,32 @@ class Layer:
             f_p * subtimestep + free_drainage_demand / subtimestep
         )  # infiltration in cm
 
-        if self.global_params.ponded_depth_max_cm > 0.0:
-            if ponded_depth_temp < self.global_params.ponded_depth_max_cm:
-                runoff = torch.tensor(0.0, device=self.global_params.device)
+        if self.global_params.ponded_depth_max > 0.0:
+            if ponded_depth_temp < self.global_params.ponded_depth_max:
+                # Runnoff will clamp to zero in this case
                 infiltration = torch.min(ponded_depth, fp_cm)
                 ponded_depth = ponded_depth - infiltration
                 # PTL: does this code account for the case where volin_this_timestep can not all infiltrate?
-                return runoff, infiltration, ponded_depth
-            elif ponded_depth_temp > self.global_params.ponded_depth_max_cm:
-                runoff = ponded_depth_temp - self.global_params.ponded_depth_max_cm
-                ponded_depth = self.global_params.ponded_depth_max_cm
+            elif ponded_depth_temp > self.global_params.ponded_depth_max:
+                # Runoff will be positive in this case
+                ponded_depth = self.global_params.ponded_depth_max
                 infiltration = fp_cm
-                return (
-                    runoff,
-                    infiltration,
-                    ponded_depth,
-                )
+            _runoff_ = ponded_depth_temp - self.global_params.ponded_depth_max
+            runoff = torch.clamp(_runoff_, min=0)  # Ensuring Runoff has a gradient
+            return runoff, infiltration, ponded_depth
         else:
             # if it got to this point, no ponding is allowed, either infiltrate or runoff
             # order is important here; assign zero to ponded depth once we compute volume in and runoff
             infiltration = torch.min(ponded_depth, fp_cm)
-            if ponded_depth < fp_cm:
-                runoff = torch.tensor(0.0, device=self.global_params.device)
-            else:
-                runoff = ponded_depth - infiltration
-            ponded_depth = torch.tensor(0.0, device=self.global_params.device)
+            # if ponded_depth < fp_cm:
+            #     runoff = torch.tensor(0.0, device=self.global_params.device)
+            # else:
+            #     runoff = ponded_depth - infiltration
+            # ponded_depth = torch.tensor(0.0, device=self.global_params.device)
+            _runoff_ = ponded_depth - infiltration
+            ponded_depth = self.global_params.ponded_depth_max
+            runoff = torch.clamp(_runoff_, min=0.0)
+            _x_ = "test"
 
         return runoff, infiltration, ponded_depth
 

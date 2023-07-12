@@ -8,7 +8,7 @@ log = logging.getLogger("models.physics.GlobalParams")
 
 
 class GlobalParams:
-    def __init__(self, cfg: DictConfig) -> None:
+    def __init__(self, cfg: DictConfig, ponded_depth_max) -> None:
         super().__init__()
 
         self.device = cfg.device
@@ -19,7 +19,7 @@ class GlobalParams:
         self.num_layers = None
         self.soil_depth_cm = None
         self.initial_psi = None
-        self.ponded_depth_max_cm = None
+        self.ponded_depth_max = ponded_depth_max.clone()
         self.layer_soil_type = None
         self.num_soil_types = None
         self.wilting_point_psi_cm = None
@@ -75,6 +75,7 @@ class GlobalParams:
         self.relative_moisture_at_which_PET_equals_AET = torch.tensor(0.75, device=self.device)
         self.nint = torch.tensor(cfg.constants.nint, device=self.device)
 
+
     def initialize_config_parameters(self, cfg: DictConfig) -> None:
         """
         Reading variables from the config file specific to each testcase
@@ -110,7 +111,8 @@ class GlobalParams:
         self.soil_depth_cm = self.cum_layer_thickness[-1]
 
         self.initial_psi = torch.tensor(cfg.data.initial_psi, device=cfg.device)
-        self.ponded_depth_max_cm = torch.tensor(cfg.data.ponded_depth_max, device=cfg.device, dtype=torch.float64)
+        # Using a nn.Param for this
+        # self.ponded_depth_max = torch.tensor(cfg.data.ponded_depth_max, device=cfg.device, dtype=torch.float64)
 
         self.use_closed_form_G = cfg.data.use_closed_form_G
 

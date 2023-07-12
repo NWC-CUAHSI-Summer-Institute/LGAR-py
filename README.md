@@ -68,3 +68,5 @@ Please make sure to update tests as appropriate.
 ## License
 
 [MIT](https://choosealicense.com/licenses/mit/)
+
+Project Template provided by: https://github.com/moemen95/Pytorch-Project-Template

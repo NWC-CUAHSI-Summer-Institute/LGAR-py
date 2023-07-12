@@ -1,15 +1,12 @@
 """
-        dd         ppp      LL          GGG
-        dd      ppp  ppp    LL        GGG GGG       AAA  A    RR   RRRR
-        dd     pp     ppp   LL       GG    GGG    AAA AAAA     RR RR  RR
-        dd     pp     pp    LL       GG     GG   AA     AA     RRR
-        dd     pp    pp     LL      GGG    GGG  AAA     AA     RR
-    dddddd     pp  pp       LL       GG  GG GG   AA     AAA    RR
-   dd   dd     pppp         LL        GGGG  GG    AAA  AA A    RR
-  dd    dd     pp           LL              GG      AAAA   AA  RR
-  dd    dd     pp           LL              GG
-   ddddddd     pp           LLLLLLLL  GG   GG
-                                       GGGG
+
+       _|            _|          _|_|_|    _|_|    _|_|_|
+   _|_|_|  _|_|_|    _|        _|        _|    _|  _|    _|
+ _|    _|  _|    _|  _|        _|  _|_|  _|_|_|_|  _|_|_|
+ _|    _|  _|    _|  _|        _|    _|  _|    _|  _|    _|
+   _|_|_|  _|_|_|    _|_|_|_|    _|_|_|  _|    _|  _|    _|
+           _|
+           _|
 """
 from omegaconf import DictConfig
 import logging
@@ -40,22 +37,29 @@ class dpLGAR(nn.Module):
 
         self.cfg = cfg
 
-        # Setting NN parameters
+        # Getting Soils information
         alpha_, n_, ksat_ = read_test_params(cfg)
+        soil_types = cfg.data.layer_soil_type
+        alpha_layer = alpha_[soil_types]
+        n_layer = n_[soil_types]
+        ksat_layer = ksat_[soil_types]
+
+        # Setting NN parameters
+        # self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64))
+        self.ponded_depth_max = torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64)
         self.alpha = nn.ParameterList([])
         self.n = nn.ParameterList([])
         self.ksat = nn.ParameterList([])
-        for i in range(alpha_.shape[0]):
-            self.alpha.append(nn.Parameter(alpha_[i]))
-            self.n.append(nn.Parameter(n_[i]))
+        for i in range(alpha_layer.shape[0]):
+            self.alpha.append(nn.Parameter(alpha_layer[i]))
+            self.n.append(nn.Parameter(n_layer[i]))
             # Addressing Frozen Factor
-            self.ksat.append(nn.Parameter(ksat_[i] * cfg.constants.frozen_factor))
+            self.ksat.append(nn.Parameter(ksat_layer[i] * cfg.constants.frozen_factor))
 
-        # Creating static soil params
-        self.soils_df = read_df(cfg.data.soil_params_file)
-        texture_values = self.soils_df["Texture"].values
-        self.texture_map = {idx: texture for idx, texture in enumerate(texture_values)}
-        self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
+        # Initializing Values
+        self.soils_df = None
+        self.texture_map = None
+        self.c = None
         self.cfg.data.soil_index = {
             "theta_r": 0,
             "theta_e": 1,
@@ -67,10 +71,6 @@ class dpLGAR(nn.Module):
             "h_min_cm": 7,
         }
 
-        # Creating tensors from config variables
-        self.global_params = GlobalParams(cfg)
-
-        # Initializing Values
         self.top_layer = None
         self.bottom_layer = None
         self.num_wetting_fronts = None
@@ -89,10 +89,20 @@ class dpLGAR(nn.Module):
         self.groundwater_discharge = None
         self.percolation = None
 
+        self.global_params = None
+
         # Setting internal states (soil layers)
         self.set_internal_states()
 
     def set_internal_states(self):
+        # Creating static soil params
+        self.soils_df = read_df(self.cfg.data.soil_params_file)
+        texture_values = self.soils_df["Texture"].values
+        self.texture_map = {idx: texture for idx, texture in enumerate(texture_values)}
+        self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
+
+        self.global_params = GlobalParams(self.cfg, self.ponded_depth_max)
+
         # Creating initial soil layer stack
         # We're only saving a reference to the top layer as all precip, PET, and runoff deal with it
         layer_index = 0  # This is the top layer
@@ -137,6 +147,7 @@ class dpLGAR(nn.Module):
         self.percolation = torch.tensor(0.0, device=self.cfg.device)
 
     def update_soil_parameters(self):
+        self.global_params.ponded_depth_max = self.ponded_depth_max.clone()
         self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
         self.top_layer.update_soil_parameters(self.c)
 
@@ -356,7 +367,7 @@ class dpLGAR(nn.Module):
         return infiltration, AET_sub
 
     def update_ponded_depth(self, ponded_depth_sub):
-        if ponded_depth_sub < self.global_params.ponded_depth_max_cm:
+        if ponded_depth_sub < self.global_params.ponded_depth_max:
             runoff_sub = torch.tensor(0.0, device=self.cfg.device)
             self.runoff = self.runoff + runoff_sub
             ponded_water_sub = ponded_depth_sub
@@ -364,11 +375,23 @@ class dpLGAR(nn.Module):
 
         else:
             # This is the timestep that adds runoff
-            runoff_sub = ponded_depth_sub - self.global_params.ponded_depth_max_cm
-            ponded_depth_sub = self.global_params.ponded_depth_max_cm
+            runoff_sub = ponded_depth_sub - self.global_params.ponded_depth_max
+            ponded_depth_sub = self.global_params.ponded_depth_max
             ponded_water_sub = ponded_depth_sub
             self.runoff = self.runoff + runoff_sub
         return ponded_depth_sub, ponded_water_sub, runoff_sub
+
+    def print_params(self):
+        for i in range(len(self.alpha)):
+            alpha = self.alpha[i]
+            log.info(f"Alpha for soil {i+1}: {alpha.detach().item():.4f}")
+        for i in range(len(self.n)):
+            n = self.n[i]
+            log.info(f"n for soil {i+1}: {n.detach().item():.4f}")
+        for i in range(len(self.ksat)):
+            ksat = self.ksat[i]
+            log.info(f"Ksat for soil {i+1}: {ksat.detach().item():.4f}")
+        log.info(f"Max Ponded Depth: {self.ponded_depth_max.detach().item():.4f}")
 
     def print_local_mass_balance(
         self,

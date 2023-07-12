@@ -9,6 +9,7 @@ from dpLGAR.models.physics.utils import (
     calc_se_from_theta,
     calc_k_from_se,
     calc_theta_from_h,
+    calc_h_from_se,
 )
 
 log = logging.getLogger("models.physics.layers.WettingFront")
@@ -51,8 +52,8 @@ class WettingFront:
         theta_r = attributes[global_params.soil_index["theta_r"]]
         theta_e = attributes[global_params.soil_index["theta_e"]]
         m = attributes[global_params.soil_index["m"]]
-        calc_theta_from_h(self.psi_cm, alpha, m, n, theta_e, theta_r)
         self.se = calc_se_from_theta(self.theta, theta_e, theta_r)
+        self.psi_cm = calc_h_from_se(self.se, alpha, m, n)
         self.k_cm_per_h = calc_k_from_se(self.se, ksat, m)
 
     def deepcopy(self, wf):
