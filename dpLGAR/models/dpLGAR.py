@@ -28,21 +28,26 @@ log = logging.getLogger("models.dpLGAR")
 
 
 class dpLGAR(nn.Module):
-    def __init__(self, cfg: DictConfig) -> None:
+    def __init__(self, cfg: DictConfig, soil_information) -> None:
         """
 
         :param cfg:
+        :param soil_information: soil attributes
         """
         super(dpLGAR, self).__init__()
 
         self.cfg = cfg
 
-        # Getting Soils information
+        self.soil_depth = soil_information[0]
+        self.texture = soil_information[1]
+        # The soil type in this basin, adding 1 for indexing error (Tadd's fault)
+        self.soil_types = soil_information[2] - 1
+
+        # Getting starting values for soil information (File from Fred Ogden)
         alpha_, n_, ksat_ = read_test_params(cfg)
-        soil_types = cfg.data.layer_soil_type
-        alpha_layer = alpha_[soil_types]
-        n_layer = n_[soil_types]
-        ksat_layer = ksat_[soil_types]
+        alpha_layer = alpha_[self.soil_types]
+        n_layer = n_[self.soil_types]
+        ksat_layer = ksat_[self.soil_types]
 
         # Setting NN parameters
         # self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64))
@@ -58,7 +63,6 @@ class dpLGAR(nn.Module):
 
         # Initializing Values
         self.soils_df = None
-        self.texture_map = None
         self.c = None
         self.cfg.data.soil_index = {
             "theta_r": 0,
@@ -97,11 +101,11 @@ class dpLGAR(nn.Module):
     def set_internal_states(self):
         # Creating static soil params
         self.soils_df = read_df(self.cfg.data.soil_params_file)
-        texture_values = self.soils_df["Texture"].values
-        self.texture_map = {idx: texture for idx, texture in enumerate(texture_values)}
+        # texture_values = self.soils_df["Texture"].values
+        # self.texture_map = {idx: texture for idx, texture in enumerate(texture_values)}
         self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
 
-        self.global_params = GlobalParams(self.cfg, self.ponded_depth_max)
+        self.global_params = GlobalParams(self.cfg, self.ponded_depth_max, self.soil_depth, self.soil_types)
 
         # Creating initial soil layer stack
         # We're only saving a reference to the top layer as all precip, PET, and runoff deal with it

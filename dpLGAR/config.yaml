@@ -24,6 +24,7 @@ conversions:
   mm_to_cm: 0.1
   cm_to_m: 0.01
   hr_to_sec: 3600.0
+  m_to_cm: 100.0
 
 ################## HYDRA CONFIG #######################
 hydra:

@@ -61,7 +61,7 @@ class DifferentiableLGAR(BaseAgent):
         )
 
         # Defining the model and output variables to save
-        self.model = dpLGAR(self.cfg)
+        self.model = dpLGAR(self.cfg, self.data.soil_information)
         self.percolation_output = torch.zeros(
             [self.cfg.models.nsteps], device=self.cfg.device
         )

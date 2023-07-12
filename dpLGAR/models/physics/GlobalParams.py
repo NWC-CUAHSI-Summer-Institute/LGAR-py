@@ -8,10 +8,12 @@ log = logging.getLogger("models.physics.GlobalParams")
 
 
 class GlobalParams:
-    def __init__(self, cfg: DictConfig, ponded_depth_max) -> None:
+    def __init__(self, cfg: DictConfig, ponded_depth_max, soil_depth, soil_types) -> None:
         super().__init__()
 
         self.device = cfg.device
+
+        # TODO IMPLEMENT SOIL DEPTH AND SOIL TYPE IN HERE, THEN EDIT THIS IN THE LAYERS
 
         # Defining all of the variables required by LGAR
         self.layer_thickness_cm = None

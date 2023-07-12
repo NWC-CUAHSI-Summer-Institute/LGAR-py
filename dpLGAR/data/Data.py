@@ -23,11 +23,11 @@ class Data(Dataset):
     def __init__(self, cfg: DictConfig) -> None:
         super().__init__()
 
-        self.x = self.read_forcings(cfg)
+        self.x = self.get_forcings(cfg)
 
-        self.c = self.read_attributes(cfg)
+        self.soil_information = self.get_attributes(cfg)
 
-        self.y = self.read_observations(cfg)
+        self.y = self.get_observations(cfg)
         # self.y = torch.rand([self.x.shape[0]], device=cfg.device)
 
     def __getitem__(self, index) -> T_co:
@@ -44,7 +44,7 @@ class Data(Dataset):
         """
         return self.x.shape[0]
 
-    def read_forcings(self, cfg: DictConfig):
+    def get_forcings(self, cfg: DictConfig):
         """
         Read and filter a CSV file for specified columns and date range.
         :param cfg: the dictionary that we're reading vars from
@@ -61,20 +61,17 @@ class Data(Dataset):
         # Units is kg/m^2
         PET = torch.tensor(filtered_data["potential_evaporation"].to_numpy(), device=cfg.device)
         stacked_forcings = torch.stack([precip, PET])
-        x_tr = stacked_forcings.transpose(0,1)
+        # Note: kg/m^2 == mm, so we need to convert to CM
+        x = stacked_forcings.transpose(0,1) * cfg.conversions.mm_to_cm
+        return x
 
-        # TODO MAKE SURE THESE UNITS ARE CM
-
-        return x_tr
-
-    def read_basin_area(self, cfg):
+    def get_basin_area(self, cfg):
         """
         Read and filter a CSV file for a specified basin id to get the basin area.
         :param cfg: the DictConfig obj
 
         :return: Basin area for the specified basin id.
         """
-
         file_path = cfg.data.area_file
         basin_id = cfg.data.basin_id
         data = pd.read_csv(file_path)
@@ -82,26 +79,31 @@ class Data(Dataset):
         filtered_data = data[data['gauge_id'] == formatted_basin_id]
         return filtered_data['AREA_sqkm'].values[0] if not filtered_data.empty else None
 
-    def read_attributes(self, cfg: DictConfig):
+    def get_attributes(self, cfg: DictConfig):
         """
         Reading attributes from the soil params file
         """
         file_name = cfg.data.soil_params_file
         basin_id = cfg.data.basin_id
         # Load the txt data into a DataFrame
-        data = pd.read_csv(file_name, sep='\s+', header=None, names=['basin_id', 'soil_class'])
-
+        data = pd.read_csv(file_name, sep=';')
+        data["gauge_id"] = data["gauge_id"].astype('str').str.zfill(8)
         # Filter the DataFrame for the specified basin id
-        filtered_data = data[data['basin_id'] == cfg.data.basin_id]
+        filtered_data = data[data['gauge_id'] == basin_id]
+        soil_depth = filtered_data["soil_depth_statsgo"].item() * cfg.conversions.m_to_cm
+        soil_texture = filtered_data["soil_texture_class"].item()
+        soil_index = filtered_data["soil_index"].item()
+        return [soil_depth, soil_texture, soil_index]
 
-
-        raise NotImplementedError
-
-    def read_observations(self, cfg: DictConfig):
+    def get_observations(self, cfg: DictConfig):
         """
         reading observations from NLDAS forcings
         :param cfg: the DictConfig obj
         """
-        obs = read_df(cfg.data.observations)
+        obs = read_df(cfg.data.observations_file)
         precip = obs["QObs(mm/h)"]
-        return precip
+        precip_tensor = torch.tensor(precip.to_numpy(), device=cfg.device)
+        nan_mask = torch.isnan(precip_tensor)
+        # Filling NaNs with 0 as there is no streamflow
+        precip_tensor[nan_mask] = 0.0
+        return precip_tensor
