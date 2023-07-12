@@ -27,10 +27,10 @@ class RangeBoundLoss(nn.Module):
             loss = loss + upper_bound_loss + lower_bound_loss
 
         # # Process the last Parameter separately
-        # lb = self.lb[-1]
-        # ub = self.ub[-1]
-        # params_tensor = params[-1]  # this is already a tensor
-        # upper_bound_loss = self.factor * torch.relu(params_tensor - ub)
-        # lower_bound_loss = self.factor * torch.relu(lb - params_tensor)
-        # loss = loss + upper_bound_loss + lower_bound_loss
+        lb = self.lb[-1]
+        ub = self.ub[-1]
+        params_tensor = params[-1]  # this is already a tensor
+        upper_bound_loss = self.factor * torch.relu(params_tensor - ub)
+        lower_bound_loss = self.factor * torch.relu(lb - params_tensor)
+        loss = loss + upper_bound_loss + lower_bound_loss
         return loss
