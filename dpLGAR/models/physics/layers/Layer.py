@@ -51,10 +51,10 @@ class Layer:
         ]
         self.soil_type = self.global_params.layer_soil_type[self.layer_num]
         self.texture = texture_map[self.soil_type]
-        self.attributes = c[self.soil_type]
-        self.alpha_layer = alpha[self.soil_type]
-        self.n_layer = n[self.soil_type]
-        self.ksat_layer = ksat[self.soil_type]
+        self.attributes = c[self.layer_num]
+        self.alpha_layer = alpha[self.layer_num]
+        self.n_layer = n[self.layer_num]
+        self.ksat_layer = ksat[self.layer_num]
 
         # For mass balance
         self.tolerance = torch.tensor(1e-12, device=self.global_params.device)
@@ -93,7 +93,7 @@ class Layer:
         """
         Updating the soil parameters stored inside the Layers
         """
-        self.attributes = c[self.soil_type]
+        self.attributes = c[self.layer_num]
         for wf in self.wetting_fronts:
             wf.update_soil_parameters(
                 self.global_params,

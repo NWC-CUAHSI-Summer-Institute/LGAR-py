@@ -16,8 +16,9 @@ hyperparameters:
   warmup: 168
   epochs: 50
   learning_rate: 0.001
-  minibatch: 15 # [days]
-#  minibatch: 1/24 # this makes no minibatch
+#  minibatch: 31 # [days]
+#  minibatch: 15 # [days]
+  minibatch: 1/24 # this makes no minibatch
   lb:
     - 0.0015 # alpha
     - 1.0 # n

@@ -10,9 +10,9 @@ initial_psi: 2000.0 #[cm]
 ponded_depth_max: 2 #[cm]
 use_closed_form_G: False
 layer_soil_type:
+  - 12
   - 13
   - 14
-  - 15
 num_soil_types: 15  # must be less than or equal to MAX_NUM_SOIL_TYPES
 num_soil_layers: 3  # must be less than or equal to MAX_NUM_SOIL_LAYERS
 num_fronts: 0  # must be less than MAX_NUM_FRONTS

@@ -37,18 +37,24 @@ class dpLGAR(nn.Module):
 
         self.cfg = cfg
 
-        # Setting NN parameters
+        # Getting Soils information
         alpha_, n_, ksat_ = read_test_params(cfg)
+        soil_types = cfg.data.layer_soil_type
+        alpha_layer = alpha_[soil_types]
+        n_layer = n_[soil_types]
+        ksat_layer = ksat_[soil_types]
+
+        # Setting NN parameters
         self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64))
         # self.ponded_depth_max = torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64)
         self.alpha = nn.ParameterList([])
         self.n = nn.ParameterList([])
         self.ksat = nn.ParameterList([])
-        for i in range(alpha_.shape[0]):
-            self.alpha.append(nn.Parameter(alpha_[i]))
-            self.n.append(nn.Parameter(n_[i]))
+        for i in range(alpha_layer.shape[0]):
+            self.alpha.append(nn.Parameter(alpha_layer[i]))
+            self.n.append(nn.Parameter(n_layer[i]))
             # Addressing Frozen Factor
-            self.ksat.append(nn.Parameter(ksat_[i] * cfg.constants.frozen_factor))
+            self.ksat.append(nn.Parameter(ksat_layer[i] * cfg.constants.frozen_factor))
 
         # Creating static soil params
         self.soils_df = read_df(cfg.data.soil_params_file)
