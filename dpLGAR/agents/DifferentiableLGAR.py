@@ -129,7 +129,6 @@ class DifferentiableLGAR(BaseAgent):
         self.y_t = y_t_[warmup:]
         # If there is no gradient (i.e. no runoff), then we shouldn't validate
         self.validate()
-        # self.model.update_soil_parameters()
 
     # Commenting out until we get the normal model to work
     # def train_one_epoch(self):

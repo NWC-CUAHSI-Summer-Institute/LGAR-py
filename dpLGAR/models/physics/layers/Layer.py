@@ -1520,16 +1520,16 @@ class Layer:
         else:
             # if it got to this point, no ponding is allowed, either infiltrate or runoff
             # order is important here; assign zero to ponded depth once we compute volume in and runoff
-            #TODO TEST THIS MORE
             infiltration = torch.min(ponded_depth, fp_cm)
             # if ponded_depth < fp_cm:
             #     runoff = torch.tensor(0.0, device=self.global_params.device)
             # else:
             #     runoff = ponded_depth - infiltration
             # ponded_depth = torch.tensor(0.0, device=self.global_params.device)
-            ponded_depth = ponded_depth_temp
             _runoff_ = ponded_depth - infiltration
+            ponded_depth = self.global_params.ponded_depth_max
             runoff = torch.clamp(_runoff_, min=0.0)
+            _x_ = "test"
 
         return runoff, infiltration, ponded_depth
 
