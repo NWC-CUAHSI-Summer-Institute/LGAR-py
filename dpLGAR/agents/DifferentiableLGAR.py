@@ -106,6 +106,33 @@ class DifferentiableLGAR(BaseAgent):
             # Resetting the mass
             self.mass_balance.reset_mass(self.model)
 
+    # def train_one_epoch(self):
+    #     """
+    #     One epoch of training
+    #     :return:
+    #     """
+    #     y_hat_ = torch.zeros([self.data_loader.shape[0]], device=self.cfg.device)  # runoff
+    #     y_t = torch.zeros([self.data_loader.shape[0]], device=self.cfg.device)  # runoff
+    #     for i, (x, y_t) in enumerate(self.data_loader):
+    #         # Resetting output vars
+    #         runoff, percolation = self.model(x)
+    #         self.y_hat[i] = runoff
+    #         # percolation_batch[j] = percolation
+    #         # Updating the total mass of the system
+    #         self.mass_balance.change_mass(self.model)  # Updating global balance
+    #         self.mass_balance.report_mass(self.model)  # Global mass balance
+    #     if self.y_hat.requires_grad:
+    #         warmup = self.cfg.models.hyperparameters.warmup
+    #         self.y_hat = self.y_hat[warmup:]
+    #         self.y_t = self.y_t[warmup:]
+    #         # If there is no gradient (i.e. no runoff), then we shouldn't validate
+    #         self.validate()
+    #         self.optimizer.zero_grad()
+    #         self.model.update_soil_parameters()
+    #
+    #         time.sleep(0.01)
+
+    # Commenting out until we get the normal model to work
     def train_one_epoch(self):
         """
         One epoch of training
@@ -113,33 +140,34 @@ class DifferentiableLGAR(BaseAgent):
         """
         for i, (x, y_t) in enumerate(self.data_loader):
             # Resetting output vars
-            self.y_hat = torch.zeros([x.shape[0]], device=self.cfg.device)  # runoff
-            self.y_t = y_t
+            y_hat_ = torch.zeros([x.shape[0]], device=self.cfg.device)  # runoff
+            y_t_ = y_t
             percolation_batch = torch.zeros([x.shape[0]], device=self.cfg.device)
-            if i =
             for j in trange(x.shape[0], desc=f"Running Minibatch {i+1}", leave=True):
                 # Minibatch loop
                 inputs = x[j]
                 runoff, percolation = self.model(inputs)
-                self.y_hat[j] = runoff
+                y_hat_[j] = runoff
                 percolation_batch[j] = percolation
                 # Updating the total mass of the system
                 self.mass_balance.change_mass(self.model)
                 time.sleep(0.01)
             self.mass_balance.report_mass(self.model)
-            if self.y_hat.requires_grad:
+            if y_hat_.requires_grad:
                 if i == 0:
                     warmup = self.cfg.models.hyperparameters.warmup
-                    self.y_hat = self.y_hat[warmup:]
-                    self.y_t = self.y_t[warmup:]
+                else:
+                    warmup = 0
+                self.y_hat = y_hat_[warmup:]
+                self.y_t = y_t_[warmup:]
                 # If there is no gradient (i.e. no runoff), then we shouldn't validate
                 self.validate()
                 self.optimizer.zero_grad()
                 self.model.update_soil_parameters()
 
-            starting_index = i * x.shape[0]
-            ending_index = (i + 1) * x.shape[0]
-            self.percolation_output[starting_index:ending_index] = percolation_batch
+            # starting_index = i * x.shape[0]
+            # ending_index = (i + 1) * x.shape[0]
+            # self.percolation_output[starting_index:ending_index] = percolation_batch
 
     def validate(self) -> None:
         """
@@ -181,7 +209,7 @@ class DifferentiableLGAR(BaseAgent):
 
         # Update the model parameters
         self.optimizer.step()
-        # self.model.update_soil_parameters()
+        # torch.autograd.set_detect_anomaly(True)
 
     def finalize(self):
         """

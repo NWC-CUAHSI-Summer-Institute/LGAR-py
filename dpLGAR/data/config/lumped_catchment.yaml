@@ -1,6 +1,7 @@
 data_dir: /Users/taddbindas/Google Drive/Shared drives/SI_NextGen_Aridity/data/camELS/gauch_etal_2020/
 basin_id: 10249300
 observations: ${data_dir}/usgs_streamflow/${basin_id}-usgs-hourly.csv
+
 forcing_file: ${data_dir}/nldas_hourly/${basin_id}_hourly_nldas.csv
 soil_params_file: ${cwd}/data/vG_default_params.dat
 layer_thickness: ??? #[cm]

@@ -40,6 +40,7 @@ class dpLGAR(nn.Module):
         # Setting NN parameters
         alpha_, n_, ksat_ = read_test_params(cfg)
         self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64))
+        # self.ponded_depth_max = torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64)
         self.alpha = nn.ParameterList([])
         self.n = nn.ParameterList([])
         self.ksat = nn.ParameterList([])
@@ -135,6 +136,7 @@ class dpLGAR(nn.Module):
         self.percolation = torch.tensor(0.0, device=self.cfg.device)
 
     def update_soil_parameters(self):
+        self.global_params.ponded_depth_max = self.ponded_depth_max.clone()
         self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
         self.top_layer.update_soil_parameters(self.c)
 

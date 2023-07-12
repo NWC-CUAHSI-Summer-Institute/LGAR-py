@@ -16,9 +16,9 @@ class RangeBoundLoss(nn.Module):
         self.factor = torch.tensor(factor)
 
     def forward(self, params):
-        loss = 0
+        loss = torch.tensor(0.0, dtype=torch.float64)
         # Process the ParameterList objects
-        for i in range(len(params) - 1):  # subtract 1 to exclude the last Parameter
+        for i in range(len(params)):  # subtract 1 to exclude the last Parameter
             lb = self.lb[i]
             ub = self.ub[i]
             params_tensor = torch.stack([param for param in params[i]])  # convert ParameterList to tensor
