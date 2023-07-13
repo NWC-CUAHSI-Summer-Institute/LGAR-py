@@ -12,7 +12,8 @@ time_interval:
 forcing_file: ${data.data_dir}/nldas_forcings/${data.basin_id}_hourly_nldas.csv
 observations_file: ${data.data_dir}/usgs_streamflow/${data.basin_id}-usgs-hourly.csv
 area_file: ${data.data_dir}/attributes/CAMELS_areas.csv
-soil_params_file: ${data.data_dir}/attributes/camels_soil_class.txt
+attributes_file: ${data.data_dir}/attributes/camels_soil_class.txt
+soil_params_file: ${cwd}/data/vG_default_params.dat
 layer_thickness: ??? #[cm]
 initial_psi: 2000.0 #[cm]
 ponded_depth_max: 0.0 #[cm]

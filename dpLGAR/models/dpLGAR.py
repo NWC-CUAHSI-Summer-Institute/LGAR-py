@@ -38,16 +38,19 @@ class dpLGAR(nn.Module):
 
         self.cfg = cfg
 
-        self.soil_depth = soil_information[0]
-        self.texture = soil_information[1]
+        self.cfg.data.layer_thickness = [soil_information[0]]
+        # self.soil_depth = torch.tensor(soil_information[0], device=self.cfg.device)
+        self.textures = [soil_information[1]]
         # The soil type in this basin, adding 1 for indexing error (Tadd's fault)
-        self.soil_types = soil_information[2] - 1
+        # SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
+        self.cfg.data.layer_soil_type = [soil_information[2] - 1]
+        self.cfg.data.num_soil_layers = len(self.cfg.data.layer_soil_type)
 
         # Getting starting values for soil information (File from Fred Ogden)
         alpha_, n_, ksat_ = read_test_params(cfg)
-        alpha_layer = alpha_[self.soil_types]
-        n_layer = n_[self.soil_types]
-        ksat_layer = ksat_[self.soil_types]
+        alpha_layer = alpha_[self.cfg.data.layer_soil_type]
+        n_layer = n_[self.cfg.data.layer_soil_type]
+        ksat_layer = ksat_[self.cfg.data.layer_soil_type]
 
         # Setting NN parameters
         # self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64))
@@ -105,7 +108,7 @@ class dpLGAR(nn.Module):
         # self.texture_map = {idx: texture for idx, texture in enumerate(texture_values)}
         self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
 
-        self.global_params = GlobalParams(self.cfg, self.ponded_depth_max, self.soil_depth, self.soil_types)
+        self.global_params = GlobalParams(self.cfg, self.ponded_depth_max)
 
         # Creating initial soil layer stack
         # We're only saving a reference to the top layer as all precip, PET, and runoff deal with it
@@ -117,7 +120,7 @@ class dpLGAR(nn.Module):
             self.alpha,
             self.n,
             self.ksat,
-            self.texture_map,
+            self.textures,
         )
 
         # Gaining a reference to the bottom layer
