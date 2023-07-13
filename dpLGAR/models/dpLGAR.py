@@ -56,8 +56,8 @@ class dpLGAR(nn.Module):
         ksat_layer = ksat_[self.cfg.data.layer_soil_type]
 
         # Setting NN parameters
-        # self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64))
-        self.ponded_depth_max = torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64)
+        self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64))
+        # self.ponded_depth_max = torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64)
         self.alpha = nn.ParameterList([])
         self.n = nn.ParameterList([])
         self.ksat = nn.ParameterList([])

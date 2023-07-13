@@ -1,4 +1,4 @@
-data_dir: /Users/taddbindas/projects/dpLGAR/data
+data_dir: ${cwd}/data
 basin_id: "01031500"
 #endtime: 372.0 #[hr]
 endtime: 3000.0 #[hr]

@@ -2,7 +2,7 @@ units:
   endtime_s: [hr]
   forcing_resolution_h: [ sec ]
   timestep_h: [s]
-subcycle_length: 900 #[sec]
+subcycle_length: 3600 #[sec]
 subcycle_length_h: ??? #[hr]
 num_subcycles: ???
 #num_time_step: 90000  # total simulation time is this number times the time_step_s
@@ -11,6 +11,8 @@ forcing_resolution_h: ???
 time_per_step: ???
 nsteps: ???
 forcing_resolution: 3600 # [sec]
+save_path: ${cwd}/saved_model_runs/${data.basin_id}/
+save_name: trained_model_${now:%m-%d}_${now:%H-%M-%S}.pth
 hyperparameters:
   warmup: 168
   epochs: 50

@@ -176,7 +176,12 @@ class DifferentiableLGAR(BaseAgent):
         Finalizes all the operations of the 2 Main classes of the process, the operator and the data loader
         :return:
         """
-        raise NotImplementedError
+        from pathlib import Path
+        dir_path = Path(self.cfg.models.save_path)
+        if not dir_path.exists():
+            dir_path.mkdir(parents=True)
+        file_path = dir_path / self.cfg.models.save_name
+        torch.save(self.model.state_dict(), file_path)
 
     def load_checkpoint(self, file_name):
         """
