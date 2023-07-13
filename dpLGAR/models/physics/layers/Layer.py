@@ -27,7 +27,7 @@ class Layer:
         alpha: torch.nn.ParameterList,
         n: torch.nn.ParameterList,
         ksat: torch.nn.ParameterList,
-        texture_map: dict,
+        textures,
         previous_layer=None,
     ):
         """
@@ -50,7 +50,7 @@ class Layer:
             self.layer_num
         ]
         self.soil_type = self.global_params.layer_soil_type[self.layer_num]
-        self.texture = texture_map[self.soil_type]
+        self.texture = textures[self.layer_num]
         self.attributes = c[self.layer_num]
         self.alpha_layer = alpha[self.layer_num]
         self.n_layer = n[self.layer_num]
@@ -84,7 +84,7 @@ class Layer:
                 alpha,
                 n,
                 ksat,
-                texture_map,
+                textures,
                 previous_layer=self,
             )
         self.previous_state = self.deepcopy()
@@ -1635,7 +1635,7 @@ class Layer:
     def print(self, first=True):
         if first:
             log.info(
-                f"[     Depth   Theta       Layer_num   dzdt     k_cm_hr    psi   ]"
+                f"[     Depth       Theta   Layer_num   dzdt     k_cm_hr    psi   ]"
             )
         for wf in self.wetting_fronts:
             wf.print()

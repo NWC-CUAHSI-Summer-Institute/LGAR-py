@@ -33,7 +33,7 @@ class DifferentiableLGAR(BaseAgent):
 
         # Configuring timesteps
         self.cfg.models.endtime_s = (
-            self.cfg.models.endtime * self.cfg.conversions.hr_to_sec
+            self.cfg.data.endtime * self.cfg.conversions.hr_to_sec
         )
         self.cfg.models.subcycle_length_h = self.cfg.models.subcycle_length * (
             1 / self.cfg.conversions.hr_to_sec
@@ -61,7 +61,7 @@ class DifferentiableLGAR(BaseAgent):
         )
 
         # Defining the model and output variables to save
-        self.model = dpLGAR(self.cfg)
+        self.model = dpLGAR(self.cfg, self.data.soil_information)
         self.percolation_output = torch.zeros(
             [self.cfg.models.nsteps], device=self.cfg.device
         )
@@ -116,7 +116,7 @@ class DifferentiableLGAR(BaseAgent):
         self.optimizer.zero_grad()
         for i, (x, y_t) in enumerate(tqdm(self.data_loader, desc=f"Epoch {self.current_epoch + 1} Training")):
             # Resetting output vars
-            runoff, percolation = self.model(x.squeeze())
+            runoff, percolation = self.model(i, x.squeeze())
             y_hat_[i] = runoff
             y_t_[i] = y_t
             time.sleep(0.01)

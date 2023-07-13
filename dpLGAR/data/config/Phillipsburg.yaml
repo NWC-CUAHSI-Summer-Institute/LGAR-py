@@ -2,6 +2,8 @@ data_dir: {$cwd}
 basin_id: 10249300
 forcing_file: ${cwd}/data/forcing_data_resampled_uniform_Phillipsburg.csv
 soil_params_file: ${cwd}/data/vG_default_params.dat
+#endtime: 372.0 #[hr]
+endtime: 3000.0 #[hr]
 layer_thickness: #[cm]
   - 44.0
   - 131.0

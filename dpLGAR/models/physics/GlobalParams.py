@@ -13,6 +13,8 @@ class GlobalParams:
 
         self.device = cfg.device
 
+        # TODO IMPLEMENT SOIL DEPTH AND SOIL TYPE IN HERE, THEN EDIT THIS IN THE LAYERS
+
         # Defining all of the variables required by LGAR
         self.layer_thickness_cm = None
         self.cum_layer_thickness = None
@@ -102,7 +104,7 @@ class GlobalParams:
         self.cum_layer_thickness = torch.zeros(
             [len(cfg.data.layer_thickness)], device=cfg.device
         )
-        self.cum_layer_thickness[0] = self.layer_thickness_cm[0]
+        self.cum_layer_thickness[0] = cfg.data.layer_thickness[0]
         for i in range(1, self.cum_layer_thickness.shape[0]):
             self.cum_layer_thickness[i] = (
                     self.cum_layer_thickness[i - 1].clone() + self.layer_thickness_cm[i]
@@ -117,7 +119,7 @@ class GlobalParams:
         self.use_closed_form_G = cfg.data.use_closed_form_G
 
         # HARDCODING A 1 SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
-        self.layer_soil_type = np.array(cfg.data.layer_soil_type) - 1
+        self.layer_soil_type = cfg.data.layer_soil_type
 
         self.num_soil_types = torch.tensor(cfg.data.max_soil_types, device=cfg.device)
 
