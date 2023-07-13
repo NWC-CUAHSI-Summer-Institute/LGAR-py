@@ -38,12 +38,15 @@ class dpLGAR(nn.Module):
 
         self.cfg = cfg
 
-        self.cfg.data.layer_thickness = [soil_information[0]]
-        # self.soil_depth = torch.tensor(soil_information[0], device=self.cfg.device)
-        self.textures = [soil_information[1]]
+        soil_depth = soil_information[0]
+        self.cfg.data.layer_thickness = [self.cfg.data.top_soil_thickness, soil_depth - self.cfg.data.top_soil_thickness]
+        # We're assuming two soil layers of the same "type" The first layer is topsoil
+        # The bottom is of the same "type" but will be trained to closer mimic what the physics tells us will be there
+        self.textures = [soil_information[1], soil_information[1]]
         # The soil type in this basin, adding 1 for indexing error (Tadd's fault)
         # SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
-        self.cfg.data.layer_soil_type = [soil_information[2] - 1]
+        layer = soil_information[2] - 1
+        self.cfg.data.layer_soil_type = [layer, layer]
         self.cfg.data.num_soil_layers = len(self.cfg.data.layer_soil_type)
 
         # Getting starting values for soil information (File from Fred Ogden)

@@ -14,6 +14,7 @@ observations_file: ${data.data_dir}/usgs_streamflow/${data.basin_id}-usgs-hourly
 area_file: ${data.data_dir}/attributes/CAMELS_areas.csv
 attributes_file: ${data.data_dir}/attributes/camels_soil_class.txt
 soil_params_file: ${cwd}/data/vG_default_params.dat
+top_soil_thickness: 25.0 #[cm]
 layer_thickness: ??? #[cm]
 initial_psi: 2000.0 #[cm]
 ponded_depth_max: 0.0 #[cm]
