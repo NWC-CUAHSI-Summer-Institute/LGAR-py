@@ -90,9 +90,9 @@ def calc_geff(global_params, attributes, theta_1, theta_2, alpha, n, ksat) -> Te
         # Green ampt capillary drive parameter, which can be used in the approximation of G with the Brooks-Corey model (See Ogden and Saghafian, 1997)
         h_c = bc_psib_cm * (2 + 3 * bc_lambda) / (1 + 3 * bc_lambda)
 
-        geff = h_c * (safe_pow(se_i, (3 + 1 / bc_lambda))) - safe_pow(
+        geff = h_c * (torch.pow(se_i, (3 + 1 / bc_lambda))) - torch.pow(
             se_f, (3 + 1 / bc_lambda)
-        ) / (1 - safe_pow(se_f, (3 + 1 / bc_lambda)))
+        ) / (1 - torch.pow(se_f, (3 + 1 / bc_lambda)))
 
         if torch.isinf(geff) or torch.isnan(geff):
             geff = h_c

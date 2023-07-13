@@ -65,6 +65,22 @@ class Data(Dataset):
         x = stacked_forcings.transpose(0,1) * cfg.conversions.mm_to_cm
         return x
 
+    def to_lgar_c_format(self, df, file_name):
+        """
+        For converting filtered data to LGAR-C format
+        """
+        df = df.copy()
+        df['date'] = pd.to_datetime(df['date'])
+        df['date'] = df['date'].dt.strftime('%-m/%-d/%y %H:%M')
+        df = df.rename(columns={
+            "date": "Time",
+            "potential_evaporation": "PET(mm/h)",
+            "total_precipitation": "P(mm/h)"
+        })
+        df = df[['Time', 'P(mm/h)', 'PET(mm/h)']]
+        df['PET(mm/h)'] = df['PET(mm/h)'].clip(lower=0)
+        df.to_csv(file_name, index=False)
+
     def get_basin_area(self, cfg):
         """
         Read and filter a CSV file for a specified basin id to get the basin area.

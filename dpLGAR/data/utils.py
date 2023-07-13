@@ -66,6 +66,7 @@ def generate_soil_metrics(
     initial_psi = torch.tensor(cfg.data.initial_psi, device=cfg.device)
     theta_e = torch.tensor(soils_df["theta_e"], device=cfg.device)[soil_types]
     theta_r = torch.tensor(soils_df["theta_r"], device=cfg.device)[soil_types]
+    # m = torch.tensor(soils_df["m"], device=cfg.device)[soil_types]
     m = torch.zeros(len(alpha), device=cfg.device)
     theta_wp = torch.zeros(len(alpha), device=cfg.device)
     theta_init = torch.zeros(len(alpha), device=cfg.device)
@@ -76,6 +77,7 @@ def generate_soil_metrics(
         alpha_ = alpha[i]
         n_ = n[i]
         m_ = calc_m(n_)
+        # m_ = m[i]
         theta_e_ = theta_e[i]
         theta_r_ = theta_r[i]
         theta_wp[i] = calc_theta_from_h(h, alpha_, m_, n_, theta_e_, theta_r_)
@@ -142,7 +144,7 @@ def read_test_params(cfg: DictConfig) -> (Tensor, Tensor, Tensor):
             1.68,
             1.32,
             1.52,
-            1.66,
+            1.6599999999,
             1.6858,
             1.299,
             1.6151,

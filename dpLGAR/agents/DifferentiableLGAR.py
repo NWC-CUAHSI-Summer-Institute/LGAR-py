@@ -116,7 +116,7 @@ class DifferentiableLGAR(BaseAgent):
         self.optimizer.zero_grad()
         for i, (x, y_t) in enumerate(tqdm(self.data_loader, desc=f"Epoch {self.current_epoch + 1} Training")):
             # Resetting output vars
-            runoff, percolation = self.model(x.squeeze())
+            runoff, percolation = self.model(i, x.squeeze())
             y_hat_[i] = runoff
             y_t_[i] = y_t
             time.sleep(0.01)

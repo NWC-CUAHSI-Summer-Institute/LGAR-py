@@ -161,7 +161,7 @@ class dpLGAR(nn.Module):
         self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
         self.top_layer.update_soil_parameters(self.c)
 
-    def forward(self, x) -> (Tensor, Tensor):
+    def forward(self, i, x) -> (Tensor, Tensor):
         """
         The forward function to model Precip/PET through LGAR functions
         /* Note unit conversion:
@@ -186,7 +186,8 @@ class dpLGAR(nn.Module):
         for _ in range(int(self.cfg.models.num_subcycles)):
             self.top_layer.copy_states()
             precip_sub = precip * subtimestep_h
-            pet_sub = pet * subtimestep_h
+            # Making sure PET >=0
+            pet_sub = torch.clamp(pet * subtimestep_h, min=0.0)
             previous_precip_sub = self.previous_precip.clone()
             ponded_depth_sub = precip_sub + self.ponded_water
             ponded_water_sub = torch.tensor(0.0, device=self.cfg.device)
@@ -210,26 +211,25 @@ class dpLGAR(nn.Module):
                 # ------------------------------------------------------------------------------------------------------
                 # /* create a new wetting front if the following is true. Meaning there is no
                 #    wetting front in the top layer to accept the water, must create one. */
-                if is_top_layer_saturated is False:
-                    temp_pd = torch.tensor(0.0, device=self.cfg.device)
-                    # // move the wetting fronts without adding any water; this is done to close the mass balance
-                    temp_pd, AET_sub = self.move_wetting_front(
-                        temp_pd,
-                        AET_sub,
-                        ending_volume_sub,
-                        subtimestep_h,
-                        bottom_boundary_flux,
-                    )
-                    # depth of the surficial front to be created
-                    dry_depth = self.top_layer.calc_dry_depth(subtimestep_h)
-                    (
-                        ponded_depth_sub,
-                        infiltration_sub,
-                    ) = self.top_layer.create_surficial_front(
-                        dry_depth, ponded_depth_sub, infiltration_sub
-                    )
-                    self.top_layer.copy_states()
-                    self.infiltration = self.infiltration + infiltration_sub
+                temp_pd = torch.tensor(0.0, device=self.cfg.device)
+                # // move the wetting fronts without adding any water; this is done to close the mass balance
+                temp_pd, AET_sub = self.move_wetting_front(
+                    temp_pd,
+                    AET_sub,
+                    ending_volume_sub,
+                    subtimestep_h,
+                    bottom_boundary_flux,
+                )
+                # depth of the surficial front to be created
+                dry_depth = self.top_layer.calc_dry_depth(subtimestep_h)
+                (
+                    ponded_depth_sub,
+                    infiltration_sub,
+                ) = self.top_layer.create_surficial_front(
+                    dry_depth, ponded_depth_sub, infiltration_sub
+                )
+                self.top_layer.copy_states()
+                self.infiltration = self.infiltration + infiltration_sub
             if create_surficial_front is False and ponded_depth_sub > 0:
                 # ------------------------------------------------------------------------------------------------------
                 # /* infiltrate water based on the infiltration capacity given no new wetting front
@@ -306,6 +306,18 @@ class dpLGAR(nn.Module):
                 self.giuh_runoff = self.giuh_runoff + giuh_runoff_sub
                 self.discharge = self.discharge + giuh_runoff_sub
                 self.groundwater_discharge = groundwater_discharge_sub
+        # self.print_local_mass_balance(
+        #     local_mb,
+        #     starting_volume_sub,
+        #     precip_sub,
+        #     runoff_sub,
+        #     AET_sub,
+        #     ponded_water_sub,
+        #     percolation_sub,
+        #     ending_volume_sub,
+        #     infiltration_sub,
+        #     i,
+        # )
         return self.runoff, self.percolation
 
     def calc_mass_balance(self) -> Tensor:
@@ -386,9 +398,9 @@ class dpLGAR(nn.Module):
         else:
             # This is the timestep that adds runoff
             runoff_sub = ponded_depth_sub - self.global_params.ponded_depth_max
-            ponded_depth_sub = self.global_params.ponded_depth_max
-            ponded_water_sub = ponded_depth_sub
             self.runoff = self.runoff + runoff_sub
+            ponded_water_sub = ponded_depth_sub
+            ponded_depth_sub = self.global_params.ponded_depth_max
         return ponded_depth_sub, ponded_water_sub, runoff_sub
 
     def print_params(self):
@@ -414,9 +426,10 @@ class dpLGAR(nn.Module):
         percolation_sub,
         ending_volume_sub,
         infiltration_sub,
+        i,
     ):
         self.top_layer.print()
-        log.info(f"Local mass balance at this timestep...")
+        log.info(f"Local mass balance at timestep {i}:")
         log.info(f"Error         = {local_mb.item():14.10f}")
         log.info(f"Initial water = {starting_volume_sub.item():14.10f}")
         log.info(f"Water added   = {precip_sub.item():14.10f}")

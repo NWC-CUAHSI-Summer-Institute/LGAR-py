@@ -43,8 +43,8 @@ def calc_theta_from_h(
     :parameter device: the device that we're using
     :return thickness of individual layers
     """
-    alpha_pow = safe_pow(alpha * h, n)
-    outer_alpha_pow = (safe_pow(1.0 + alpha_pow, m))
+    alpha_pow = torch.pow(alpha * h, n)
+    outer_alpha_pow = (torch.pow(1.0 + alpha_pow, m))
     result = (
         1.0 / outer_alpha_pow * (theta_e - theta_r)
     ) + theta_r
@@ -126,8 +126,8 @@ def calc_se_from_h(h, alpha, m, n):
         return torch.tensor(
             1.0
         )  # TODO EXPLORE A CLAMP (this function doesn't work well for tiny h)
-    internal_state = safe_pow(alpha * h, n)
-    result = 1.0 / (safe_pow(1.0 + internal_state, m))
+    internal_state = torch.pow(alpha * h, n)
+    result = 1.0 / (torch.pow(1.0 + internal_state, m))
     return error_check(result)
 
 
@@ -140,18 +140,18 @@ def calc_k_from_se(se: Tensor, ksat: Tensor, m: Tensor) -> Tensor:
     :param m: Van Genuchten
     :return: hydraulic conductivity (K)
     """
-    se_pow = safe_pow(se, 1.0 / m)
+    se_pow = torch.pow(se, 1.0 / m)
     # If SE = 1, our gradient chain breaks since we'll be doing a .pow() of 0
     # Taking the derivative of that won't work
     base = 1.0 - se_pow
     if torch.isclose(base, zero, threshold):
         base = base + threshold
-    outside_se_pow = safe_pow(base, m)
+    outside_se_pow = torch.pow(base, m)
     exponent = torch.tensor(2.0)
     result = (
         ksat
         * torch.sqrt(se)
-        * safe_pow(1.0 - outside_se_pow, exponent)
+        * torch.pow(1.0 - outside_se_pow, exponent)
     )
     return error_check(result)
 
@@ -163,13 +163,13 @@ def calc_h_from_se(
     function to calculate h from Se using:
     1.0/alpha*pow(pow(Se,-1.0/m)-1.0,1.0/n))
     """
-    se_pow = safe_pow(se, (-1.0 / m))
+    se_pow = torch.pow(se, (-1.0 / m))
     base = se_pow - 1.0
     # If SE = 1, our gradient chain breaks since we'll be doing a .pow() of 0
     # Taking the derivative of that won't work
     if torch.isclose(base, zero, threshold):
         base = base + threshold
-    outside_se_pow = safe_pow(base, (1.0 / n))
+    outside_se_pow = torch.pow(base, (1.0 / n))
     result = 1.0 / alpha * outside_se_pow
     return error_check(result)
 
