@@ -25,6 +25,10 @@ conversions:
   cm_to_m: 0.01
   hr_to_sec: 3600.0
   m_to_cm: 100.0
+local_rank: ???
+nproc: ???
+distributed_backend: "gloo"  # CPU
+#distributed_backend: "nvcc"  # GPU
 
 ################## HYDRA CONFIG #######################
 hydra:

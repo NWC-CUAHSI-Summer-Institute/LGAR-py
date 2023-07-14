@@ -1,0 +1,9 @@
+Metadata-Version: 2.1
+Name: dpLGAR
+Version: 0.1
+Summary: LGAR in torch
+Home-page: https://github.com/NWC-CUAHSI-Summer-Institute/dpLGAR/tree/main
+Author: Your Name
+Author-email: tkb5476@psu.edu
+License: MIT
+License-File: LICENSE
