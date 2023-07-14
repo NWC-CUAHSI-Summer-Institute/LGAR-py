@@ -28,7 +28,7 @@ conversions:
 local_rank: ???
 nproc: ???
 distributed_backend: "gloo"  # CPU
-#distributed_backend: "nvcc"  # GPU
+#distributed_backend: "nccl"  # GPU
 
 ################## HYDRA CONFIG #######################
 hydra:

@@ -4,6 +4,7 @@ import time
 import torch
 from torch import Tensor
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.utils.data import DataLoader
 import torch.distributed as dist
 from tqdm import tqdm, trange
@@ -102,7 +103,7 @@ class DifferentiableLGAR(BaseAgent):
         :return:
         """
         self.model.train()
-        self.net = DDP(self.model)
+        self.net = FSDP(self.model)
         for epoch in range(1, self.cfg.models.hyperparameters.epochs + 1):
             if self.rank == 0:
                 log.info(f"Running epoch: {self.current_epoch}")
@@ -226,7 +227,7 @@ class DifferentiableLGAR(BaseAgent):
     def setup(self, cfg: DictConfig) -> None:
 
         dist_url = "env://"  # Not important for what we're doing
-        dist.init_process_group(backend="gloo")
+        dist.init_process_group(backend="gloo", world_size=self.cfg.nproc)
         dist.barrier()
 
     def cleanup(self):
