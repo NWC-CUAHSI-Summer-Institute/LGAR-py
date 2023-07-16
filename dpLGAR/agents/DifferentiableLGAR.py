@@ -110,7 +110,7 @@ class DifferentiableLGAR(BaseAgent):
                 log.info(f"-----Current Params-----")
             self.model.print_params()
             self.train_one_epoch()
-            self.current_epoch += 1
+            self.current_epoch = self.current_epoch + 1
 
             # Resetting the internal states (soil layers) for the next run
             self.model.set_internal_states()

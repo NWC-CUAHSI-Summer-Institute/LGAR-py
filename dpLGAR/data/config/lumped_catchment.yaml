@@ -7,7 +7,7 @@ time_interval:
 #  warmup: 1998-10-01 00:00:00
   start: 2001-01-01 01:00:00
 #  start: 1999-10-01 00:00:00
-  end: 2001-01-11 23:00:00
+  end: 2001-01-10 23:00:00
 #  end: 2008-09-30 23:00:00
   testing_warmup: 2008-10-01 00:00:00
   testing_start: 2009-10-01 23:00:00
@@ -17,7 +17,7 @@ observations_file: ${data.data_dir}/usgs_streamflow/${data.basin_id}-usgs-hourly
 area_file: ${data.data_dir}/attributes/CAMELS_areas.csv
 attributes_file: ${data.data_dir}/attributes/camels_soil_class.txt
 soil_params_file: ${cwd}/data/vG_default_params.dat
-top_soil_thickness: 25.0 #[cm]
+top_soil_thickness: 15.0 #[cm]
 layer_thickness: ??? #[cm]
 initial_psi: 2000.0 #[cm]
 ponded_depth_max: 0.0 #[cm]
