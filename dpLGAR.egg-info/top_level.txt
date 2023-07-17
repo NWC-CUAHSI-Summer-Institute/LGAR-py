@@ -1,3 +1,0 @@
-data
-dpLGAR
-saved_model_runs

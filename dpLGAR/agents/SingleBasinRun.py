@@ -17,10 +17,10 @@ from dpLGAR.models.dpLGAR import dpLGAR
 from dpLGAR.models.functions.loss import MSE_loss, RangeBoundLoss
 from dpLGAR.models.physics.MassBalance import MassBalance
 
-log = logging.getLogger("agents.DifferentiableLGAR")
+log = logging.getLogger("agents.SingleBasinRun")
 
 
-class DifferentiableLGAR(BaseAgent):
+class LGARAgent(BaseAgent):
     def __init__(self, cfg: DictConfig) -> None:
         """
         Initialize the Differentiable LGAR code
@@ -37,8 +37,6 @@ class DifferentiableLGAR(BaseAgent):
 
         # Initialize DistributedDataParallel (DDP)
         self.rank = int(cfg.local_rank)
-        log.info(f"Initializing Distributed Data: {self.rank}")
-        self.setup(self.cfg)
 
         # Configuring subcycles (If we're running hourly, 15 mins, etc)
         self.cfg.models.subcycle_length_h = self.cfg.models.subcycle_length * (
@@ -223,12 +221,3 @@ class DifferentiableLGAR(BaseAgent):
         :return:
         """
         raise NotImplementedError
-
-    def setup(self, cfg: DictConfig) -> None:
-
-        dist_url = "env://"  # Not important for what we're doing
-        dist.init_process_group(backend="gloo", world_size=self.cfg.nproc)
-        dist.barrier()
-
-    def cleanup(self):
-        dist.destroy_process_group()
