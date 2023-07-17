@@ -1602,6 +1602,12 @@ class Layer:
                         )
                     else:
                         try:
+                            if self.next_layer is None:
+                                return (
+                                    current_front,
+                                    current_free_drainage,
+                                    None
+                                )
                             return (
                                 current_front,
                                 current_free_drainage,
