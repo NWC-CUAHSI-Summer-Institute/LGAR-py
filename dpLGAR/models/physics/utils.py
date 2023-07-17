@@ -173,14 +173,3 @@ def calc_h_from_se(
     outside_se_pow = torch.pow(base, (1.0 / n))
     result = 1.0 / alpha * outside_se_pow
     return result
-
-
-def error_check(result):
-    """
-    Checks to make sure there are no NaN values
-    """
-    if torch.any(torch.isnan(result)):
-        log.error("NaN values found in result")
-        raise ValueError
-    else:
-        return result
