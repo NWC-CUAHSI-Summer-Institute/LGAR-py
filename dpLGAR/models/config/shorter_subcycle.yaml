@@ -5,11 +5,7 @@ units:
 subcycle_length: 3600.0 #[sec]
 subcycle_length_h: ??? #[hr]
 num_subcycles: ???
-#num_time_step: 90000  # total simulation time is this number times the time_step_s
-#endtime_s: ???
 forcing_resolution_h: ???
-#time_per_step: ???
-#nsteps: ???
 forcing_resolution: 3600 # [sec]
 save_path: ${cwd}/saved_model_runs/${basin_id}/
 not_finished_name: ${save_name}_epoch_{}_${now:%m-%d}_${now:%H-%M-%S}.pth

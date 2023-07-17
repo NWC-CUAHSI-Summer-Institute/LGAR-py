@@ -1,9 +1,8 @@
+import logging
 from sklearn import preprocessing
 import torch
 
-import utils.logger as logger
-
-log = logger.get_logger("models.functions.utils")
+log = logging.getLogger("models.functions.utils")
 
 def to_physical(x, parameter_space):
     """

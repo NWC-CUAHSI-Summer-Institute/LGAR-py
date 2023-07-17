@@ -25,7 +25,7 @@ class Data(Dataset):
 
         self.x = self.get_forcings(cfg)
 
-        self.soil_information = self.get_attributes(cfg)
+        self.soil_information = self.get_polaris_atributes(cfg)
 
         self.y = self.get_observations(cfg)
         # self.y = torch.rand([self.x.shape[0]], device=cfg.device)
@@ -95,7 +95,7 @@ class Data(Dataset):
         filtered_data = data[data['gauge_id'] == formatted_basin_id]
         return filtered_data['AREA_sqkm'].values[0] if not filtered_data.empty else None
 
-    def get_attributes(self, cfg: DictConfig):
+    def get_camels_attributes(self, cfg: DictConfig):
         """
         Reading attributes from the soil params file
         """
@@ -110,6 +110,36 @@ class Data(Dataset):
         soil_texture = filtered_data["soil_texture_class"].item()
         soil_index = filtered_data["soil_index"].item()
         return [soil_depth, soil_texture, soil_index]
+
+    def get_polaris_atributes(self, cfg: DictConfig):
+        file_name = cfg.data.attributes_file
+        # Load the txt data into a DataFrame
+        df = pd.read_csv(file_name)
+
+        # Filter columns for soil %, Ph, and organic_matter
+        clay_columns = [col for col in df.columns if col.startswith('clay')]
+        sand_columns = [col for col in df.columns if col.startswith('sand')]
+        silt_columns = [col for col in df.columns if col.startswith('silt')]
+        ph_columns = [col for col in df.columns if col.startswith('ph')]
+        organic_matter_columns = [col for col in df.columns if col.startswith('om')]
+
+        # Create a numpy array from the columns
+        clay_data = df[clay_columns].values
+        sand_data = df[sand_columns].values
+        silt_data = df[silt_columns].values
+        ph_data = df[ph_columns].values
+        organic_matter_data = df[organic_matter_columns].values
+
+        # Shape (<num_points>, <num_layers>, <num_attributes>)
+        soil_attributes = torch.stack([
+            torch.from_numpy(clay_data),
+            torch.from_numpy(sand_data),
+            torch.from_numpy(silt_data),
+            torch.from_numpy(ph_data),
+            torch.from_numpy(organic_matter_data)
+        ], dim=-1)
+
+        return soil_attributes
 
     def get_observations(self, cfg: DictConfig):
         """
