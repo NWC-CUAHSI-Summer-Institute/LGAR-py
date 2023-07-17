@@ -49,7 +49,7 @@ class BaseAgent:
         """
         raise NotImplementedError
 
-    def validate(self):
+    def validate(self, pred, obs):
         """
         One cycle of model validation
         :return:

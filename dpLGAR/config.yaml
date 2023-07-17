@@ -2,8 +2,9 @@ defaults:
   - _self_
   - data: config/lumped_catchment
   - models: config/shorter_subcycle
-#cwd: /mnt/sdb1/tkb5476/dpLGAR/
-cwd: /Users/taddbindas/projects/dpLGAR
+  - override hydra/launcher: joblib
+cwd: /mnt/sdb1/tkb5476/dpLGAR/
+#cwd: /Users/taddbindas/projects/dpLGAR
 save_name: debugger
 output_dir: ${cwd}/output
 device: cpu
@@ -25,6 +26,10 @@ conversions:
   cm_to_m: 0.01
   hr_to_sec: 3600.0
   m_to_cm: 100.0
+local_rank: ???
+nproc: ???
+distributed_backend: "gloo"  # CPU
+#distributed_backend: "nccl"  # GPU
 
 ################## HYDRA CONFIG #######################
 hydra:

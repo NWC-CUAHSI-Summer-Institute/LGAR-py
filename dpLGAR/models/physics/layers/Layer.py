@@ -28,6 +28,7 @@ class Layer:
         n: torch.nn.ParameterList,
         ksat: torch.nn.ParameterList,
         textures,
+        rank,
         previous_layer=None,
     ):
         """
@@ -42,6 +43,7 @@ class Layer:
         :param is_top: TBD if this is necessary. Rn it's always true
         """
         super().__init__()
+        self.rank = rank
         self.global_params = global_params
         self.num_layers = global_params.num_layers
         self.layer_num = layer_index
@@ -52,9 +54,9 @@ class Layer:
         self.soil_type = self.global_params.layer_soil_type[self.layer_num]
         self.texture = textures[self.layer_num]
         self.attributes = c[self.layer_num]
-        self.alpha_layer = alpha[self.layer_num]
-        self.n_layer = n[self.layer_num]
-        self.ksat_layer = ksat[self.layer_num]
+        self.alpha_layer = alpha[self.layer_num].clone()
+        self.n_layer = n[self.layer_num].clone()
+        self.ksat_layer = ksat[self.layer_num].clone()
 
         # For mass balance
         self.tolerance = torch.tensor(1e-12, device=self.global_params.device)
@@ -85,6 +87,7 @@ class Layer:
                 n,
                 ksat,
                 textures,
+                self.rank,
                 previous_layer=self,
             )
         self.previous_state = self.deepcopy()
@@ -307,7 +310,7 @@ class Layer:
             if torch.abs(psi_cm - psi_cm_loc_prev) < 1e-15 and factor < 1e-13:
                 break
             if torch.abs(delta_mass - delta_mass_prev) < 1e-15:
-                count_no_mass_change += 1
+                count_no_mass_change = count_no_mass_change + 1
             else:
                 count_no_mass_change = 0
             if count_no_mass_change == break_no_mass_change:
@@ -1634,6 +1637,7 @@ class Layer:
 
     def print(self, first=True):
         if first:
+            log.info(f"Printing the top_layer for rank: {self.rank}")
             log.info(
                 f"[     Depth       Theta   Layer_num   dzdt     k_cm_hr    psi   ]"
             )

@@ -37,16 +37,24 @@ class dpLGAR(nn.Module):
         super(dpLGAR, self).__init__()
 
         self.cfg = cfg
+        self.rank = cfg.local_rank
 
         soil_depth = soil_information[0]
-        self.cfg.data.layer_thickness = [self.cfg.data.top_soil_thickness, soil_depth - self.cfg.data.top_soil_thickness]
+        log.info(f"Top Soil_depth = {self.cfg.data.top_soil_thickness}")
+        self.cfg.data.layer_thickness = [
+            self.cfg.data.top_soil_thickness,
+            self.cfg.data.second_soil_thickness,
+            soil_depth
+            - self.cfg.data.top_soil_thickness
+            - self.cfg.data.second_soil_thickness,
+        ]
         # We're assuming two soil layers of the same "type" The first layer is topsoil
         # The bottom is of the same "type" but will be trained to closer mimic what the physics tells us will be there
-        self.textures = [soil_information[1], soil_information[1]]
+        self.textures = [soil_information[1], soil_information[1], soil_information[1]]
         # The soil type in this basin, adding 1 for indexing error (Tadd's fault)
         # SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
         layer = soil_information[2] - 1
-        self.cfg.data.layer_soil_type = [layer, layer]
+        self.cfg.data.layer_soil_type = [layer, layer, layer]
         self.cfg.data.num_soil_layers = len(self.cfg.data.layer_soil_type)
 
         # Getting starting values for soil information (File from Fred Ogden)
@@ -56,8 +64,10 @@ class dpLGAR(nn.Module):
         ksat_layer = ksat_[self.cfg.data.layer_soil_type]
 
         # Setting NN parameters
-        # self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64))
-        self.ponded_depth_max = torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64)
+        self.ponded_depth_max = nn.Parameter(
+            torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64)
+        )
+        # self.ponded_depth_max = torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64)
         self.alpha = nn.ParameterList([])
         self.n = nn.ParameterList([])
         self.ksat = nn.ParameterList([])
@@ -124,6 +134,7 @@ class dpLGAR(nn.Module):
             self.n,
             self.ksat,
             self.textures,
+            self.rank
         )
 
         # Gaining a reference to the bottom layer
@@ -155,6 +166,7 @@ class dpLGAR(nn.Module):
         self.discharge = torch.tensor(0.0, device=self.cfg.device)
         self.groundwater_discharge = torch.tensor(0.0, device=self.cfg.device)
         self.percolation = torch.tensor(0.0, device=self.cfg.device)
+        self.top_layer.print()
 
     def update_soil_parameters(self):
         self.global_params.ponded_depth_max = self.ponded_depth_max.clone()
@@ -239,10 +251,7 @@ class dpLGAR(nn.Module):
                     infiltration_sub,
                     ponded_depth_sub,
                 ) = self.top_layer.insert_water(
-                    subtimestep_h,
-                    precip_sub,
-                    ponded_depth_sub,
-                    infiltration_sub,
+                    subtimestep_h, precip_sub, ponded_depth_sub, infiltration_sub,
                 )
 
                 self.infiltration = self.infiltration + infiltration_sub
@@ -318,7 +327,7 @@ class dpLGAR(nn.Module):
         #     infiltration_sub,
         #     i,
         # )
-        return self.runoff, self.percolation
+        return self.runoff
 
     def calc_mass_balance(self) -> Tensor:
         """
