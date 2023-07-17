@@ -79,7 +79,7 @@ def calc_h_min_cm(bc_lambda, bc_psib_cm) -> pd.DataFrame:
     :return:
     """
     h_min_cm = bc_psib_cm * (2.0 + 3.0 / bc_lambda) / (1.0 + 3.0 / bc_lambda)
-    return error_check(h_min_cm)
+    return h_min_cm
 
 
 def calc_bc_psib(alpha: Tensor, m: Tensor) -> Tensor:
@@ -97,7 +97,7 @@ def calc_bc_psib(alpha: Tensor, m: Tensor) -> Tensor:
         * (147.8 + 8.1 * p_ + 0.092 * p_ * p_)
         / (2.0 * alpha * p_ * (p_ - 1.0) * (55.6 + 7.4 * p_ + p_ * p_))
     )
-    return error_check(bc_psib)
+    return bc_psib
 
 
 def calc_se_from_theta(theta: Tensor, theta_e: Tensor, theta_r: Tensor) -> Tensor:
