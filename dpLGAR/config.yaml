@@ -3,8 +3,8 @@ defaults:
   - data: config/lumped_catchment
   - models: config/shorter_subcycle
   - override hydra/launcher: joblib
-#cwd: /mnt/sdb1/tkb5476/dpLGAR/
-cwd: /Users/taddbindas/projects/dpLGAR
+cwd: /mnt/sdb1/tkb5476/dpLGAR/
+#cwd: /Users/taddbindas/projects/dpLGAR
 save_name: debugger
 output_dir: ${cwd}/output
 device: cpu

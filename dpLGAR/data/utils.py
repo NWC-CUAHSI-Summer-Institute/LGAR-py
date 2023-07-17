@@ -74,19 +74,21 @@ def generate_soil_metrics(
     bc_psib_cm = torch.zeros(len(alpha), device=cfg.device)
     h_min_cm = torch.zeros(len(alpha), device=cfg.device)
     for i in range(len(alpha)):
-        alpha_ = alpha[i]
-        n_ = n[i]
+        alpha_ = alpha[i].clone()
+        n_ = n[i].clone()
         m_ = calc_m(n_)
         # m_ = m[i]
         theta_e_ = theta_e[i]
         theta_r_ = theta_r[i]
-        theta_wp[i] = calc_theta_from_h(h, alpha_, m_, n_, theta_e_, theta_r_)
-        theta_init[i] = calc_theta_from_h(
+        theta_wp_ = calc_theta_from_h(h, alpha_, m_, n_, theta_e_, theta_r_)
+        theta_init_ = calc_theta_from_h(
             initial_psi, alpha_, m_, n_, theta_e_, theta_r_
         )
         bc_lambda_ = calc_bc_lambda(m_)
         bc_psib_cm_ = calc_bc_psib(alpha_, m_)
         h_min_cm_ = calc_h_min_cm(bc_lambda_, bc_psib_cm_)
+        theta_wp[i] = theta_wp_
+        theta_init[i] = theta_init_
         bc_lambda[i] = bc_lambda_
         bc_psib_cm[i] = bc_psib_cm_
         h_min_cm[i] = h_min_cm_
