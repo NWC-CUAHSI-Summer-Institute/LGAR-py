@@ -1,3 +1,12 @@
 output/
 data/*
 .idea/
+.DS_Store
+dpLGAR/__pycache__/
+dpLGAR/agents/__pycache__/
+dpLGAR/data/__pycache__/
+dpLGAR/models/__pycache__/
+dpLGAR/models/physics/__pycache__/
+dpLGAR/models/physics/lgar/__pycache__/
+dpLGAR/models/physics/layers/__pycache__/
+dpLGAR/models/functions/__pycache__/
