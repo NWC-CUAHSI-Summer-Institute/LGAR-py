@@ -32,10 +32,11 @@ class DataParallelLGAR(BaseAgent):
         self.cfg = cfg
         torch.manual_seed(0)
         torch.set_default_dtype(torch.float64)
+        # torch.autograd.set_detect_anomaly(True)
 
         # Initialize DistributedDataParallel (DDP)
         self.rank = int(cfg.local_rank)
-        log.info(f"Initializing Distributed Data: {self.rank}")
+        log.info(f"Initializing Distributed Data Process: {self.rank}")
         self.setup(self.cfg)
 
         # Configuring subcycles (If we're running hourly, 15 mins, etc)
@@ -139,12 +140,9 @@ class DataParallelLGAR(BaseAgent):
                 self.mass_balance.change_mass(self.model)  # Updating global balance
                 time.sleep(0.01)
             self.mass_balance.report_mass(self.model)  # Global mass balance
-            warmup = self.cfg.models.hyperparameters.warmup
-            self.y_hat = y_hat_[warmup:]
-            self.y_t = y_t_[warmup:]
-            self.validate()
+            self.validate(y_hat_, y_t_)
 
-    def validate(self) -> None:
+    def validate(self, y_hat_, y_t_) -> None:
         """
         One cycle of model validation
         This function calculates the loss for the given predicted and actual values,
@@ -154,13 +152,16 @@ class DataParallelLGAR(BaseAgent):
         - y_hat_ : The tensor containing predicted values
         - y_t_ : The tensor containing actual values.
         """
+        warmup = self.cfg.models.hyperparameters.warmup
+        y_hat = y_hat_[warmup:]
+        y_t = y_t_[warmup:]
         # Outputting trained Nash-Sutcliffe efficiency (NSE) coefficient
-        y_hat_np = self.y_hat.detach().squeeze().numpy()
-        y_t_np = self.y_t.detach().squeeze().numpy()
+        y_hat_np = y_hat.detach().squeeze().numpy()
+        y_t_np = y_t.detach().squeeze().numpy()
         log.info(f"trained NSE: {calculate_nse(y_hat_np, y_t_np):.4}")
 
         # Compute the overall loss
-        loss_mse = self.criterion(self.y_hat, self.y_t)
+        loss_mse = self.criterion(y_hat, y_t)
 
         # Compute the range bound loss for the parameters you want to constrain
         params = [

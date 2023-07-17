@@ -43,12 +43,13 @@ def calc_theta_from_h(
     :parameter device: the device that we're using
     :return thickness of individual layers
     """
-    alpha_pow = torch.pow(alpha * h, n)
-    outer_alpha_pow = (torch.pow(1.0 + alpha_pow, m))
+    _inner_ = alpha * h
+    alpha_pow = torch.pow(_inner_, n)
+    outer_alpha_pow = torch.pow(1.0 + alpha_pow, m)
     result = (
         1.0 / outer_alpha_pow * (theta_e - theta_r)
     ) + theta_r
-    return error_check(result)
+    return result
 
 
 def calc_bc_lambda(m: Tensor) -> Tensor:
@@ -109,7 +110,7 @@ def calc_se_from_theta(theta: Tensor, theta_e: Tensor, theta_r: Tensor) -> Tenso
     :return: Se this is the relative (scaled 0-1) water content, like Theta
     """
     result = (theta - theta_r)/(theta_e - theta_r)
-    return error_check(result)
+    return result
 
 
 def calc_se_from_h(h, alpha, m, n):
@@ -128,7 +129,7 @@ def calc_se_from_h(h, alpha, m, n):
         )  # TODO EXPLORE A CLAMP (this function doesn't work well for tiny h)
     internal_state = torch.pow(alpha * h, n)
     result = 1.0 / (torch.pow(1.0 + internal_state, m))
-    return error_check(result)
+    return result
 
 
 def calc_k_from_se(se: Tensor, ksat: Tensor, m: Tensor) -> Tensor:
@@ -153,7 +154,7 @@ def calc_k_from_se(se: Tensor, ksat: Tensor, m: Tensor) -> Tensor:
         * torch.sqrt(se)
         * torch.pow(1.0 - outside_se_pow, exponent)
     )
-    return error_check(result)
+    return result
 
 
 def calc_h_from_se(
@@ -171,7 +172,7 @@ def calc_h_from_se(
         base = base + threshold
     outside_se_pow = torch.pow(base, (1.0 / n))
     result = 1.0 / alpha * outside_se_pow
-    return error_check(result)
+    return result
 
 
 def error_check(result):
