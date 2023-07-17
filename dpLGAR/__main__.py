@@ -6,6 +6,7 @@ import time
 
 from dpLGAR.agents.DataParallelLGAR import DataParallelLGAR
 from dpLGAR.agents.SingleBasinRun import LGARAgent
+from dpLGAR.agents.SyntheticAgent import SyntheticAgent
 
 
 log = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ def main(cfg: DictConfig) -> None:
         cfg.local_rank = 0
         cfg.nproc = 1
         agent = LGARAgent(cfg)
+        # agent = SyntheticAgent(cfg)
     agent.run()
     agent.finalize()
     end = time.perf_counter()

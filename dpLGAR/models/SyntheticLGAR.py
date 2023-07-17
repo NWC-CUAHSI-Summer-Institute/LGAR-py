@@ -27,14 +27,14 @@ from dpLGAR.models.physics.lgar.giuh import calc_giuh
 log = logging.getLogger("models.dpLGAR")
 
 
-class dpLGAR(nn.Module):
-    def __init__(self, cfg: DictConfig, soil_attributes) -> None:
+class SyntheticLGAR(nn.Module):
+    def __init__(self, cfg: DictConfig) -> None:
         """
 
         :param cfg:
         :param soil_information: soil attributes
         """
-        super(dpLGAR, self).__init__()
+        super(SyntheticLGAR, self).__init__()
 
         self.cfg = cfg
         self.rank = cfg.local_rank
