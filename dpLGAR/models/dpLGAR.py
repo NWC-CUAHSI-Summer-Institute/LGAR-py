@@ -28,7 +28,7 @@ log = logging.getLogger("models.dpLGAR")
 
 
 class dpLGAR(nn.Module):
-    def __init__(self, cfg: DictConfig, c) -> None:
+    def __init__(self, cfg: DictConfig, soil_attributes) -> None:
         """
 
         :param cfg:
@@ -39,8 +39,8 @@ class dpLGAR(nn.Module):
         self.cfg = cfg
         self.rank = cfg.local_rank
 
-        self.c = c
-        self.normalized_c = normalization(c)
+        self.soil_attributes = soil_attributes
+        self.normalized_soil_attributes = normalization(soil_attributes)
 
         self.mlp = MLP(cfg)
 
@@ -81,7 +81,7 @@ class dpLGAR(nn.Module):
         )
 
         # Initializing Values
-        self.soils_df = None
+        self.c = None
         self.cfg.data.soil_index = {
             "theta_r": 0,
             "theta_e": 1,
@@ -91,6 +91,8 @@ class dpLGAR(nn.Module):
             "bc_lambda": 5,
             "bc_psib_cm": 6,
             "h_min_cm": 7,
+            "alpha": 8,
+            "n": 9,
         }
 
         self.top_layer = None
@@ -118,11 +120,6 @@ class dpLGAR(nn.Module):
 
     def set_internal_states(self):
         # Creating static soil params
-        # self.soils_df = read_df(self.cfg.data.soil_params_file)
-        # texture_values = self.soils_df["Texture"].values
-        # self.texture_map = {idx: texture for idx, texture in enumerate(texture_values)}
-        # self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
-        # self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
         (
             self.alpha,
             self.n,
@@ -130,7 +127,11 @@ class dpLGAR(nn.Module):
             self.ponded_max_depth,
             self.theta_e,
             self.theta_r,
-        ) = self.mlp(self.normalized_c)
+        ) = self.mlp(self.normalized_soil_attributes)
+
+        self.c = generate_soil_metrics(
+            self.cfg, self.alpha, self.n, self.theta_e, self.theta_r
+        )
 
         self.global_params = GlobalParams(self.cfg, self.ponded_depth_max)
 
@@ -141,12 +142,7 @@ class dpLGAR(nn.Module):
             self.global_params,
             layer_index,
             self.c,
-            self.alpha,
-            self.n,
             self.ksat,
-            self.theta_e,
-            self.theta_r,
-            self.textures,
             self.rank,
         )
 

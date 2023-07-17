@@ -24,10 +24,7 @@ class Layer:
         global_params,
         layer_index: int,
         c: Tensor,
-        alpha: torch.nn.ParameterList,
-        n: torch.nn.ParameterList,
-        ksat: torch.nn.ParameterList,
-        textures,
+        ksat: Tensor,
         rank,
         previous_layer=None,
     ):
@@ -51,12 +48,10 @@ class Layer:
         self.cumulative_layer_thickness = self.global_params.cum_layer_thickness[
             self.layer_num
         ]
-        self.soil_type = self.global_params.layer_soil_type[self.layer_num]
-        self.texture = textures[self.layer_num]
         self.attributes = c[self.layer_num]
-        self.alpha_layer = alpha[self.layer_num].clone()
-        self.n_layer = n[self.layer_num].clone()
-        self.ksat_layer = ksat[self.layer_num].clone()
+        self.alpha_layer = c[self.layer_num][self.global_params.soil_index["alpha"]]
+        self.n_layer = c[self.layer_num][self.global_params.soil_index["n"]]
+        self.ksat_layer = ksat[self.layer_num]
 
         # For mass balance
         self.tolerance = torch.tensor(1e-12, device=self.global_params.device)
@@ -83,10 +78,7 @@ class Layer:
                 global_params,
                 layer_index + 1,
                 c,
-                alpha,
-                n,
                 ksat,
-                textures,
                 self.rank,
                 previous_layer=self,
             )

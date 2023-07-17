@@ -39,9 +39,10 @@ def read_df(file: str) -> pd.DataFrame:
 
 def generate_soil_metrics(
     cfg: DictConfig,
-    soils_df: pd.DataFrame,
-    alpha: torch.nn.ParameterList,
-    n: torch.nn.ParameterList,
+    alpha: Tensor,
+    n: Tensor,
+    theta_e: Tensor,
+    theta_r: Tensor,
 ) -> Tensor:
     """
     Reading the soils dataframe
@@ -59,40 +60,18 @@ def generate_soil_metrics(
 
     :return:
     """
-    soil_types = cfg.data.layer_soil_type
     h = torch.tensor(
         cfg.data.wilting_point_psi_cm, device=cfg.device
     )  # Wilting point in cm
     initial_psi = torch.tensor(cfg.data.initial_psi, device=cfg.device)
-    theta_e = torch.tensor(soils_df["theta_e"], device=cfg.device)[soil_types]
-    theta_r = torch.tensor(soils_df["theta_r"], device=cfg.device)[soil_types]
-    # m = torch.tensor(soils_df["m"], device=cfg.device)[soil_types]
-    m = torch.zeros(len(alpha), device=cfg.device)
-    theta_wp = torch.zeros(len(alpha), device=cfg.device)
-    theta_init = torch.zeros(len(alpha), device=cfg.device)
-    bc_lambda = torch.zeros(len(alpha), device=cfg.device)
-    bc_psib_cm = torch.zeros(len(alpha), device=cfg.device)
-    h_min_cm = torch.zeros(len(alpha), device=cfg.device)
-    for i in range(len(alpha)):
-        alpha_ = alpha[i].clone()
-        n_ = n[i].clone()
-        m_ = calc_m(n_)
-        # m_ = m[i]
-        theta_e_ = theta_e[i]
-        theta_r_ = theta_r[i]
-        theta_wp_ = calc_theta_from_h(h, alpha_, m_, n_, theta_e_, theta_r_)
-        theta_init_ = calc_theta_from_h(
-            initial_psi, alpha_, m_, n_, theta_e_, theta_r_
-        )
-        bc_lambda_ = calc_bc_lambda(m_)
-        bc_psib_cm_ = calc_bc_psib(alpha_, m_)
-        h_min_cm_ = calc_h_min_cm(bc_lambda_, bc_psib_cm_)
-        theta_wp[i] = theta_wp_
-        theta_init[i] = theta_init_
-        bc_lambda[i] = bc_lambda_
-        bc_psib_cm[i] = bc_psib_cm_
-        h_min_cm[i] = h_min_cm_
-        m[i] = m_
+    m = calc_m(n)
+    theta_wp = calc_theta_from_h(h, alpha, m, n, theta_e, theta_r)
+    theta_init = calc_theta_from_h(
+        initial_psi, alpha, m, n, theta_e, theta_r
+    )
+    bc_lambda = calc_bc_lambda(m)
+    bc_psib_cm = calc_bc_psib(alpha, m)
+    h_min_cm = calc_h_min_cm(bc_lambda, bc_psib_cm)
 
     soils_data = torch.stack(
         [
@@ -104,6 +83,8 @@ def generate_soil_metrics(
             bc_lambda,
             bc_psib_cm,
             h_min_cm,
+            alpha,
+            n,
         ]
     )  # Putting all numeric columns in a tensor other than the Texture column
     return soils_data.transpose(0, 1)
