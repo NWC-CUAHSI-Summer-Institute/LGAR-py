@@ -89,7 +89,7 @@ class Data(Dataset):
         :return: Basin area for the specified basin id.
         """
         file_path = cfg.data.area_file
-        basin_id = cfg.data.basin_id
+        basin_id = cfg.basin_id
         data = pd.read_csv(file_path)
         formatted_basin_id = f"Gage-{basin_id}"
         filtered_data = data[data['gauge_id'] == formatted_basin_id]
@@ -100,7 +100,7 @@ class Data(Dataset):
         Reading attributes from the soil params file
         """
         file_name = cfg.data.attributes_file
-        basin_id = cfg.data.basin_id
+        basin_id = cfg.basin_id
         # Load the txt data into a DataFrame
         data = pd.read_csv(file_name, sep=';')
         data["gauge_id"] = data["gauge_id"].astype('str').str.zfill(8)

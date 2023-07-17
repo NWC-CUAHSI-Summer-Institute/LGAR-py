@@ -40,7 +40,7 @@ class dpLGAR(nn.Module):
         self.rank = cfg.local_rank
 
         soil_depth = soil_information[0]
-        log.info(f"Top Soil_depth = {self.cfg.data.top_soil_thickness}")
+        # log.info(f"Top Soil_depth = {self.cfg.data.top_soil_thickness}")
         self.cfg.data.layer_thickness = [
             self.cfg.data.top_soil_thickness,
             self.cfg.data.second_soil_thickness,
@@ -166,7 +166,7 @@ class dpLGAR(nn.Module):
         self.discharge = torch.tensor(0.0, device=self.cfg.device)
         self.groundwater_discharge = torch.tensor(0.0, device=self.cfg.device)
         self.percolation = torch.tensor(0.0, device=self.cfg.device)
-        self.top_layer.print()
+        # self.top_layer.print()
 
     def update_soil_parameters(self):
         self.global_params.ponded_depth_max = self.ponded_depth_max.clone()

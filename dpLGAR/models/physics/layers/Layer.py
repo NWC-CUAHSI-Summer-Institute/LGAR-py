@@ -1601,11 +1601,14 @@ class Layer:
                             self.wetting_fronts[i + 1],
                         )
                     else:
-                        return (
-                            current_front,
-                            current_free_drainage,
-                            self.next_layer.wetting_fronts[0],
-                        )
+                        try:
+                            return (
+                                current_front,
+                                current_free_drainage,
+                                self.next_layer.wetting_fronts[0],
+                            )
+                        except AttributeError:
+                            log.error("help")
 
     def find_front_layer(self):
         """

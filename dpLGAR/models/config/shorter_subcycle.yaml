@@ -11,7 +11,7 @@ forcing_resolution_h: ???
 #time_per_step: ???
 #nsteps: ???
 forcing_resolution: 3600 # [sec]
-save_path: ${cwd}/saved_model_runs/${data.basin_id}/
+save_path: ${cwd}/saved_model_runs/${basin_id}/
 not_finished_name: ${save_name}_epoch_{}_${now:%m-%d}_${now:%H-%M-%S}.pth
 save_name: ${save_name}_trained_model_${now:%m-%d}_${now:%H-%M-%S}.pth
 hyperparameters:
