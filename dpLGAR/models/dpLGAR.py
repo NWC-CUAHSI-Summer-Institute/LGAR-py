@@ -43,10 +43,10 @@ class dpLGAR(nn.Module):
         log.info(f"Top Soil_depth = {self.cfg.data.top_soil_thickness}")
         self.cfg.data.layer_thickness = [
             self.cfg.data.top_soil_thickness,
-            self.cfg.data.top_soil_thickness,
+            self.cfg.data.second_soil_thickness,
             soil_depth
             - self.cfg.data.top_soil_thickness
-            - self.cfg.data.top_soil_thickness,
+            - self.cfg.data.second_soil_thickness,
         ]
         # We're assuming two soil layers of the same "type" The first layer is topsoil
         # The bottom is of the same "type" but will be trained to closer mimic what the physics tells us will be there

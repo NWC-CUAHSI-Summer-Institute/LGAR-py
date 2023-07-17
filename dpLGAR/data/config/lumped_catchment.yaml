@@ -1,7 +1,8 @@
 data_dir: ${cwd}/data
-basin_id: "01031500"
+#basin_id: "01031500"
+basin_id: "06332515"
 #endtime: 372.0 #[hr]
-endtime: 3000.0 #[hr]
+#endtime: 3000.0 #[hr]
 time_interval:
   warmup: 2001-01-01 00:00:00
 #  warmup: 1998-10-01 00:00:00
@@ -17,7 +18,8 @@ observations_file: ${data.data_dir}/usgs_streamflow/${data.basin_id}-usgs-hourly
 area_file: ${data.data_dir}/attributes/CAMELS_areas.csv
 attributes_file: ${data.data_dir}/attributes/camels_soil_class.txt
 soil_params_file: ${cwd}/data/vG_default_params.dat
-top_soil_thickness: 15.0 #[cm]
+top_soil_thickness: 10.0 #[cm]
+second_soil_thickness: 15.0
 layer_thickness: ??? #[cm]
 initial_psi: 2000.0 #[cm]
 ponded_depth_max: 0.0 #[cm]

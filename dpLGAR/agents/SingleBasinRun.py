@@ -196,7 +196,6 @@ class LGARAgent(BaseAgent):
             else:
                 file_path = dir_path / self.cfg.models.save_name
             torch.save(self.model.state_dict(), file_path)
-        self.cleanup()
 
     def load_checkpoint(self, file_name):
         """
