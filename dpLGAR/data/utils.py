@@ -61,7 +61,7 @@ def generate_soil_metrics(
     """
     soil_types = cfg.data.layer_soil_type
     h = torch.tensor(
-        cfg.data.wilting_point_psi, device=cfg.device
+        cfg.data.wilting_point_psi_cm, device=cfg.device
     )  # Wilting point in cm
     initial_psi = torch.tensor(cfg.data.initial_psi, device=cfg.device)
     theta_e = torch.tensor(soils_df["theta_e"], device=cfg.device)[soil_types]

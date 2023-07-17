@@ -10,13 +10,13 @@
 """
 from omegaconf import DictConfig
 import logging
-import time
-from tqdm import tqdm
 import torch
 from torch import Tensor
 import torch.nn as nn
 
 from dpLGAR.data.utils import generate_soil_metrics, read_df, read_test_params
+from dpLGAR.models.MLP import MLP
+from dpLGAR.models.functions.utils import normalization
 from dpLGAR.models.physics.GlobalParams import GlobalParams
 from dpLGAR.models.physics.layers.Layer import Layer
 from dpLGAR.models.physics.lgar.frozen_factor import (
@@ -28,7 +28,7 @@ log = logging.getLogger("models.dpLGAR")
 
 
 class dpLGAR(nn.Module):
-    def __init__(self, cfg: DictConfig, soil_information) -> None:
+    def __init__(self, cfg: DictConfig, c) -> None:
         """
 
         :param cfg:
@@ -39,8 +39,12 @@ class dpLGAR(nn.Module):
         self.cfg = cfg
         self.rank = cfg.local_rank
 
-        soil_depth = soil_information[0]
-        # log.info(f"Top Soil_depth = {self.cfg.data.top_soil_thickness}")
+        self.c = c
+        self.normalized_c = normalization(c)
+
+        self.mlp = MLP(cfg)
+
+        soil_depth = torch
         self.cfg.data.layer_thickness = [
             self.cfg.data.top_soil_thickness,
             self.cfg.data.second_soil_thickness,
@@ -50,36 +54,34 @@ class dpLGAR(nn.Module):
         ]
         # We're assuming two soil layers of the same "type" The first layer is topsoil
         # The bottom is of the same "type" but will be trained to closer mimic what the physics tells us will be there
-        self.textures = [soil_information[1], soil_information[1], soil_information[1]]
+        # self.textures = [soil_information[1], soil_information[1], soil_information[1]]
         # The soil type in this basin, adding 1 for indexing error (Tadd's fault)
         # SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
-        layer = soil_information[2] - 1
-        self.cfg.data.layer_soil_type = [layer, layer, layer]
-        self.cfg.data.num_soil_layers = len(self.cfg.data.layer_soil_type)
+        # layer = soil_information[2] - 1
+        # self.cfg.data.layer_soil_type = [layer, layer, layer]
 
         # Getting starting values for soil information (File from Fred Ogden)
-        alpha_, n_, ksat_ = read_test_params(cfg)
-        alpha_layer = alpha_[self.cfg.data.layer_soil_type]
-        n_layer = n_[self.cfg.data.layer_soil_type]
-        ksat_layer = ksat_[self.cfg.data.layer_soil_type]
-
-        # Setting NN parameters
-        self.ponded_depth_max = nn.Parameter(
-            torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64)
+        self.alpha = torch.zeros(
+            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
         )
-        # self.ponded_depth_max = torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64)
-        self.alpha = nn.ParameterList([])
-        self.n = nn.ParameterList([])
-        self.ksat = nn.ParameterList([])
-        for i in range(alpha_layer.shape[0]):
-            self.alpha.append(nn.Parameter(alpha_layer[i]))
-            self.n.append(nn.Parameter(n_layer[i]))
-            # Addressing Frozen Factor
-            self.ksat.append(nn.Parameter(ksat_layer[i] * cfg.constants.frozen_factor))
+        self.n = torch.zeros(
+            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+        )
+        self.ksat = torch.zeros(
+            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+        )
+        self.max_ponded_depth = torch.zeros(
+            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+        )
+        self.theta_e = torch.zeros(
+            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+        )
+        self.theta_r = torch.zeros(
+            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+        )
 
         # Initializing Values
         self.soils_df = None
-        self.c = None
         self.cfg.data.soil_index = {
             "theta_r": 0,
             "theta_e": 1,
@@ -116,10 +118,19 @@ class dpLGAR(nn.Module):
 
     def set_internal_states(self):
         # Creating static soil params
-        self.soils_df = read_df(self.cfg.data.soil_params_file)
+        # self.soils_df = read_df(self.cfg.data.soil_params_file)
         # texture_values = self.soils_df["Texture"].values
         # self.texture_map = {idx: texture for idx, texture in enumerate(texture_values)}
-        self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
+        # self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
+        # self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
+        (
+            self.alpha,
+            self.n,
+            self.ksat,
+            self.ponded_max_depth,
+            self.theta_e,
+            self.theta_r,
+        ) = self.mlp(self.normalized_c)
 
         self.global_params = GlobalParams(self.cfg, self.ponded_depth_max)
 
@@ -133,8 +144,10 @@ class dpLGAR(nn.Module):
             self.alpha,
             self.n,
             self.ksat,
+            self.theta_e,
+            self.theta_r,
             self.textures,
-            self.rank
+            self.rank,
         )
 
         # Gaining a reference to the bottom layer
@@ -251,7 +264,10 @@ class dpLGAR(nn.Module):
                     infiltration_sub,
                     ponded_depth_sub,
                 ) = self.top_layer.insert_water(
-                    subtimestep_h, precip_sub, ponded_depth_sub, infiltration_sub,
+                    subtimestep_h,
+                    precip_sub,
+                    ponded_depth_sub,
+                    infiltration_sub,
                 )
 
                 self.infiltration = self.infiltration + infiltration_sub

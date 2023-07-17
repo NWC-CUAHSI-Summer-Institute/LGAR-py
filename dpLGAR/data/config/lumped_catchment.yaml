@@ -17,23 +17,28 @@ observations_file: ${data.data_dir}/usgs_streamflow/${basin_id}-usgs-hourly.csv
 area_file: ${data.data_dir}/attributes/CAMELS_areas.csv
 attributes_file: ${data.data_dir}/attributes/camels_soil_class.txt
 soil_params_file: ${cwd}/data/vG_default_params.dat
-top_soil_thickness: 10.0 #[cm]
-second_soil_thickness: 15.0
-layer_thickness: ??? #[cm]
+#top_soil_thickness: 10.0 #[cm]
+#second_soil_thickness: 15.0
+layer_thickness: #[cm]
+  - 5
+  - 10
+  - 15
+  - 30
+  - 40
+  - 100
 initial_psi: 2000.0 #[cm]
-ponded_depth_max: 0.0 #[cm]
+#ponded_depth_max: 0.0 #[cm]
 use_closed_form_G: False
-layer_soil_type: ???
+#layer_soil_type: ???
 num_soil_types: 15  # must be less than or equal to MAX_NUM_SOIL_TYPES
-num_soil_layers: ???  # must be less than or equal to MAX_NUM_SOIL_LAYERS
+num_soil_layers: 6  # must be less than or equal to MAX_NUM_SOIL_LAYERS
 num_fronts: 0  # must be less than MAX_NUM_FRONTS
 root_zone_bottom_layer: 2  # example, if set to 2, then the root zone is in layer 1 and 2
 AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET
 ET_expon: 1.0  # exponent that allows curvature of the rising portion of the Budyko curve
-wilting_point_psi_cm: 154950.0  # AJ-correction
-soil_index: ???
+wilting_point_psi_cm: 15495.0  # wilting_point_psi_cm=initial_psi_cm*101325.0/9810.0*100.0;  // assumed 15 atm
+#soil_index: ???
 max_soil_types: 25
-wilting_point_psi: 15495.0 #[cm]
 giuh_ordinates:
   - 0.06
   - 0.51

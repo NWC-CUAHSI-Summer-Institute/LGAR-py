@@ -124,7 +124,7 @@ class GlobalParams:
         self.num_soil_types = torch.tensor(cfg.data.max_soil_types, device=cfg.device)
 
         self.wilting_point_psi_cm = torch.tensor(
-            cfg.data.wilting_point_psi, device=cfg.device
+            cfg.data.wilting_point_psi_cm, device=cfg.device
         )
         self.frozen_factor = torch.tensor(cfg.constants.frozen_factor, device=cfg.device)
         self.soil_index = cfg.data.soil_index
