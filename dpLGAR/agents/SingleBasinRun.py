@@ -54,14 +54,9 @@ class LGARAgent(BaseAgent):
 
         # Defining the torch Dataset and Dataloader
         self.data = Data(self.cfg)
-        self.data_size = int(self.data.x.shape[0] / cfg.nproc)
-        self.graph_sampler = GraphDataSampler(
-            dataset=self.data, batch_size=self.data_size, shuffle=False
-        )
         self.data_loader = DataLoader(
             self.data,
             batch_size=self.hourly_mini_batch,
-            sampler=self.graph_sampler,
             shuffle=False,
         )
 
@@ -101,7 +96,6 @@ class LGARAgent(BaseAgent):
         :return:
         """
         self.model.train()
-        self.net = FSDP(self.model)
         for epoch in range(1, self.cfg.models.hyperparameters.epochs + 1):
             if self.rank == 0:
                 log.info(f"Running epoch: {self.current_epoch}")
@@ -120,18 +114,17 @@ class LGARAgent(BaseAgent):
         One epoch of training
         :return:
         """
-        self.graph_sampler.set_epoch(self.current_epoch)
         y_hat_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
         y_t_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
         self.optimizer.zero_grad()
         for i, (x, y_t) in enumerate(
             tqdm(
                 self.data_loader,
-                desc=f"Rank: {self.rank} Epoch {self.current_epoch + 1} Training",
+                desc=f"Nproc: {self.rank} Epoch {self.current_epoch + 1} Training",
             )
         ):
             # Resetting output vars
-            runoff = self.net(i, x.squeeze())
+            runoff = self.model(i, x.squeeze())
             y_hat_[i] = runoff
             y_t_[i] = y_t
             # Updating the total mass of the system

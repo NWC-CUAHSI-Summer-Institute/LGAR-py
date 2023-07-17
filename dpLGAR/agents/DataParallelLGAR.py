@@ -2,9 +2,7 @@ import logging
 from omegaconf import DictConfig
 import time
 import torch
-from torch import Tensor
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.utils.data import DataLoader
 import torch.distributed as dist
 from tqdm import tqdm, trange
@@ -103,7 +101,7 @@ class DataParallelLGAR(BaseAgent):
         :return:
         """
         self.model.train()
-        self.net = FSDP(self.model)
+        self.net = DDP(self.model)
         for epoch in range(1, self.cfg.models.hyperparameters.epochs + 1):
             if self.rank == 0:
                 log.info(f"Running epoch: {self.current_epoch}")
@@ -126,24 +124,25 @@ class DataParallelLGAR(BaseAgent):
         y_hat_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
         y_t_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
         self.optimizer.zero_grad()
-        for i, (x, y_t) in enumerate(
-            tqdm(
-                self.data_loader,
-                desc=f"Rank: {self.rank} Epoch {self.current_epoch + 1} Training",
-            )
-        ):
-            # Resetting output vars
-            runoff = self.net(i, x.squeeze())
-            y_hat_[i] = runoff
-            y_t_[i] = y_t
-            # Updating the total mass of the system
-            self.mass_balance.change_mass(self.model)  # Updating global balance
-            time.sleep(0.01)
-        self.mass_balance.report_mass(self.model)  # Global mass balance
-        warmup = self.cfg.models.hyperparameters.warmup
-        self.y_hat = y_hat_[warmup:]
-        self.y_t = y_t_[warmup:]
-        self.validate()
+        with self.net.join():
+            for i, (x, y_t) in enumerate(
+                tqdm(
+                    self.data_loader,
+                    desc=f"Nproc: {self.rank} Epoch {self.current_epoch + 1} Training",
+                )
+            ):
+                # Resetting output vars
+                runoff = self.net(i, x.squeeze())
+                y_hat_[i] = runoff
+                y_t_[i] = y_t
+                # Updating the total mass of the system
+                self.mass_balance.change_mass(self.model)  # Updating global balance
+                time.sleep(0.01)
+            self.mass_balance.report_mass(self.model)  # Global mass balance
+            warmup = self.cfg.models.hyperparameters.warmup
+            self.y_hat = y_hat_[warmup:]
+            self.y_t = y_t_[warmup:]
+            self.validate()
 
     def validate(self) -> None:
         """
