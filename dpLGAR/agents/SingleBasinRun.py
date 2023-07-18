@@ -92,10 +92,6 @@ class LGARAgent(BaseAgent):
         """
         self.model.train()
         for epoch in range(1, self.cfg.models.hyperparameters.epochs + 1):
-            # if self.rank == 0:
-                # log.info(f"Running epoch: {self.current_epoch}")
-                # log.info(f"-----Current Params-----")
-                # self.model.print_params()
             self.train_one_epoch()
             self.current_epoch = self.current_epoch + 1
 
@@ -154,6 +150,8 @@ class LGARAgent(BaseAgent):
             self.model.alpha,
             self.model.n,
             self.model.ksat,
+            self.model.theta_e,
+            self.model.theta_r,
             self.model.ponded_depth_max,
         ]
         bound_loss = self.range_bound_loss(params)

@@ -167,6 +167,8 @@ class DataParallelLGAR(BaseAgent):
             self.model.alpha,
             self.model.n,
             self.model.ksat,
+            self.model.theta_e,
+            self.model.theta_r,
             self.model.ponded_depth_max,
         ]
         bound_loss = self.range_bound_loss(params)
