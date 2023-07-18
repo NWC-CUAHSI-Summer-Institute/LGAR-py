@@ -1,5 +1,6 @@
 output/
 data/*
+data/.DS_Store
 .idea/
 .DS_Store
 dpLGAR/__pycache__/
