@@ -1,6 +1,7 @@
 import logging
 import numpy as np
 from omegaconf import DictConfig
+import pandas as pd
 from pathlib import Path
 import time
 import torch
@@ -100,11 +101,22 @@ class SyntheticAgent(BaseAgent):
         dir_path = Path(self.cfg.synthetic.output_dir)
         dir_path.mkdir(parents=True, exist_ok=True)
 
-        # Define the output file path
-        file_path = dir_path / self.cfg.synthetic.name
+        # Modify the output file name to replace colons and spaces
+        modified_name = self.cfg.synthetic.name.replace(":", "-").replace(" ", "_")
 
-        # Save the numpy array to the file
-        np.save(file_path, y_hat_np)
+        # Define the output file path
+        file_path = dir_path / modified_name
+
+        date_range = pd.date_range(start=self.cfg.data.time_interval.warmup, end=self.cfg.data.time_interval.end,freq='H')
+
+        # Create a dataframe
+        df = pd.DataFrame({
+            'date': date_range,
+            'QObs(mm/h)': y_hat_np
+        })
+
+        # Save the dataframe as a csv file
+        df.to_csv(file_path, index=False)
 
         log.info(f"Saved synthetic case from {self.cfg.data.time_interval.warmup} to {self.cfg.data.time_interval.end}")
 

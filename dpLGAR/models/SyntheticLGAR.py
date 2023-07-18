@@ -439,4 +439,5 @@ class SyntheticLGAR(nn.Module):
         #     percolation_sub,
         #     ending_volume_sub,
         #     infiltration_sub,
+        #     i,
         # )
