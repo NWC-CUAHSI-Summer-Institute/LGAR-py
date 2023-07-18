@@ -24,8 +24,8 @@ def main(cfg: DictConfig) -> None:
         # There is no Data Parallel in use
         cfg.local_rank = 0
         cfg.nproc = 1
-        agent = LGARAgent(cfg)
-        # agent = SyntheticAgent(cfg)
+        # agent = LGARAgent(cfg)
+        agent = SyntheticAgent(cfg)
     agent.run()
     agent.finalize()
     end = time.perf_counter()

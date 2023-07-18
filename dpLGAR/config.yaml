@@ -19,7 +19,7 @@ save_paths:
   soil_thickness: ${cwd}/data/save_files/soil_thickness.csv
 synthetic:
   output_dir: ${cwd}/saved_model_runs/synthetic/
-  name: ${basin_id}_${now:%Y-%m-%d_%H-%M-%S}.npy
+  name: ${basin_id}_${data.time_interval.warmup}-${data.time_interval.end}.npy
 constants:
   frozen_factor: 1
   AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET (fix later!)

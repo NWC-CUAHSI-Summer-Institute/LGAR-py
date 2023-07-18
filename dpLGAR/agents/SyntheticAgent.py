@@ -71,11 +71,11 @@ class SyntheticAgent(BaseAgent):
             self.model.eval()
             y_hat_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
             y_t_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
-            with torch.no_grad:
+            with torch.no_grad():
                 for i, (x, y_t) in enumerate(
                         tqdm(
                             self.data_loader,
-                            desc=f"Nproc: {self.rank} Epoch {self.current_epoch + 1} Training",
+                            desc=f"Nproc: {self.rank} Synthetic Evaluation",
                         )
                 ):
                     # Resetting output vars
@@ -98,14 +98,15 @@ class SyntheticAgent(BaseAgent):
 
         # Define the output directory
         dir_path = Path(self.cfg.synthetic.output_dir)
-        # Check if the directory exists, if not, create it
         dir_path.mkdir(parents=True, exist_ok=True)
 
         # Define the output file path
-        file_path = dir_path / self.cfg.synthetic.nams
+        file_path = dir_path / self.cfg.synthetic.name
 
         # Save the numpy array to the file
         np.save(file_path, y_hat_np)
+
+        log.info(f"Saved synthetic case from {self.cfg.data.time_interval.warmup} to {self.cfg.data.time_interval.end}")
 
     def train(self):
         raise NotImplementedError
@@ -113,7 +114,7 @@ class SyntheticAgent(BaseAgent):
     def train_one_epoch(self):
         raise NotImplementedError
 
-    def validate(self) -> None:
+    def validate(self, y_hat, y_t) -> None:
         raise NotImplementedError
 
     def finalize(self, interrupt=False):
@@ -121,7 +122,7 @@ class SyntheticAgent(BaseAgent):
         Finalizes all the operations of the 2 Main classes of the process, the operator and the data loader
         :return:
         """
-        raise NotImplementedError
+        log.info(f"Finished Running Synthetic Case")
 
     def load_checkpoint(self, file_name):
         """

@@ -55,21 +55,15 @@ class dpLGAR(nn.Module):
         self.alpha = torch.zeros(
             [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
-        self.n = torch.zeros(
-            [self.cfg.data.num_soil_layers], device=self.cfg.device
-        )
-        self.ksat = torch.zeros(
-            [self.cfg.data.num_soil_layers], device=self.cfg.device
-        )
-        self.ponded_depth_max = torch.zeros(
-            [self.cfg.data.num_soil_layers], device=self.cfg.device
-        )
+        self.n = torch.zeros([self.cfg.data.num_soil_layers], device=self.cfg.device)
+        self.ksat = torch.zeros([self.cfg.data.num_soil_layers], device=self.cfg.device)
         self.theta_e = torch.zeros(
             [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
         self.theta_r = torch.zeros(
             [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
+        self.ponded_depth_max = torch.tensor(0.0, device=self.cfg.device)
 
         # Initializing Values
         self.c = None

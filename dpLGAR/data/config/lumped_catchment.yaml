@@ -5,9 +5,9 @@ data_dir: ${cwd}/data
 time_interval:
   warmup: 2001-01-01 00:00:00
 #  warmup: 1998-10-01 00:00:00
-  start: 2001-04-01 01:00:00
+  start: 2001-01-01 01:00:00
 #  start: 1999-10-01 00:00:00
-  end: 2001-12-31 23:00:00
+  end: 2001-01-31 23:00:00
 #  end: 2008-09-30 23:00:00
   testing_warmup: 2008-10-01 00:00:00
   testing_start: 2009-10-01 23:00:00
@@ -17,8 +17,6 @@ observations_file: ${data.data_dir}/usgs_streamflow/${basin_id}-usgs-hourly.csv
 area_file: ${data.data_dir}/attributes/CAMELS_areas.csv
 attributes_file: ${data.data_dir}/attributes/CAMELS_Soil_Attributes_POLARIS_gage_${basin_id}.csv
 soil_params_file: ${cwd}/data/vG_default_params.dat
-#top_soil_thickness: 10.0 #[cm]
-#second_soil_thickness: 15.0
 layer_thickness: #[cm]
   - 5
   - 10

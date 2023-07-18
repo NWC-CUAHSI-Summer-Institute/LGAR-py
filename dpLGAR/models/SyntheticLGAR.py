@@ -39,23 +39,24 @@ class SyntheticLGAR(nn.Module):
         self.rank = cfg.local_rank
 
         # Setting synthetic values
-        # Sandy -> clay based on .dat table from Fred Ogden
+        # Sandy -> sandy loam -> loam -> silty loam -> clay loam -> clay
+        # with values based on .dat table from Fred Ogden
         self.alpha = torch.tensor(
             [0.04, 0.03, 0.01, 0.01, 0.02, 0.01], device=self.cfg.device
         )
         self.n = torch.tensor(
-            [self.cfg.data.num_soil_layers], device=self.cfg.device
+            [3.18, 1.45, 1.47, 1.66, 1.42, 1.25], device=self.cfg.device
         )
         self.ksat = torch.tensor(
-            [self.cfg.data.num_soil_layers], device=self.cfg.device
+            [26.64, 1.584, 0.504, 0.756, 0.3348, 0.612], device=self.cfg.device
         )
-        self.max_ponded_depth = torch.tensor(0.0, device=self.cfg.device)
         self.theta_e = torch.tensor(
-            [self.cfg.data.num_soil_layers], device=self.cfg.device
+            [0.38, 0.39, 0.4, 0.44, 0.44, 0.46], device=self.cfg.device
         )
         self.theta_r = torch.tensor(
-            [self.cfg.data.num_soil_layers], device=self.cfg.device
+            [0.05, 0.04, 0.06, 0.07, 0.08, 0.1], device=self.cfg.device
         )
+        self.ponded_depth_max = torch.tensor(0.0, device=self.cfg.device)
 
         # Initializing Values
         self.c = None
@@ -96,16 +97,6 @@ class SyntheticLGAR(nn.Module):
         self.set_internal_states()
 
     def set_internal_states(self):
-        # Creating static soil params
-        (
-            self.alpha,
-            self.n,
-            self.ksat,
-            self.ponded_max_depth,
-            self.theta_e,
-            self.theta_r,
-        ) = self.mlp(self.normalized_soil_attributes)
-
         self.c = generate_soil_metrics(
             self.cfg, self.alpha, self.n, self.theta_e, self.theta_r
         )
