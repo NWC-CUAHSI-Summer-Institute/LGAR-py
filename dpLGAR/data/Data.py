@@ -27,7 +27,10 @@ class Data(Dataset):
 
         self.soil_attributes = self.get_polaris_atributes(cfg)
 
-        self.y = self.get_observations(cfg)
+        if cfg.synthetic.run:
+            self.y = self.read_synthetic_data(cfg)
+        else:
+            self.y = self.get_observations(cfg)
 
         self.custom_normalization = {
             0: {"centering": "min", "scaling": "minmax"},
@@ -127,6 +130,16 @@ class Data(Dataset):
         # Note: kg/m^2 == mm, so we need to convert to CM
         x = stacked_forcings.transpose(0, 1) * cfg.conversions.mm_to_cm
         return x
+
+    def read_synthetic_data(self, cfg: DictConfig):
+        obs = read_df(cfg.data.synthetic_file)
+        precip = obs["QObs(mm/h)"]
+        precip_tensor = torch.tensor(precip.to_numpy(), device=cfg.device)
+        nan_mask = torch.isnan(precip_tensor)
+        # Filling NaNs with 0 as there is no streamflow
+        precip_tensor[nan_mask] = 0.0
+        return precip_tensor
+
 
     def to_lgar_c_format(self, df, file_name):
         """

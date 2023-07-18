@@ -18,6 +18,7 @@ save_paths:
   soil_moisture: ${cwd}/data/save_files/soil_moisture.csv
   soil_thickness: ${cwd}/data/save_files/soil_thickness.csv
 synthetic:
+  run: True
   output_dir: ${cwd}/saved_model_runs/synthetic/
   name: ${basin_id}_${data.time_interval.warmup}-${data.time_interval.end}.csv
 constants:
