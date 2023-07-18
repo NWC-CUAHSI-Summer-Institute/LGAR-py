@@ -419,6 +419,12 @@ class dpLGAR(nn.Module):
         for i in range(len(self.ksat)):
             ksat = self.ksat[i]
             log.info(f"Ksat for soil {i+1}: {ksat.detach().item():.4f}")
+        for i in range(len(self.theta_e)):
+            theta_e = self.theta_e[i]
+            log.info(f"theta_e for soil {i+1}: {theta_e.detach().item():.4f}")
+        for i in range(len(self.theta_r)):
+            theta_r = self.theta_r[i]
+            log.info(f"theta_r for soil {i+1}: {theta_r.detach().item():.4f}")
         log.info(f"Max Ponded Depth: {self.ponded_depth_max.detach().item():.4f}")
 
     def print_local_mass_balance(

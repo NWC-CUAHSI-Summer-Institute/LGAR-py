@@ -107,6 +107,7 @@ class LGARAgent(BaseAgent):
         """
         y_hat_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
         y_t_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
+        self.model.print_params()
         self.optimizer.zero_grad()
         for i, (x, y_t) in enumerate(
             tqdm(

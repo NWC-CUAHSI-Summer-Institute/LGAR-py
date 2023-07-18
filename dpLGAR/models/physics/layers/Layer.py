@@ -1465,7 +1465,9 @@ class Layer:
             try:
                 theta_1 = next_free_drainage.theta  # theta_below
             except AttributeError:
-                log.error("here")
+                self.find_front_layer().print()
+                # TODO Temp setting to theta. Talk to peter about the theta_below when the last layer is a wetting front
+                theta_1 = current_front.theta
             theta_2 = theta_e
             free_drainage_ksat = (
                 free_drainage_layer.ksat_layer * self.global_params.frozen_factor

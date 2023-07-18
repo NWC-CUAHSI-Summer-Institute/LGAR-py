@@ -33,20 +33,6 @@ class Data(Dataset):
             obs_path = cfg.data.observations_file
 
         self.y = self.get_observations(cfg, obs_path)
-        self.y[0:10] = torch.tensor(
-            [
-                0.01,
-                0.01,
-                0.01,
-                0.01,
-                0.01,
-                0.01,
-                0.01,
-                0.01,
-                0.01,
-                0.01,
-            ]
-        )
 
         self.custom_normalization = {
             0: {"centering": "min", "scaling": "minmax"},
