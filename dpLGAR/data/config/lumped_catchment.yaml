@@ -37,7 +37,7 @@ root_zone_bottom_layer: 2  # example, if set to 2, then the root zone is in laye
 AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET
 ET_expon: 1.0  # exponent that allows curvature of the rising portion of the Budyko curve
 wilting_point_psi_cm: 15495.0  # wilting_point_psi_cm=initial_psi_cm*101325.0/9810.0*100.0;  // assumed 15 atm
-#soil_index: ???
+soil_index: ???
 max_soil_types: 25
 giuh_ordinates:
   - 0.06

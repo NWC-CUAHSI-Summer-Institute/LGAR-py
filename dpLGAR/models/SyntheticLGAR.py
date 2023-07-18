@@ -39,22 +39,22 @@ class SyntheticLGAR(nn.Module):
         self.rank = cfg.local_rank
 
         self.alpha = torch.zeros(
-            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
         self.n = torch.zeros(
-            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
         self.ksat = torch.zeros(
-            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
         self.max_ponded_depth = torch.zeros(
-            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
         self.theta_e = torch.zeros(
-            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
         self.theta_r = torch.zeros(
-            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
 
         # Initializing Values

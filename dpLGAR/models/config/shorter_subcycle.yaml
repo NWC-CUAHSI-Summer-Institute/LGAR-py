@@ -19,18 +19,21 @@ hyperparameters:
   minibatch: 0.04166666667 # this makes no minibatch
 range:
   lb:
-    - 0.01 # alpha
+    - 0.0015 # alpha
     - 1.0 # n
     - 1e-6 # Ksat
     - 0.001 # ponded_depth_max
+    - 0.24 # Theta_e
+    - 0.001 #Theta_r
   ub:
-    - 10.0 # alpha
-    - 2.5 # n
+    - 0.015 # alpha
+    - 5.0 # n
     - 30 # Ksat
     - 10.0 # ponded_depth_max
+    - 0.81 # Theta_e
+    - 0.025 #Theta_r
 mlp:
-  input_size: 5
-  hidden_size: 6
+  hidden_size: 32
   output_size: 6
   # https://www.pc-progress.com/Downloads/Public_Lib_H1D/HYDRUS-1D_Tutorial_V1.00_2018.pdf
   # https://acsess.onlinelibrary.wiley.com/doi/pdf/10.2136/sssaj1980.03615995004400050002x

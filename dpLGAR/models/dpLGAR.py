@@ -41,7 +41,7 @@ class dpLGAR(nn.Module):
         self.soil_attributes = data.soil_attributes
         self.normalized_soil_attributes = data.normalized_soil_attributes
 
-        self.mlp = MLP(cfg)
+        self.mlp = MLP(cfg, self.normalized_soil_attributes)
 
         # We're assuming two soil layers of the same "type" The first layer is topsoil
         # The bottom is of the same "type" but will be trained to closer mimic what the physics tells us will be there
@@ -53,22 +53,22 @@ class dpLGAR(nn.Module):
 
         # Getting starting values for soil information (File from Fred Ogden)
         self.alpha = torch.zeros(
-            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
         self.n = torch.zeros(
-            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
         self.ksat = torch.zeros(
-            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
-        self.max_ponded_depth = torch.zeros(
-            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+        self.ponded_depth_max = torch.zeros(
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
         self.theta_e = torch.zeros(
-            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
         self.theta_r = torch.zeros(
-            [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
 
         # Initializing Values
@@ -115,7 +115,7 @@ class dpLGAR(nn.Module):
             self.alpha,
             self.n,
             self.ksat,
-            self.ponded_max_depth,
+            self.ponded_depth_max,
             self.theta_e,
             self.theta_r,
         ) = self.mlp(self.normalized_soil_attributes)
