@@ -32,12 +32,14 @@ class MLP(nn.Module):
             Linear(hidden_size, output_size),
             Sigmoid(),
         )
+        self.ponded_depth_lin = nn.Linear(6, 1)
         self.alpha_range = [self.cfg.models.range.lb[0], self.cfg.models.range.ub[0]]
         self.n_range = [self.cfg.models.range.lb[1], self.cfg.models.range.ub[1]]
         self.ksat_range = [self.cfg.models.range.lb[2], self.cfg.models.range.ub[2]]
-        self.ponded_max_range = [self.cfg.models.range.lb[3], self.cfg.models.range.ub[3]]
-        self.theta_e_range = [self.cfg.models.range.lb[4], self.cfg.models.range.ub[4]]
-        self.theta_r_range = [self.cfg.models.range.lb[5], self.cfg.models.range.ub[5]]
+        self.theta_e_range = [self.cfg.models.range.lb[3], self.cfg.models.range.ub[3]]
+        self.theta_r_range = [self.cfg.models.range.lb[4], self.cfg.models.range.ub[4]]
+        self.ponded_max_range = [self.cfg.models.range.lb[5], self.cfg.models.range.ub[5]]
+
 
     def forward(self, x: Tensor):
         """
@@ -54,11 +56,12 @@ class MLP(nn.Module):
         x = x.permute(1, 0, 2).reshape(num_features, -1)
         # x = x.view(batch_size, -1)
         out = self.layers(x)
+        ponded_depth_out = self.ponded_depth_lin(out[5])
         x_transpose = out.transpose(0, 1)
         alpha = to_physical(x_transpose[0], self.alpha_range)
         n = to_physical(x_transpose[1], self.n_range)
         ksat = to_physical(x_transpose[2], self.ksat_range)
-        ponded_max_depth = to_physical(x_transpose[3], self.ponded_max_range)
-        theta_e = to_physical(x_transpose[4], self.theta_e_range)
-        theta_r = to_physical(x_transpose[5], self.theta_r_range)
-        return alpha, n, ksat, ponded_max_depth, theta_e, theta_r
+        theta_e = to_physical(x_transpose[3], self.theta_e_range)
+        theta_r = to_physical(x_transpose[4], self.theta_r_range)
+        ponded_max_depth = to_physical(ponded_depth_out, self.ponded_max_range)
+        return alpha, n, ksat, theta_e, theta_r, ponded_depth_out

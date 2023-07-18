@@ -38,22 +38,22 @@ class SyntheticLGAR(nn.Module):
         self.cfg = cfg
         self.rank = cfg.local_rank
 
-        self.alpha = torch.zeros(
+        # Setting synthetic values
+        # Sandy -> clay based on .dat table from Fred Ogden
+        self.alpha = torch.tensor(
+            [0.04, 0.03, 0.01, 0.01, 0.02, 0.01], device=self.cfg.device
+        )
+        self.n = torch.tensor(
             [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
-        self.n = torch.zeros(
+        self.ksat = torch.tensor(
             [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
-        self.ksat = torch.zeros(
+        self.max_ponded_depth = torch.tensor(0.0, device=self.cfg.device)
+        self.theta_e = torch.tensor(
             [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
-        self.max_ponded_depth = torch.zeros(
-            [self.cfg.data.num_soil_layers], device=self.cfg.device
-        )
-        self.theta_e = torch.zeros(
-            [self.cfg.data.num_soil_layers], device=self.cfg.device
-        )
-        self.theta_r = torch.zeros(
+        self.theta_r = torch.tensor(
             [self.cfg.data.num_soil_layers], device=self.cfg.device
         )
 

@@ -22,16 +22,16 @@ range:
     - 0.0015 # alpha
     - 1.0 # n
     - 1e-6 # Ksat
-    - 0.001 # ponded_depth_max
     - 0.24 # Theta_e
     - 0.001 #Theta_r
+    - 0.00 # ponded_depth_max
   ub:
     - 0.015 # alpha
     - 5.0 # n
     - 30 # Ksat
-    - 10.0 # ponded_depth_max
     - 0.81 # Theta_e
     - 0.025 #Theta_r
+    - 4.0 # ponded_depth_max
 mlp:
   hidden_size: 32
   output_size: 6

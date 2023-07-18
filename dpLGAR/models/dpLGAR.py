@@ -115,9 +115,9 @@ class dpLGAR(nn.Module):
             self.alpha,
             self.n,
             self.ksat,
-            self.ponded_depth_max,
             self.theta_e,
             self.theta_r,
+            self.ponded_depth_max,
         ) = self.mlp(self.normalized_soil_attributes)
 
         self.c = generate_soil_metrics(
