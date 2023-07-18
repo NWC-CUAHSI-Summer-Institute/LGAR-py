@@ -64,8 +64,8 @@ class LGARAgent(BaseAgent):
             self.model.parameters(), lr=cfg.models.hyperparameters.learning_rate
         )
 
-        lb = cfg.models.hyperparameters.lb
-        ub = cfg.models.hyperparameters.ub
+        lb = cfg.models.range.lb
+        ub = cfg.models.range.ub
         self.range_bound_loss = RangeBoundLoss(lb, ub, factor=1.0)
 
         self.y_hat = None

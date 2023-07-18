@@ -54,9 +54,8 @@ class MLP(nn.Module):
         """
         batch_size, num_features, feature_dim = x.size()
         x = x.permute(1, 0, 2).reshape(num_features, -1)
-        # x = x.view(batch_size, -1)
         out = self.layers(x)
-        ponded_depth_out = self.ponded_depth_lin(out[5])
+        ponded_depth_out = self.ponded_depth_lin(out[5]).squeeze()
         x_transpose = out.transpose(0, 1)
         alpha = to_physical(x_transpose[0], self.alpha_range)
         n = to_physical(x_transpose[1], self.n_range)
@@ -64,4 +63,4 @@ class MLP(nn.Module):
         theta_e = to_physical(x_transpose[3], self.theta_e_range)
         theta_r = to_physical(x_transpose[4], self.theta_r_range)
         ponded_max_depth = to_physical(ponded_depth_out, self.ponded_max_range)
-        return alpha, n, ksat, theta_e, theta_r, ponded_depth_out
+        return alpha, n, ksat, theta_e, theta_r, ponded_max_depth
