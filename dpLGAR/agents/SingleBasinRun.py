@@ -56,7 +56,7 @@ class LGARAgent(BaseAgent):
         )
 
         # Defining the model and output variables to save
-        self.model = dpLGAR(self.cfg, self.data.soil_attributes)
+        self.model = dpLGAR(self.cfg, self.data)
         self.mass_balance = MassBalance(cfg, self.model)
 
         self.criterion = MSE_loss

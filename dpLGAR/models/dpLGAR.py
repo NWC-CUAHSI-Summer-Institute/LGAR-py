@@ -14,9 +14,8 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 
-from dpLGAR.data.utils import generate_soil_metrics, read_df, read_test_params
+from dpLGAR.data.utils import generate_soil_metrics
 from dpLGAR.models.MLP import MLP
-from dpLGAR.models.functions.utils import normalization
 from dpLGAR.models.physics.GlobalParams import GlobalParams
 from dpLGAR.models.physics.layers.Layer import Layer
 from dpLGAR.models.physics.lgar.frozen_factor import (
@@ -28,7 +27,7 @@ log = logging.getLogger("models.dpLGAR")
 
 
 class dpLGAR(nn.Module):
-    def __init__(self, cfg: DictConfig, soil_attributes) -> None:
+    def __init__(self, cfg: DictConfig, data) -> None:
         """
 
         :param cfg:
@@ -39,8 +38,8 @@ class dpLGAR(nn.Module):
         self.cfg = cfg
         self.rank = cfg.local_rank
 
-        self.soil_attributes = soil_attributes
-        self.normalized_soil_attributes = normalization(soil_attributes)
+        self.soil_attributes = data.soil_attributes
+        self.normalized_soil_attributes = data.normalized_soil_attributes
 
         self.mlp = MLP(cfg)
 

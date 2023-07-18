@@ -14,9 +14,8 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 
-from dpLGAR.data.utils import generate_soil_metrics, read_df, read_test_params
+from dpLGAR.data.utils import generate_soil_metrics
 from dpLGAR.models.MLP import MLP
-from dpLGAR.models.functions.utils import normalization
 from dpLGAR.models.physics.GlobalParams import GlobalParams
 from dpLGAR.models.physics.layers.Layer import Layer
 from dpLGAR.models.physics.lgar.frozen_factor import (
@@ -39,20 +38,6 @@ class SyntheticLGAR(nn.Module):
         self.cfg = cfg
         self.rank = cfg.local_rank
 
-        self.soil_attributes = soil_attributes
-        self.normalized_soil_attributes = normalization(soil_attributes)
-
-        self.mlp = MLP(cfg)
-
-        # We're assuming two soil layers of the same "type" The first layer is topsoil
-        # The bottom is of the same "type" but will be trained to closer mimic what the physics tells us will be there
-        # self.textures = [soil_information[1], soil_information[1], soil_information[1]]
-        # The soil type in this basin, adding 1 for indexing error (Tadd's fault)
-        # SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
-        # layer = soil_information[2] - 1
-        # self.cfg.data.layer_soil_type = [layer, layer, layer]
-
-        # Getting starting values for soil information (File from Fred Ogden)
         self.alpha = torch.zeros(
             [len(self.cfg.data.num_soil_layers)], device=self.cfg.device
         )
