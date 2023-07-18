@@ -25,7 +25,7 @@ class Data(Dataset):
 
         self.x = self.get_forcings(cfg)
 
-        self.soil_information = self.get_polaris_atributes(cfg)
+        self.soil_attributes = self.get_polaris_atributes(cfg)
 
         self.y = self.get_observations(cfg)
         # self.y = torch.rand([self.x.shape[0]], device=cfg.device)

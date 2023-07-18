@@ -66,7 +66,7 @@ class DataParallelLGAR(BaseAgent):
         )
 
         # Defining the model and output variables to save
-        self.model = dpLGAR(self.cfg, self.data.soil_information)
+        self.model = dpLGAR(self.cfg, self.data.soil_attributes)
         self.mass_balance = MassBalance(cfg, self.model)
 
         self.criterion = MSE_loss

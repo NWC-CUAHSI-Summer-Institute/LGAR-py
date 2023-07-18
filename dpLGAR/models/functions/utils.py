@@ -26,7 +26,7 @@ def from_physical(x, param):
     raise NotImplementedError
 
 
-def normalization(x):
+def min_max_normalization(x):
     """
     A min/max Scaler for each feature to be fed into the MLP
     :param x:
@@ -41,3 +41,41 @@ def normalization(x):
         )
     """Transposing to do correct normalization"""
     return torch.transpose(x_tensor, 1, 0)
+
+def _setup_normalization():
+    # default center and scale values are feature mean and std
+    self.scaler["xarray_feature_scale"] = xr.std(skipna=True)
+    self.scaler["xarray_feature_center"] = xr.mean(skipna=True)
+
+    # check for feature-wise custom normalization
+    for feature, feature_specs in self.cfg.custom_normalization.items():
+        for key, val in feature_specs.items():
+            # check for custom treatment of the feature center
+            if key == "centering":
+                if (val is None) or (val.lower() == "none"):
+                    self.scaler["xarray_feature_center"][feature] = np.float32(0.0)
+                elif val.lower() == "median":
+                    self.scaler["xarray_feature_center"][feature] = xr[feature].median(skipna=True)
+                elif val.lower() == "min":
+                    self.scaler["xarray_feature_center"][feature] = xr[feature].min(skipna=True)
+                elif val.lower() == "mean":
+                    # Do nothing, since this is the default
+                    pass
+                else:
+                    raise ValueError(f"Unknown centering method {val}")
+
+            # check for custom treatment of the feature scale
+            elif key == "scaling":
+                if (val is None) or (val.lower() == "none"):
+                    self.scaler["xarray_feature_scale"][feature] = np.float32(1.0)
+                elif val == "minmax":
+                    self.scaler["xarray_feature_scale"][feature] = xr[feature].max(skipna=True) - \
+                                                                   xr[feature].min(skipna=True)
+                elif val == "std":
+                    # Do nothing, since this is the default
+                    pass
+                else:
+                    raise ValueError(f"Unknown scaling method {val}")
+            else:
+                # raise ValueError to point to the correct argument names
+                raise ValueError("Unknown dict key. Use 'centering' and/or 'scaling' for each feature.")
