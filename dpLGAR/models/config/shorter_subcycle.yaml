@@ -11,7 +11,7 @@ save_path: ${cwd}/saved_model_runs/${basin_id}/
 not_finished_name: ${save_name}_epoch_{}_${now:%m-%d}_${now:%H-%M-%S}.pth
 save_name: ${save_name}_trained_model_${now:%m-%d}_${now:%H-%M-%S}.pth
 hyperparameters:
-  warmup: 96
+  warmup: 0
   epochs: 50
   learning_rate: 0.001
 #  minibatch: 31 # [days]

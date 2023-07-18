@@ -101,6 +101,7 @@ class DataParallelLGAR(BaseAgent):
         :return:
         """
         self.model.train()
+        # torch.autograd.set_detect_anomaly(True)
         self.net = DDP(self.model)
         for epoch in range(1, self.cfg.models.hyperparameters.epochs + 1):
             # if self.rank == 0:

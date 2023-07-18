@@ -28,9 +28,25 @@ class Data(Dataset):
         self.soil_attributes = self.get_polaris_atributes(cfg)
 
         if cfg.synthetic.run:
-            self.y = self.read_synthetic_data(cfg)
+            obs_path = cfg.data.synthetic_file
         else:
-            self.y = self.get_observations(cfg)
+            obs_path = cfg.data.observations_file
+
+        self.y = self.get_observations(cfg, obs_path)
+        self.y[0:10] = torch.tensor(
+            [
+                0.01,
+                0.01,
+                0.01,
+                0.01,
+                0.01,
+                0.01,
+                0.01,
+                0.01,
+                0.01,
+                0.01,
+            ]
+        )
 
         self.custom_normalization = {
             0: {"centering": "min", "scaling": "minmax"},
@@ -131,15 +147,18 @@ class Data(Dataset):
         x = stacked_forcings.transpose(0, 1) * cfg.conversions.mm_to_cm
         return x
 
-    def read_synthetic_data(self, cfg: DictConfig):
-        obs = read_df(cfg.data.synthetic_file)
-        precip = obs["QObs(mm/h)"]
+    def get_observations(self, cfg: DictConfig, file_path):
+        start_date = cfg.data.time_interval.warmup
+        end_date = cfg.data.time_interval.end
+        cols = ["date", "QObs(mm/h)"]
+        data = pd.read_csv(cfg.data.synthetic_file, usecols=cols, parse_dates=["date"])
+        filtered_data = data.query("@start_date <= date <= @end_date")
+        precip = filtered_data["QObs(mm/h)"]
         precip_tensor = torch.tensor(precip.to_numpy(), device=cfg.device)
         nan_mask = torch.isnan(precip_tensor)
         # Filling NaNs with 0 as there is no streamflow
         precip_tensor[nan_mask] = 0.0
         return precip_tensor
-
 
     def to_lgar_c_format(self, df, file_name):
         """
@@ -223,19 +242,6 @@ class Data(Dataset):
         )
 
         return soil_attributes
-
-    def get_observations(self, cfg: DictConfig):
-        """
-        reading observations from NLDAS forcings
-        :param cfg: the DictConfig obj
-        """
-        obs = read_df(cfg.data.observations_file)
-        precip = obs["QObs(mm/h)"]
-        precip_tensor = torch.tensor(precip.to_numpy(), device=cfg.device)
-        nan_mask = torch.isnan(precip_tensor)
-        # Filling NaNs with 0 as there is no streamflow
-        precip_tensor[nan_mask] = 0.0
-        return precip_tensor
 
     def _plot_normalization(self):
         import matplotlib.pyplot as plt
