@@ -8,12 +8,15 @@ from dpLGAR.agents.DataParallelLGAR import DataParallelLGAR
 from dpLGAR.agents.SingleBasinRun import LGARAgent
 from dpLGAR.agents.SyntheticAgent import SyntheticAgent
 
+from pathlib import Path
 
+cwd = Path.cwd()
 log = logging.getLogger(__name__)
 
 
 @hydra.main(version_base=None, config_path=".", config_name="config")
 def main(cfg: DictConfig) -> None:
+    cfg.cwd = cwd
     start = time.perf_counter()
     try:
         # Running the code in Parallel

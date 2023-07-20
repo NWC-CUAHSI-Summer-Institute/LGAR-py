@@ -32,7 +32,7 @@ def main():
     data_config["forcing_file"] = args.forcing_file
     data_config["layer_thickness"] = thickness_per_layer
     print(f"Texture per layer: {texture_per_layer}")
-    print(f"Thickness per layer: {}")
+
 
 if __name__ == "__main__":
     main()
