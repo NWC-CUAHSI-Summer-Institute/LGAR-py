@@ -32,11 +32,10 @@ class DataParallelLGAR(BaseAgent):
         self.cfg = cfg
         torch.manual_seed(0)
         torch.set_default_dtype(torch.float64)
-        # torch.autograd.set_detect_anomaly(True)
 
         # Initialize DistributedDataParallel (DDP)
         self.rank = int(cfg.local_rank)
-        log.info(f"Initializing Distributed Data Process: {self.rank}")
+        log.debug(f"Initializing Distributed Data Process: {self.rank}")
         self.setup(self.cfg)
 
         # Configuring subcycles (If we're running hourly, 15 mins, etc)
@@ -67,7 +66,7 @@ class DataParallelLGAR(BaseAgent):
         )
 
         # Defining the model and output variables to save
-        self.model = dpLGAR(self.cfg, self.data.soil_information)
+        self.model = dpLGAR(self.cfg, self.data)
         self.mass_balance = MassBalance(cfg, self.model)
 
         self.criterion = MSE_loss
@@ -75,8 +74,8 @@ class DataParallelLGAR(BaseAgent):
             self.model.parameters(), lr=cfg.models.hyperparameters.learning_rate
         )
 
-        lb = cfg.models.hyperparameters.lb
-        ub = cfg.models.hyperparameters.ub
+        lb = cfg.models.range.lb
+        ub = cfg.models.range.ub
         self.range_bound_loss = RangeBoundLoss(lb, ub, factor=1.0)
 
         self.y_hat = None
@@ -102,12 +101,13 @@ class DataParallelLGAR(BaseAgent):
         :return:
         """
         self.model.train()
+        # torch.autograd.set_detect_anomaly(True)
         self.net = DDP(self.model)
         for epoch in range(1, self.cfg.models.hyperparameters.epochs + 1):
-            if self.rank == 0:
-                log.info(f"Running epoch: {self.current_epoch}")
-                log.info(f"-----Current Params-----")
-            self.model.print_params()
+            # if self.rank == 0:
+            #     log.debug(f"Running epoch: {self.current_epoch}")
+            #     log.debug(f"-----Current Params-----")
+            #     self.model.print_params()
             self.train_one_epoch()
             self.current_epoch = self.current_epoch + 1
 
@@ -158,7 +158,7 @@ class DataParallelLGAR(BaseAgent):
         # Outputting trained Nash-Sutcliffe efficiency (NSE) coefficient
         y_hat_np = y_hat.detach().squeeze().numpy()
         y_t_np = y_t.detach().squeeze().numpy()
-        log.info(f"trained NSE: {calculate_nse(y_hat_np, y_t_np):.4}")
+        log.debug(f"trained NSE: {calculate_nse(y_hat_np, y_t_np):.4}")
 
         # Compute the overall loss
         loss_mse = self.criterion(y_hat, y_t)
@@ -168,6 +168,8 @@ class DataParallelLGAR(BaseAgent):
             self.model.alpha,
             self.model.n,
             self.model.ksat,
+            self.model.theta_e,
+            self.model.theta_r,
             self.model.ponded_depth_max,
         ]
         bound_loss = self.range_bound_loss(params)
@@ -180,8 +182,8 @@ class DataParallelLGAR(BaseAgent):
         end = time.perf_counter()
 
         # Log the time taken for backpropagation and the calculated loss
-        log.info(f"Back prop took : {(end - start):.6f} seconds")
-        log.info(f"Loss: {loss}")
+        log.debug(f"Back prop took : {(end - start):.6f} seconds")
+        log.debug(f"Loss: {loss}")
 
         # Update the model parameters
         self.optimizer.step()

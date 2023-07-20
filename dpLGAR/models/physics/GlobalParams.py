@@ -22,7 +22,6 @@ class GlobalParams:
         self.soil_depth_cm = None
         self.initial_psi = None
         self.ponded_depth_max = ponded_depth_max.clone()
-        self.layer_soil_type = None
         self.num_soil_types = None
         self.wilting_point_psi_cm = None
         self.giuh_ordinates = None
@@ -104,11 +103,8 @@ class GlobalParams:
         self.cum_layer_thickness = torch.zeros(
             [len(cfg.data.layer_thickness)], device=cfg.device
         )
-        self.cum_layer_thickness[0] = cfg.data.layer_thickness[0]
-        for i in range(1, self.cum_layer_thickness.shape[0]):
-            self.cum_layer_thickness[i] = (
-                    self.cum_layer_thickness[i - 1].clone() + self.layer_thickness_cm[i]
-            )
+        self.layer_thickness_cm = torch.tensor(cfg.data.layer_thickness, device=cfg.device)
+        self.cum_layer_thickness = self.layer_thickness_cm.cumsum(dim=0)
         self.num_layers = len(cfg.data.layer_thickness)
         self.soil_depth_cm = self.cum_layer_thickness[-1]
 
@@ -118,13 +114,10 @@ class GlobalParams:
 
         self.use_closed_form_G = cfg.data.use_closed_form_G
 
-        # HARDCODING A 1 SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
-        self.layer_soil_type = cfg.data.layer_soil_type
-
         self.num_soil_types = torch.tensor(cfg.data.max_soil_types, device=cfg.device)
 
         self.wilting_point_psi_cm = torch.tensor(
-            cfg.data.wilting_point_psi, device=cfg.device
+            cfg.data.wilting_point_psi_cm, device=cfg.device
         )
         self.frozen_factor = torch.tensor(cfg.constants.frozen_factor, device=cfg.device)
         self.soil_index = cfg.data.soil_index

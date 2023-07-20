@@ -26,42 +26,35 @@ from dpLGAR.models.physics.lgar.giuh import calc_giuh
 log = logging.getLogger("models.dpLGAR")
 
 
-class dpLGAR(nn.Module):
-    def __init__(self, cfg: DictConfig, data) -> None:
+class SyntheticLGAR(nn.Module):
+    def __init__(self, cfg: DictConfig) -> None:
         """
 
         :param cfg:
         :param soil_information: soil attributes
         """
-        super(dpLGAR, self).__init__()
+        super(SyntheticLGAR, self).__init__()
 
         self.cfg = cfg
         self.rank = cfg.local_rank
 
-        self.soil_attributes = data.soil_attributes
-        self.normalized_soil_attributes = data.normalized_soil_attributes
-
-        self.mlp = MLP(cfg, self.normalized_soil_attributes)
-
-        # We're assuming two soil layers of the same "type" The first layer is topsoil
-        # The bottom is of the same "type" but will be trained to closer mimic what the physics tells us will be there
-        # self.textures = [soil_information[1], soil_information[1], soil_information[1]]
-        # The soil type in this basin, adding 1 for indexing error (Tadd's fault)
-        # SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
-        # layer = soil_information[2] - 1
-        # self.cfg.data.layer_soil_type = [layer, layer, layer]
-
-        # Getting starting values for soil information (File from Fred Ogden)
-        self.alpha = torch.zeros(
-            [self.cfg.data.num_soil_layers], device=self.cfg.device
+        # Setting synthetic values
+        # Sandy -> sandy loam -> loam -> silty loam -> clay loam -> clay
+        # with values based on .dat table from Fred Ogden
+        self.alpha = torch.tensor(
+            [0.04, 0.03, 0.01, 0.01, 0.02, 0.01], device=self.cfg.device
         )
-        self.n = torch.zeros([self.cfg.data.num_soil_layers], device=self.cfg.device)
-        self.ksat = torch.zeros([self.cfg.data.num_soil_layers], device=self.cfg.device)
-        self.theta_e = torch.zeros(
-            [self.cfg.data.num_soil_layers], device=self.cfg.device
+        self.n = torch.tensor(
+            [3.18, 1.45, 1.47, 1.66, 1.42, 1.25], device=self.cfg.device
         )
-        self.theta_r = torch.zeros(
-            [self.cfg.data.num_soil_layers], device=self.cfg.device
+        self.ksat = torch.tensor(
+            [26.64, 1.584, 0.504, 0.756, 0.3348, 0.612], device=self.cfg.device
+        )
+        self.theta_e = torch.tensor(
+            [0.38, 0.39, 0.4, 0.44, 0.44, 0.46], device=self.cfg.device
+        )
+        self.theta_r = torch.tensor(
+            [0.05, 0.04, 0.06, 0.07, 0.08, 0.1], device=self.cfg.device
         )
         self.ponded_depth_max = torch.tensor(0.0, device=self.cfg.device)
 
@@ -104,16 +97,6 @@ class dpLGAR(nn.Module):
         self.set_internal_states()
 
     def set_internal_states(self):
-        # Creating static soil params
-        (
-            self.alpha,
-            self.n,
-            self.ksat,
-            self.theta_e,
-            self.theta_r,
-            self.ponded_depth_max,
-        ) = self.mlp(self.normalized_soil_attributes)
-
         self.c = generate_soil_metrics(
             self.cfg, self.alpha, self.n, self.theta_e, self.theta_r
         )
@@ -419,12 +402,6 @@ class dpLGAR(nn.Module):
         for i in range(len(self.ksat)):
             ksat = self.ksat[i]
             log.info(f"Ksat for soil {i+1}: {ksat.detach().item():.4f}")
-        for i in range(len(self.theta_e)):
-            theta_e = self.theta_e[i]
-            log.info(f"theta_e for soil {i+1}: {theta_e.detach().item():.4f}")
-        for i in range(len(self.theta_r)):
-            theta_r = self.theta_r[i]
-            log.info(f"theta_r for soil {i+1}: {theta_r.detach().item():.4f}")
         log.info(f"Max Ponded Depth: {self.ponded_depth_max.detach().item():.4f}")
 
     def print_local_mass_balance(
@@ -462,4 +439,5 @@ class dpLGAR(nn.Module):
         #     percolation_sub,
         #     ending_volume_sub,
         #     infiltration_sub,
+        #     i,
         # )

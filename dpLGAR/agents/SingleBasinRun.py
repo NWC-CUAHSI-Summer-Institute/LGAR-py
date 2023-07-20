@@ -2,16 +2,11 @@ import logging
 from omegaconf import DictConfig
 import time
 import torch
-from torch import Tensor
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.utils.data import DataLoader
-import torch.distributed as dist
 from tqdm import tqdm, trange
 
 from dpLGAR.agents.base import BaseAgent
 from dpLGAR.data.Data import Data
-from dpLGAR.data.graphdatasampler import GraphDataSampler
 from dpLGAR.data.metrics import calculate_nse
 from dpLGAR.models.dpLGAR import dpLGAR
 from dpLGAR.models.functions.loss import MSE_loss, RangeBoundLoss
@@ -61,7 +56,7 @@ class LGARAgent(BaseAgent):
         )
 
         # Defining the model and output variables to save
-        self.model = dpLGAR(self.cfg, self.data.soil_information)
+        self.model = dpLGAR(self.cfg, self.data)
         self.mass_balance = MassBalance(cfg, self.model)
 
         self.criterion = MSE_loss
@@ -69,8 +64,8 @@ class LGARAgent(BaseAgent):
             self.model.parameters(), lr=cfg.models.hyperparameters.learning_rate
         )
 
-        lb = cfg.models.hyperparameters.lb
-        ub = cfg.models.hyperparameters.ub
+        lb = cfg.models.range.lb
+        ub = cfg.models.range.ub
         self.range_bound_loss = RangeBoundLoss(lb, ub, factor=1.0)
 
         self.y_hat = None
@@ -97,10 +92,6 @@ class LGARAgent(BaseAgent):
         """
         self.model.train()
         for epoch in range(1, self.cfg.models.hyperparameters.epochs + 1):
-            if self.rank == 0:
-                log.info(f"Running epoch: {self.current_epoch}")
-                log.info(f"-----Current Params-----")
-            self.model.print_params()
             self.train_one_epoch()
             self.current_epoch = self.current_epoch + 1
 
@@ -116,6 +107,7 @@ class LGARAgent(BaseAgent):
         """
         y_hat_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
         y_t_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
+        self.model.print_params()
         self.optimizer.zero_grad()
         for i, (x, y_t) in enumerate(
             tqdm(
@@ -159,6 +151,8 @@ class LGARAgent(BaseAgent):
             self.model.alpha,
             self.model.n,
             self.model.ksat,
+            self.model.theta_e,
+            self.model.theta_r,
             self.model.ponded_depth_max,
         ]
         bound_loss = self.range_bound_loss(params)

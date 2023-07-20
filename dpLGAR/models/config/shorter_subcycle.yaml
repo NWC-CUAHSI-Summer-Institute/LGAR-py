@@ -5,31 +5,35 @@ units:
 subcycle_length: 3600.0 #[sec]
 subcycle_length_h: ??? #[hr]
 num_subcycles: ???
-#num_time_step: 90000  # total simulation time is this number times the time_step_s
-#endtime_s: ???
 forcing_resolution_h: ???
-#time_per_step: ???
-#nsteps: ???
 forcing_resolution: 3600 # [sec]
-save_path: ${cwd}/saved_model_runs/${data.basin_id}/
+save_path: ${cwd}/saved_model_runs/${basin_id}/
 not_finished_name: ${save_name}_epoch_{}_${now:%m-%d}_${now:%H-%M-%S}.pth
 save_name: ${save_name}_trained_model_${now:%m-%d}_${now:%H-%M-%S}.pth
 hyperparameters:
-  warmup: 120
+  warmup: 0
   epochs: 50
   learning_rate: 0.001
 #  minibatch: 31 # [days]
 #  minibatch: 15 # [days]
   minibatch: 0.04166666667 # this makes no minibatch
+range:
   lb:
     - 0.0015 # alpha
     - 1.0 # n
     - 1e-6 # Ksat
-    - 0.001 # ponded_depth_max
+    - 0.24 # Theta_e
+    - 0.001 #Theta_r
+    - 0.00 # ponded_depth_max
   ub:
     - 0.015 # alpha
     - 5.0 # n
     - 30 # Ksat
-    - 10.0 # ponded_depth_max
+    - 0.81 # Theta_e
+    - 0.025 #Theta_r
+    - 4.0 # ponded_depth_max
+mlp:
+  hidden_size: 32
+  output_size: 6
   # https://www.pc-progress.com/Downloads/Public_Lib_H1D/HYDRUS-1D_Tutorial_V1.00_2018.pdf
   # https://acsess.onlinelibrary.wiley.com/doi/pdf/10.2136/sssaj1980.03615995004400050002x
