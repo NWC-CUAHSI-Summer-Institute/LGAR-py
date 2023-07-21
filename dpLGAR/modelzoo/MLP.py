@@ -6,7 +6,7 @@ from torch import Tensor
 import torch.nn as nn
 from torch.nn import Sigmoid, Linear
 
-from dpLGAR.models.functions.utils import to_physical
+from dpLGAR.modelzoo.functions.utils import to_physical
 
 log = logging.getLogger("graphs.MLP")
 

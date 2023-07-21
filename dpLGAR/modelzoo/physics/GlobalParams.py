@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-log = logging.getLogger("models.physics.GlobalParams")
+log = logging.getLogger("modelzoo.physics.GlobalParams")
 
 
 class GlobalParams:

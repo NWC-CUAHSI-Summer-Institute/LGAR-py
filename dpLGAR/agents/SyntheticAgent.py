@@ -11,8 +11,8 @@ from tqdm import tqdm, trange
 from dpLGAR.agents.base import BaseAgent
 from dpLGAR.data.Data import Data
 from dpLGAR.data.metrics import calculate_nse
-from dpLGAR.models.SyntheticLGAR import SyntheticLGAR
-from dpLGAR.models.physics.MassBalance import MassBalance
+from dpLGAR.modelzoo.SyntheticLGAR import SyntheticLGAR
+from dpLGAR.modelzoo.physics.MassBalance import MassBalance
 
 log = logging.getLogger("agents.SyntheticAgent")
 

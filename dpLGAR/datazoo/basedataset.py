@@ -13,7 +13,7 @@ from torch import Tensor
 from torch.utils.data import Dataset
 
 
-log = logging.getLogger("data.basedataset")
+log = logging.getLogger("datazoo.basedataset")
 T_co = TypeVar("T_co", covariant=True)
 T = TypeVar("T")
 
@@ -45,6 +45,22 @@ class BaseDataset(Dataset):
         """This function has to return the attributes in a Tensor."""
         raise NotImplementedError
 
+    def _load_basin_data(self):
+        """
+        Read and filter a CSV file for specified columns and date range.
+        :param cfg: the dictionary that we're reading vars from
+        :return: DataFrame filtered for specified columns and date range.
+        """
+        raise NotImplementedError
+
+    def _load_data(self):
+        self._load_attributes()
+
+        self._load_basin_data()
+
+        self._load_observations()
+
+
     def _load_observations(self):
         start_date = self.cfg.data.time_interval.warmup
         end_date = self.cfg.data.time_interval.end
@@ -56,21 +72,6 @@ class BaseDataset(Dataset):
         nan_mask = torch.isnan(precip_tensor)
         precip_tensor[nan_mask] = 0.0
         self._y = precip_tensor
-
-    def _load_forcings(self):
-        """
-        Read and filter a CSV file for specified columns and date range.
-        :param cfg: the dictionary that we're reading vars from
-        :return: DataFrame filtered for specified columns and date range.
-        """
-        raise NotImplementedError
-
-    def _load_data(self):
-        self._load_attributes()
-
-        self._load_forcings()
-
-        self._load_observations()
 
     def _setup_normalization(self):
         # initialize scaler dict with default center and scale values (mean and std)
@@ -132,39 +133,6 @@ class BaseDataset(Dataset):
         Method from the torch.Dataset parent class
         """
         return self._x.shape[0]
-
-    def get_polaris_atributes(self, cfg: DictConfig):
-        file_name = cfg.data.attributes_file
-        # Load the txt flat_files into a DataFrame
-        df = pd.read_csv(file_name)
-
-        # Filter columns for soil %, Ph, and organic_matter
-        clay_columns = [col for col in df.columns if col.startswith("clay")]
-        sand_columns = [col for col in df.columns if col.startswith("sand")]
-        silt_columns = [col for col in df.columns if col.startswith("silt")]
-        ph_columns = [col for col in df.columns if col.startswith("ph")]
-        organic_matter_columns = [col for col in df.columns if col.startswith("om")]
-
-        # Create a numpy array from the columns
-        clay_data = df[clay_columns].values
-        sand_data = df[sand_columns].values
-        silt_data = df[silt_columns].values
-        ph_data = df[ph_columns].values
-        organic_matter_data = df[organic_matter_columns].values
-
-        # Shape (<num_points>, <num_layers>, <num_attributes>)
-        soil_attributes = torch.stack(
-            [
-                torch.from_numpy(clay_data),
-                torch.from_numpy(sand_data),
-                torch.from_numpy(silt_data),
-                torch.from_numpy(ph_data),
-                torch.from_numpy(organic_matter_data),
-            ],
-            dim=-1,
-        )
-
-        return soil_attributes
 
     def _plot_normalization(self):
         """

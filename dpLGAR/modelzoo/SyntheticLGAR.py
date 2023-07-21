@@ -15,15 +15,15 @@ from torch import Tensor
 import torch.nn as nn
 
 from dpLGAR.data.utils import generate_soil_metrics
-from dpLGAR.models.MLP import MLP
-from dpLGAR.models.physics.GlobalParams import GlobalParams
-from dpLGAR.models.physics.layers.Layer import Layer
-from dpLGAR.models.physics.lgar.frozen_factor import (
+from dpLGAR.modelzoo.MLP import MLP
+from dpLGAR.modelzoo.physics.GlobalParams import GlobalParams
+from dpLGAR.modelzoo.physics.layers.Layer import Layer
+from dpLGAR.modelzoo.physics.lgar.frozen_factor import (
     frozen_factor_hydraulic_conductivity,
 )
-from dpLGAR.models.physics.lgar.giuh import calc_giuh
+from dpLGAR.modelzoo.physics.lgar.giuh import calc_giuh
 
-log = logging.getLogger("models.dpLGAR")
+log = logging.getLogger("modelzoo.dpLGAR")
 
 
 class SyntheticLGAR(nn.Module):

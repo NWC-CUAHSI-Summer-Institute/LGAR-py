@@ -2,7 +2,7 @@ import logging
 from sklearn import preprocessing
 import torch
 
-log = logging.getLogger("models.functions.utils")
+log = logging.getLogger("modelzoo.functions.utils")
 
 def to_physical(x, parameter_space):
     """

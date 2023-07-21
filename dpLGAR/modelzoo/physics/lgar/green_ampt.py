@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from dpLGAR.models.physics.utils import (
+from dpLGAR.modelzoo.physics.utils import (
     calc_theta_from_h,
     calc_k_from_se,
     calc_se_from_h,
@@ -13,7 +13,7 @@ from dpLGAR.models.physics.utils import (
     safe_pow
 )
 
-log = logging.getLogger("models.physics.lgar.green_ampt")
+log = logging.getLogger("modelzoo.physics.lgar.green_ampt")
 
 
 def calc_geff(global_params, attributes, theta_1, theta_2, alpha, n, ksat) -> Tensor:

@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-log = logging.getLogger("models.physics.lgar.frozen_factor")
+log = logging.getLogger("modelzoo.physics.lgar.frozen_factor")
 
 
 def frozen_factor_hydraulic_conductivity() -> None:

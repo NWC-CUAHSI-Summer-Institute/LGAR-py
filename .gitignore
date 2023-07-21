@@ -5,10 +5,10 @@ flat_files/.DS_Store
 .DS_Store
 dpLGAR/__pycache__/
 dpLGAR/agents/__pycache__/
-dpLGAR/data/__pycache__/
-dpLGAR/models/__pycache__/
-dpLGAR/models/physics/__pycache__/
-dpLGAR/models/physics/lgar/__pycache__/
-dpLGAR/models/physics/layers/__pycache__/
-dpLGAR/models/functions/__pycache__/
+dpLGAR/datazoo/__pycache__/
+dpLGAR/modelzoo/__pycache__/
+dpLGAR/modelzoo/physics/__pycache__/
+dpLGAR/modelzoo/physics/lgar/__pycache__/
+dpLGAR/modelzoo/physics/layers/__pycache__/
+dpLGAR/modelzoo/functions/__pycache__/
 saved_model_runs/

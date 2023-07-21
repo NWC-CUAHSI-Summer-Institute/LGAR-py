@@ -5,14 +5,14 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 
-from dpLGAR.models.physics.utils import (
+from dpLGAR.modelzoo.physics.utils import (
     calc_se_from_theta,
     calc_k_from_se,
     calc_theta_from_h,
     calc_h_from_se,
 )
 
-log = logging.getLogger("models.physics.layers.WettingFront")
+log = logging.getLogger("modelzoo.physics.layers.WettingFront")
 
 
 class WettingFront:

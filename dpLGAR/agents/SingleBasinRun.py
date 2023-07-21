@@ -8,9 +8,9 @@ from tqdm import tqdm, trange
 from dpLGAR.agents.base import BaseAgent
 from dpLGAR.data.Data import Data
 from dpLGAR.data.metrics import calculate_nse
-from dpLGAR.models.dpLGAR import dpLGAR
-from dpLGAR.models.functions.loss import MSE_loss, RangeBoundLoss
-from dpLGAR.models.physics.MassBalance import MassBalance
+from dpLGAR.modelzoo.dpLGAR import dpLGAR
+from dpLGAR.modelzoo.functions.loss import MSE_loss, RangeBoundLoss
+from dpLGAR.modelzoo.physics.MassBalance import MassBalance
 
 log = logging.getLogger("agents.SingleBasinRun")
 

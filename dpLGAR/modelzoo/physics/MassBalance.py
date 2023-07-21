@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-log = logging.getLogger("models.physics.MassBalance")
+log = logging.getLogger("modelzoo.physics.MassBalance")
 
 
 class MassBalance:

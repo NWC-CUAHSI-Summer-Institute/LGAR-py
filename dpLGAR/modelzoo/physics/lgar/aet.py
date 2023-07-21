@@ -4,14 +4,14 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from dpLGAR.models.physics.utils import (
+from dpLGAR.modelzoo.physics.utils import (
     calc_theta_from_h,
     calc_se_from_theta,
     calc_h_from_se,
     safe_pow
 )
 
-log = logging.getLogger("models.physics.lgar.aet")
+log = logging.getLogger("modelzoo.physics.lgar.aet")
 
 
 def calc_aet(global_params, subtimestep_h, pet, psi_cm, theta_e, theta_r, m, alpha, n) -> Tensor:

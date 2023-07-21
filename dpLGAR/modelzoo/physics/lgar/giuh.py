@@ -2,7 +2,7 @@ import logging
 import torch
 from torch import Tensor
 
-log = logging.getLogger("models.physics.lgar.giuh")
+log = logging.getLogger("modelzoo.physics.lgar.giuh")
 
 
 def calc_giuh(global_params, giuh_runoff_queue, runoff) -> (Tensor, Tensor):

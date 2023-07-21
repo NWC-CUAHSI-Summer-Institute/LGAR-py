@@ -5,7 +5,7 @@ from pathlib import Path
 cwd = Path.cwd()
 main_cfg_path = cwd / "dpLGAR"
 data_cfg_path = cwd / "dpLGAR/flat_files/config"
-models_cfg_path = cwd / "dpLGAR/models/config"
+models_cfg_path = cwd / "dpLGAR/modelzoo/config"
 
 
 def main():
