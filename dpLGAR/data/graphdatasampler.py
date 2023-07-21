@@ -42,10 +42,10 @@ class GraphDataSampler(DistributedSampler):
         self.epoch = 0
         self.drop_last = drop_last
         # If the dataset length is evenly divisible by # of replicas, then there
-        # is no need to drop any data, since the dataset will be split equally.
+        # is no need to drop any flat_files, since the dataset will be split equally.
         if self.drop_last and len(self.dataset) % self.num_replicas != 0:  # type: ignore[arg-type]
             # Split to nearest available length that is evenly divisible.
-            # This is to ensure each rank receives the same amount of data when
+            # This is to ensure each rank receives the same amount of flat_files when
             # using this Sampler.
             self.num_samples = math.ceil(
                 (len(self.dataset) - self.num_replicas) / self.num_replicas  # type: ignore[arg-type]
@@ -74,7 +74,7 @@ class GraphDataSampler(DistributedSampler):
             else:
                 indices += (indices * math.ceil(padding_size / len(indices)))[:padding_size]
         else:
-            # remove tail of data to make it evenly divisible.
+            # remove tail of flat_files to make it evenly divisible.
             indices = indices[:self.total_size]
         assert len(indices) == self.total_size
 

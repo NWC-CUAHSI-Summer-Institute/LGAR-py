@@ -110,7 +110,7 @@ class GlobalParams:
 
         self.initial_psi = torch.tensor(cfg.data.initial_psi, device=cfg.device)
         # Using a nn.Param for this
-        # self.ponded_depth_max = torch.tensor(cfg.data.ponded_depth_max, device=cfg.device, dtype=torch.float64)
+        # self.ponded_depth_max = torch.tensor(cfg.flat_files.ponded_depth_max, device=cfg.device, dtype=torch.float64)
 
         self.use_closed_form_G = cfg.data.use_closed_form_G
 

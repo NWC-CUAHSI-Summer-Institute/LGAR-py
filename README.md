@@ -69,4 +69,8 @@ Please make sure to update tests as appropriate.
 
 [MIT](https://choosealicense.com/licenses/mit/)
 
-Project Template provided by: https://github.com/moemen95/Pytorch-Project-Template
+## Acknowledgments
+This project's coding structure was created using NeuralHydrology. The original code can be found at [here](https://github.com/neuralhydrology/neuralhydrology/tree/master). 
+Thanks to the Neural Hydrology team for making their code available for use.
+
+Project Template was provided by: https://github.com/moemen95/Pytorch-Project-Template

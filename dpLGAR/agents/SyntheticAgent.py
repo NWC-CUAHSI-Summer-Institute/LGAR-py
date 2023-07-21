@@ -131,7 +131,7 @@ class SyntheticAgent(BaseAgent):
 
     def finalize(self, interrupt=False):
         """
-        Finalizes all the operations of the 2 Main classes of the process, the operator and the data loader
+        Finalizes all the operations of the 2 Main classes of the process, the operator and the flat_files loader
         :return:
         """
         log.info(f"Finished Running Synthetic Case")

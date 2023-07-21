@@ -13,7 +13,7 @@ from dpLGAR.models.physics.utils import (
     calc_m,
 )
 
-log = logging.getLogger("data.utils")
+log = logging.getLogger("flat_files.utils")
 
 
 def read_df(file: str) -> pd.DataFrame:

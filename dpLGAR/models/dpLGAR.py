@@ -49,7 +49,7 @@ class dpLGAR(nn.Module):
         # The soil type in this basin, adding 1 for indexing error (Tadd's fault)
         # SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
         # layer = soil_information[2] - 1
-        # self.cfg.data.layer_soil_type = [layer, layer, layer]
+        # self.cfg.flat_files.layer_soil_type = [layer, layer, layer]
 
         # Getting starting values for soil information (File from Fred Ogden)
         self.alpha = torch.zeros(

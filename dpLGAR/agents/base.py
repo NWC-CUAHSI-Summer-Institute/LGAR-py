@@ -58,7 +58,7 @@ class BaseAgent:
 
     def finalize(self):
         """
-        Finalizes all the operations of the 2 Main classes of the process, the operator and the data loader
+        Finalizes all the operations of the 2 Main classes of the process, the operator and the flat_files loader
         :return:
         """
         raise NotImplementedError

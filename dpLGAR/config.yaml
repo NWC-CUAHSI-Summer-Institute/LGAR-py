@@ -3,7 +3,8 @@ defaults:
   - data: config/lumped_catchment
   - models: config/shorter_subcycle
   - override hydra/launcher: joblib
-cwd: ???
+#cwd: /mnt/sdb1/tkb5476/dpLGAR/
+cwd: /Users/taddbindas/projects/dpLGAR
 #basin_id: "01031500"  # Default basin
 basin_id: "06332515"
 save_name: ${basin_id}_train
@@ -11,16 +12,16 @@ output_dir: ${cwd}/output
 device: cpu
 print_output: False # Not supported rn
 save_paths:
-#  precip: ${cwd}/data/save_files/precip.csv
-  precip: ${cwd}/data/save_files/test.csv
-  pet: ${cwd}/data/save_files/PET.csv
-  soil_moisture: ${cwd}/data/save_files/soil_moisture.csv
-  soil_thickness: ${cwd}/data/save_files/soil_thickness.csv
+#  precip: ${cwd}/flat_files/save_files/precip.csv
+  precip: ${cwd}/flat_files/save_files/test.csv
+  pet: ${cwd}/flat_files/save_files/PET.csv
+  soil_moisture: ${cwd}/flat_files/save_files/soil_moisture.csv
+  soil_thickness: ${cwd}/flat_files/save_files/soil_thickness.csv
 synthetic:
   eval: False
   run: True
   output_dir: ${cwd}/saved_model_runs/synthetic/
-  name: ${basin_id}_${data.time_interval.warmup}-${data.time_interval.end}.csv
+  name: ${basin_id}_${flat_files.time_interval.warmup}-${flat_files.time_interval.end}.csv
 constants:
   frozen_factor: 1
   AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET (fix later!)
@@ -40,7 +41,7 @@ distributed_backend: "gloo"  # CPU
 ################## HYDRA CONFIG #######################
 hydra:
   help:
-    app_name: LGAR-TORCH
+    app_name: differentiable parameter Learning LGAR (dpLGAR)
     header: == ${hydra.help.app_name} ==
     template: |-
       ${hydra.help.header}

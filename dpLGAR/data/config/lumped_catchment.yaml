@@ -1,4 +1,4 @@
-data_dir: ${cwd}/data
+data_dir: ${cwd}/flat_files
 #basin_id: "06332515"
 #endtime: 372.0 #[hr]
 #endtime: 3000.0 #[hr]
@@ -8,16 +8,16 @@ time_interval:
   start: 2001-01-01 01:00:00
 #  start: 1999-10-01 00:00:00
 #  end: 2001-01-05 23:00:00
-  end: 2001-01-10 23:00:00
+  end: 2001-01-31 23:00:00
 #  end: 2008-09-30 23:00:00
   testing_warmup: 2008-10-01 00:00:00
   testing_start: 2009-10-01 23:00:00
   testing_end: 2010-09-30 23:00:00
-forcing_file: ${data.data_dir}/nldas_forcings/${basin_id}_hourly_nldas.csv
-observations_file: ${data.data_dir}/usgs_streamflow/${basin_id}-usgs-hourly.csv
-area_file: ${data.data_dir}/attributes/CAMELS_areas.csv
-attributes_file: ${data.data_dir}/attributes/CAMELS_Soil_Attributes_POLARIS_gage_${basin_id}.csv
-soil_params_file: ${cwd}/data/vG_default_params.dat
+forcing_file: ${flat_files.data_dir}/nldas_forcings/${basin_id}_hourly_nldas.csv
+observations_file: ${flat_files.data_dir}/usgs_streamflow/${basin_id}-usgs-hourly.csv
+area_file: ${flat_files.data_dir}/attributes/CAMELS_areas.csv
+attributes_file: ${flat_files.data_dir}/attributes/CAMELS_Soil_Attributes_POLARIS_gage_${basin_id}.csv
+soil_params_file: ${cwd}/flat_files/vG_default_params.dat
 synthetic_file: ${cwd}/saved_model_runs/synthetic/06332515_2001-01-01_00-00-00-2001-11_30_23-00-00.csv
 layer_thickness: #[cm]
   - 5

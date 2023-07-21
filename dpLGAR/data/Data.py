@@ -1,4 +1,4 @@
-"""A file to store the function where we read the input data"""
+"""A file to store the function where we read the input flat_files"""
 import logging
 
 from omegaconf import DictConfig
@@ -14,7 +14,7 @@ from typing import (
 
 from dpLGAR.data.utils import read_df
 
-log = logging.getLogger("data.Data")
+log = logging.getLogger("flat_files.Data")
 T_co = TypeVar("T_co", covariant=True)
 T = TypeVar("T")
 
@@ -98,7 +98,7 @@ class Data(Dataset):
         """
         Method from the torch.Dataset parent class
         :param index: the date you're iterating on
-        :return: the forcing and observed data for a particular index
+        :return: the forcing and observed flat_files for a particular index
         """
         return self.x[index], self.y[index]
 
@@ -148,7 +148,7 @@ class Data(Dataset):
 
     def to_lgar_c_format(self, df, file_name):
         """
-        For converting filtered data to LGAR-C format
+        For converting filtered flat_files to LGAR-C format
         """
         df = df.copy()
         df["date"] = pd.to_datetime(df["date"])
@@ -184,7 +184,7 @@ class Data(Dataset):
         """
         file_name = cfg.data.attributes_file
         basin_id = cfg.basin_id
-        # Load the txt data into a DataFrame
+        # Load the txt flat_files into a DataFrame
         data = pd.read_csv(file_name, sep=";")
         data["gauge_id"] = data["gauge_id"].astype("str").str.zfill(8)
         # Filter the DataFrame for the specified basin id
@@ -198,7 +198,7 @@ class Data(Dataset):
 
     def get_polaris_atributes(self, cfg: DictConfig):
         file_name = cfg.data.attributes_file
-        # Load the txt data into a DataFrame
+        # Load the txt flat_files into a DataFrame
         df = pd.read_csv(file_name)
 
         # Filter columns for soil %, Ph, and organic_matter
