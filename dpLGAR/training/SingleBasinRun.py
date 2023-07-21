@@ -5,14 +5,14 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
-from dpLGAR.agents.base import BaseAgent
+from dpLGAR.training.basetrainer import BaseAgent
 from dpLGAR.data.Data import Data
 from dpLGAR.data.metrics import calculate_nse
 from dpLGAR.modelzoo.dpLGAR import dpLGAR
 from dpLGAR.modelzoo.functions.loss import MSE_loss, RangeBoundLoss
 from dpLGAR.modelzoo.physics.MassBalance import MassBalance
 
-log = logging.getLogger("agents.SingleBasinRun")
+log = logging.getLogger("training.SingleBasinRun")
 
 
 class LGARAgent(BaseAgent):

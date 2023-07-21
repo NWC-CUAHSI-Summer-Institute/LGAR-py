@@ -18,7 +18,7 @@ observations_file: ${flat_files.data_dir}/usgs_streamflow/${basin_id}-usgs-hourl
 area_file: ${flat_files.data_dir}/attributes/CAMELS_areas.csv
 attributes_file: ${flat_files.data_dir}/attributes/CAMELS_Soil_Attributes_POLARIS_gage_${basin_id}.csv
 soil_params_file: ${cwd}/flat_files/vG_default_params.dat
-synthetic_file: ${cwd}/saved_model_runs/synthetic/06332515_2001-01-01_00-00-00-2001-11_30_23-00-00.csv
+synthetic_file: ${cwd}/runs/synthetic/06332515_2001-01-01_00-00-00-2001-11_30_23-00-00.csv
 layer_thickness: #[cm]
   - 5
   - 10

@@ -25,6 +25,7 @@ class BaseDataset(Dataset):
                  period: str,
                  basin: str = None,
                  ) -> None:
+        # TODO REMOVE CALL TO TORCH DATASET
         super(BaseDataset).__init__()
         self.cfg = cfg
         self.is_train = is_train

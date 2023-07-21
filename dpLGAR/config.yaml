@@ -3,10 +3,17 @@ defaults:
   - datazoo: config/lumped_catchment
   - modelzoo: config/shorter_subcycle
   - override hydra/launcher: joblib
+
 #cwd: /mnt/sdb1/tkb5476/dpLGAR/
 cwd: /Users/taddbindas/projects/dpLGAR
-#basin_id: "01031500"  # Default basin
+
+# Model information
+mode: train
+
+# Setting the dataset and information related:
+dataset: Phillipsburg
 basin_id: "06332515"
+
 save_name: ${basin_id}_train
 output_dir: ${cwd}/output
 device: cpu
@@ -20,7 +27,7 @@ save_paths:
 synthetic:
   eval: False
   run: True
-  output_dir: ${cwd}/saved_model_runs/synthetic/
+  output_dir: ${cwd}/runs/synthetic/
   name: ${basin_id}_${flat_files.time_interval.warmup}-${flat_files.time_interval.end}.csv
 constants:
   frozen_factor: 1

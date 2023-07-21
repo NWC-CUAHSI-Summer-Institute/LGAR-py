@@ -8,13 +8,13 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
-from dpLGAR.agents.base import BaseAgent
+from dpLGAR.training.basetrainer import BaseAgent
 from dpLGAR.data.Data import Data
 from dpLGAR.data.metrics import calculate_nse
 from dpLGAR.modelzoo.SyntheticLGAR import SyntheticLGAR
 from dpLGAR.modelzoo.physics.MassBalance import MassBalance
 
-log = logging.getLogger("agents.SyntheticAgent")
+log = logging.getLogger("training.SyntheticAgent")
 
 
 class SyntheticAgent(BaseAgent):

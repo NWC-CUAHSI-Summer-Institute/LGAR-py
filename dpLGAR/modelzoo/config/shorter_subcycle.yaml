@@ -7,7 +7,7 @@ subcycle_length_h: ??? #[hr]
 num_subcycles: ???
 forcing_resolution_h: ???
 forcing_resolution: 3600 # [sec]
-save_path: ${cwd}/saved_model_runs/${basin_id}/
+save_path: ${cwd}/runs/${basin_id}/
 not_finished_name: ${save_name}_epoch_{}_${now:%m-%d}_${now:%H-%M-%S}.pth
 save_name: ${save_name}_trained_model_${now:%m-%d}_${now:%H-%M-%S}.pth
 hyperparameters:

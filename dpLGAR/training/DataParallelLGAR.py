@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 import torch.distributed as dist
 from tqdm import tqdm, trange
 
-from dpLGAR.agents.base import BaseAgent
+from dpLGAR.training.basetrainer import BaseAgent
 from dpLGAR.data.Data import Data
 from dpLGAR.data.graphdatasampler import GraphDataSampler
 from dpLGAR.data.metrics import calculate_nse
@@ -15,7 +15,7 @@ from dpLGAR.modelzoo.dpLGAR import dpLGAR
 from dpLGAR.modelzoo.functions.loss import MSE_loss, RangeBoundLoss
 from dpLGAR.modelzoo.physics.MassBalance import MassBalance
 
-log = logging.getLogger("agents.DataParallelLGAR")
+log = logging.getLogger("training.DataParallelLGAR")
 
 
 class DataParallelLGAR(BaseAgent):
