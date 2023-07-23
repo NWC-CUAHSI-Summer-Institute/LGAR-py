@@ -71,18 +71,17 @@ class BaseTrainer:
         """
         raise NotImplementedError
 
-
     def _get_dataset(self) -> BaseDataset:
         return get_dataset(cfg=self.cfg, is_train=True, period="train", basin=self.basins)
 
-    # def _get_model(self) -> torch.nn.Module:
-    #     return get_model(cfg=self.cfg)
+    def _get_model(self) -> torch.nn.Module:
+        return get_model(cfg=self.cfg)
 
-    # def _get_optimizer(self) -> torch.optim.Optimizer:
-    #     return get_optimizer(model=self.model, cfg=self.cfg)
+    def _get_optimizer(self) -> torch.optim.Optimizer:
+        return get_optimizer(model=self.model, cfg=self.cfg)
 
-    # def _get_loss_obj(self) -> loss.BaseLoss:
-    #     return get_loss_obj(cfg=self.cfg)
+    def _get_loss_obj(self) -> loss.BaseLoss:
+        return get_loss_obj(cfg=self.cfg)
 
     def _get_data_loader(self, ds: BaseDataset) -> torch.utils.data.DataLoader:
         return DataLoader(ds,
@@ -111,5 +110,9 @@ class BaseTrainer:
         if len(ds) == 0:
             raise ValueError("Dataset contains no samples.")
         self.loader = self._get_data_loader(ds=ds)
+        self.model = self._get_model().to(self.device)
+        self.optimizer = self._get_optimizer()
+        self.loss_obj = self._get_loss_obj().to(self.device)
+
 
 

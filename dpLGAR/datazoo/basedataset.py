@@ -25,7 +25,6 @@ class BaseDataset(Dataset):
                  period: str,
                  basin: str = None,
                  ) -> None:
-        # TODO REMOVE CALL TO TORCH DATASET
         super(BaseDataset).__init__()
         self.cfg = cfg
         self.is_train = is_train
@@ -41,6 +40,8 @@ class BaseDataset(Dataset):
         self._x = {}
         self._attributes = {}
         self._y = {}
+
+        self._load_data()
 
     def _load_attributes(self):
         """This function has to return the attributes in a Tensor."""
@@ -63,16 +64,17 @@ class BaseDataset(Dataset):
 
 
     def _load_observations(self):
-        start_date = self.cfg.data.time_interval.warmup
-        end_date = self.cfg.data.time_interval.end
-        cols = ["date", "QObs(mm/h)"]
-        data = pd.read_csv(self.cfg.data.synthetic_file, usecols=cols, parse_dates=["date"])
-        filtered_data = data.query("@start_date <= date <= @end_date")
-        precip = filtered_data["QObs(mm/h)"]
-        precip_tensor = torch.tensor(precip.to_numpy(), device=self.cfg.device)
-        nan_mask = torch.isnan(precip_tensor)
-        precip_tensor[nan_mask] = 0.0
-        self._y = precip_tensor
+        raise NotImplementedError
+        # start_date = self.cfg.data.time_interval.warmup
+        # end_date = self.cfg.data.time_interval.end
+        # cols = ["date", "QObs(mm/h)"]
+        # data = pd.read_csv(self.cfg.data.synthetic_file, usecols=cols, parse_dates=["date"])
+        # filtered_data = data.query("@start_date <= date <= @end_date")
+        # precip = filtered_data["QObs(mm/h)"]
+        # precip_tensor = torch.tensor(precip.to_numpy(), device=self.cfg.device)
+        # nan_mask = torch.isnan(precip_tensor)
+        # precip_tensor[nan_mask] = 0.0
+        # self._y = precip_tensor
 
     def _setup_normalization(self):
         # initialize scaler dict with default center and scale values (mean and std)

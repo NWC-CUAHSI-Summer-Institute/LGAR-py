@@ -1,7 +1,8 @@
 defaults:
   - _self_
-  - datazoo: config/lumped_catchment
+  - datazoo: config/Phillipsburg
   - modelzoo: config/shorter_subcycle
+  - datautils: config/base
   - override hydra/launcher: joblib
 
 #cwd: /mnt/sdb1/tkb5476/dpLGAR/
@@ -9,9 +10,6 @@ cwd: /Users/taddbindas/projects/dpLGAR
 
 # Model information
 mode: train
-
-# Setting the dataset and information related:
-dataset: Phillipsburg
 basin_id: "06332515"
 
 save_name: ${basin_id}_train
@@ -29,21 +27,6 @@ synthetic:
   run: True
   output_dir: ${cwd}/runs/synthetic/
   name: ${basin_id}_${flat_files.time_interval.warmup}-${flat_files.time_interval.end}.csv
-constants:
-  frozen_factor: 1
-  AET_thresh_Theta: 0.85  # scaled soil moisture (0-1) above which AET=PET (fix later!)
-  AET_expon: 1.0
-  nint: 120
-conversions:
-  cm_to_mm: 10.0
-  mm_to_cm: 0.1
-  cm_to_m: 0.01
-  hr_to_sec: 3600.0
-  m_to_cm: 100.0
-local_rank: ???
-nproc: ???
-distributed_backend: "gloo"  # CPU
-#distributed_backend: "nccl"  # GPU
 
 ################## HYDRA CONFIG #######################
 hydra:

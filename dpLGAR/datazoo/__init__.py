@@ -1,8 +1,11 @@
+import logging
+
 from omegaconf import DictConfig
 
 from dpLGAR.datazoo.basedataset import BaseDataset
 from dpLGAR.datazoo.phillipsburg import Phillipsburg
 
+log = logging.getLogger(__name__)
 
 def get_dataset(cfg: DictConfig,
                 is_train: bool,
@@ -38,7 +41,7 @@ def get_dataset(cfg: DictConfig,
     NotImplementedError
         If no data set class is implemented for the 'dataset' argument in the config.
     """
-    if cfg.dataset.lower() == "phillipsburg":
+    if cfg.datazoo.dataset.lower() == "phillipsburg":
         Dataset = Phillipsburg
     else:
         raise NotImplementedError(f"No dataset class implemented for dataset {cfg.dataset}")
