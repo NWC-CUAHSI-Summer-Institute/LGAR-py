@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 
 from dpLGAR.datazoo import get_dataset
 from dpLGAR.datazoo import BaseDataset
+from dpLGAR.training import get_optimizer, get_loss_obj
 
 
 class BaseTrainer:

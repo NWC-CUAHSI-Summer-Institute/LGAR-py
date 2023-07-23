@@ -30,7 +30,7 @@ def get_optimizer(model: torch.nn.Module, cfg: DictConfig) -> torch.optim.Optimi
     if cfg.modelzoo.optimizer.lower() == "adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=cfg.modelzoo.learning_rate)
     else:
-        raise NotImplementedError(f"{cfg.optimizer} not implemented or not linked in `get_optimizer()`")
+        raise NotImplementedError(f"{cfg.modelzoo.optimizer} not implemented or not linked in `get_optimizer()`")
 
     return optimizer
 
@@ -52,9 +52,9 @@ def get_loss_obj(cfg: DictConfig):
         head.
     """
     # TODO ADD Range bound Loss custom
-    if cfg.loss.lower() == "mse":
+    if cfg.modelzoo.loss.lower() == "mse":
         loss_obj = torch.nn.MSELoss()
     else:
-        raise NotImplementedError(f"{cfg.loss} not implemented or not linked in `get_loss()`")
+        raise NotImplementedError(f"{cfg.modelzoo.loss} not implemented or not linked in `get_loss()`")
 
     return loss_obj
