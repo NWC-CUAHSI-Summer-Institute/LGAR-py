@@ -7,7 +7,7 @@ from torch import Tensor
 log = logging.getLogger("modelzoo.physics.MassBalance")
 
 
-class MassBalance:
+class BaseMassBalance:
     def __init__(self, cfg: DictConfig, model):
         super().__init__()
         self.device = cfg.device

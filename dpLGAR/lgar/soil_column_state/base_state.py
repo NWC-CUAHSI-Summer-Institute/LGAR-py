@@ -4,24 +4,21 @@ import numpy as np
 import torch
 from torch import Tensor
 
-log = logging.getLogger("modelzoo.physics.GlobalParams")
+log = logging.getLogger(__name__)
 
 
-class GlobalParams:
-    def __init__(self, cfg: DictConfig, ponded_depth_max) -> None:
-        super().__init__()
+class BaseState:
+    def __init__(self, cfg: DictConfig) -> None:
+        super(BaseState).__init__()
 
         self.device = cfg.device
 
-        # TODO IMPLEMENT SOIL DEPTH AND SOIL TYPE IN HERE, THEN EDIT THIS IN THE LAYERS
-
-        # Defining all of the variables required by LGAR
         self.layer_thickness_cm = None
         self.cum_layer_thickness = None
         self.num_layers = None
         self.soil_depth_cm = None
         self.initial_psi = None
-        self.ponded_depth_max = ponded_depth_max.clone()
+        self.ponded_depth_max = None
         self.num_soil_types = None
         self.wilting_point_psi_cm = None
         self.giuh_ordinates = None
@@ -32,36 +29,7 @@ class GlobalParams:
         self.endtime_s = None
         self.forcing_resolution_h = None
 
-        self.soils_df = None
-        self.soil_temperature = None
-        self.soil_temperature_z = None
-        self.num_cells_z = None
-        self.forcing_interval = None
         self.frozen_factor = None
-
-        self.ponded_depth_cm = None
-        self.num_wetting_fronts = None
-        self.time_s = None
-        self.timesteps = None
-        self.shape = None
-        self.volprecip_cm = None
-        self.volin_cm = None
-        self.volend_cm = None
-        self.volAET_cm = None
-        self.volrech_cm = None
-        self.volrunoff_cm = None
-        self.volrunoff_giuh_cm = None
-        self.volQ_cm = None
-        self.volon_cm = None
-        self.volprecip_cm = None
-        self.volon_timestep_cm = None
-        self.precip_previous_timestep_cm = None
-        self.volQ_cm = None
-
-        self.soil_depth_wetting_fronts = None
-        self.soil_moisture_wetting_fronts = None
-        self.precipitation_mm_per_h = None
-        self.PET_mm_per_h = None
 
         # Setting these options to false (default)
         self.sft_coupled = False
@@ -69,15 +37,14 @@ class GlobalParams:
 
         self.soil_index = None
 
-        self.initialize_config_parameters(cfg)
-        self.initialize_giuh_params(cfg)
+        self._initialize_config_parameters(cfg)
+        self._initialize_giuh_params(cfg)
 
         # Variables for specific functions:
         self.relative_moisture_at_which_PET_equals_AET = torch.tensor(0.75, device=self.device)
-        self.nint = torch.tensor(cfg.constants.nint, device=self.device)
+        self.nint = torch.tensor(cfg.datautils.constants.nint, device=self.device)
 
-
-    def initialize_config_parameters(self, cfg: DictConfig) -> None:
+    def _initialize_config_parameters(self, cfg: DictConfig) -> None:
         """
         Reading variables from the config file specific to each testcase
         :param cfg: The config file
@@ -109,8 +76,6 @@ class GlobalParams:
         self.soil_depth_cm = self.cum_layer_thickness[-1]
 
         self.initial_psi = torch.tensor(cfg.data.initial_psi, device=cfg.device)
-        # Using a nn.Param for this
-        # self.ponded_depth_max = torch.tensor(cfg.flat_files.ponded_depth_max, device=cfg.device, dtype=torch.float64)
 
         self.use_closed_form_G = cfg.data.use_closed_form_G
 
@@ -122,7 +87,7 @@ class GlobalParams:
         self.frozen_factor = torch.tensor(cfg.constants.frozen_factor, device=cfg.device)
         self.soil_index = cfg.data.soil_index
 
-    def initialize_giuh_params(self, cfg: DictConfig):
+    def _initialize_giuh_params(self, cfg: DictConfig):
         """
         Initalizing all giuh params
         :param cfg:
