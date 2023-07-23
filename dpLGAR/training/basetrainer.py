@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 
 from dpLGAR.datazoo import get_dataset
 from dpLGAR.datazoo import BaseDataset
+from dpLGAR.modelzoo import get_model
 from dpLGAR.training import get_optimizer, get_loss_obj
 
 
@@ -81,12 +82,12 @@ class BaseTrainer:
     def _get_optimizer(self) -> torch.optim.Optimizer:
         return get_optimizer(model=self.model, cfg=self.cfg)
 
-    def _get_loss_obj(self) -> loss.BaseLoss:
+    def _get_loss_obj(self):
         return get_loss_obj(cfg=self.cfg)
 
     def _get_data_loader(self, ds: BaseDataset) -> torch.utils.data.DataLoader:
         return DataLoader(ds,
-                          batch_size=self.cfg.batch_size,
+                          batch_size=self.cfg.datazoo.batch_size,
                           shuffle=False,)
 
     def _get_start_epoch_number(self):

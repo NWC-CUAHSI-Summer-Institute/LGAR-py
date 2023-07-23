@@ -38,7 +38,7 @@ def get_optimizer(model: torch.nn.Module, cfg: DictConfig) -> torch.optim.Optimi
 def get_loss_obj(cfg: DictConfig):
     """Get loss object, depending on the run configuration.
 
-    Currently supported are 'MSE', 'NSE', 'RMSE', 'GMMLoss', 'CMALLoss', and 'UMALLoss'.
+    Currently supported are 'MSE'
 
     Parameters
     ----------

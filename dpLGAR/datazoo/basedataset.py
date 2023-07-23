@@ -38,7 +38,7 @@ class BaseDataset(Dataset):
         self.basins = [basin]
 
         self._x = {}
-        self._attributes = {}
+        self.attributes = {}
         self._y = {}
 
         self._load_data()

@@ -35,6 +35,22 @@ class Phillipsburg(BaseDataset):
             basin=basin,
         )
 
+    def _load_attributes(self):
+        """This function has to return the attributes in a Tensor."""
+        self.attributes = self.load_soils_df()
+
+    def _load_basin_data(self):
+        """
+        Read and filter a CSV file for specified columns and date range.
+        :param cfg: the dictionary that we're reading vars from
+        :return: DataFrame filtered for specified columns and date range.
+        """
+        self._x = self.load_phillipsburg_data()
+
+    def _load_observations(self):
+        # There are no observations when comparing to an LGAR-C Case
+        self._y = self.load_observations()
+
     def load_observations(self):
         # There are no observations from LGAR-C
         return None
@@ -60,20 +76,4 @@ class Phillipsburg(BaseDataset):
         return x_tr * self.cfg.datautils.conversions.mm_to_cm
 
     def load_soils_df(self):
-        return read_df(self.cfg.datazoo.soil_params_file)
-
-    def _load_attributes(self):
-        """This function has to return the attributes in a Tensor."""
-        self._attributes = self.load_soils_df()
-
-    def _load_basin_data(self):
-        """
-        Read and filter a CSV file for specified columns and date range.
-        :param cfg: the dictionary that we're reading vars from
-        :return: DataFrame filtered for specified columns and date range.
-        """
-        self._x = self.load_phillipsburg_data()
-
-    def _load_observations(self):
-        # There are no observations when comparing to an LGAR-C Case
-        self._y = self.load_observations()
+        read_df(self.cfg.datazoo.soil_params_file)

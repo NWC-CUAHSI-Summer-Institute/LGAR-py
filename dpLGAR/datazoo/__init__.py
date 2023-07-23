@@ -7,6 +7,7 @@ from dpLGAR.datazoo.phillipsburg import Phillipsburg
 
 log = logging.getLogger(__name__)
 
+
 def get_dataset(cfg: DictConfig,
                 is_train: bool,
                 period: str,
