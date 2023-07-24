@@ -8,25 +8,21 @@ log = logging.getLogger("modelzoo.physics.MassBalance")
 
 
 class BaseMassBalance:
-    def __init__(self, cfg: DictConfig, model):
+    def __init__(self):
         super().__init__()
-        self.device = cfg.device
-
-        self.precip = None
-        self.infiltration = None
-        self.starting_volume = None
         self.ending_volume = None
+        self.precip = None
+        self.PET = None
         self.AET = None
-        self.percolation = None
+        self.ponded_water = None
+        self.previous_precip = None
+        self.infiltration = None
         self.runoff = None
         self.giuh_runoff = None
+        self.giuh_runoff_queue = None
         self.discharge = None
-        self.PET = None
-        self.ponded_depth = None
-        self.ponded_water = None
         self.groundwater_discharge = None
-
-        self.set_internal_states(model)
+        self.percolation = None
 
     def change_mass(self, model):
         self.precip = self.precip + model.precip

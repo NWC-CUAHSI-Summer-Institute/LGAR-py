@@ -8,17 +8,18 @@ log = logging.getLogger(__name__)
 
 
 class BaseState:
-    def __init__(self, cfg: DictConfig) -> None:
+    def __init__(self, cfg: DictConfig, ponded_depth_max: torch.Tensor) -> None:
         super(BaseState).__init__()
 
         self.device = cfg.device
+
+        self.ponded_depth_max = ponded_depth_max.clone()
 
         self.layer_thickness_cm = None
         self.cum_layer_thickness = None
         self.num_layers = None
         self.soil_depth_cm = None
         self.initial_psi = None
-        self.ponded_depth_max = None
         self.num_soil_types = None
         self.wilting_point_psi_cm = None
         self.giuh_ordinates = None

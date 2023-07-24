@@ -90,7 +90,10 @@ def generate_soil_metrics(
     return soils_data.transpose(0, 1)
 
 
-def read_test_params(cfg: DictConfig) -> (Tensor, Tensor, Tensor):
+def read_test_params() -> (Tensor, Tensor, Tensor):
+    """
+    Sets the values of alpha, n, and ksat to the values defined nby the LGAR-C soils profiles
+    """
     alpha_test_params = torch.tensor(
         [
             0.01,
@@ -112,7 +115,6 @@ def read_test_params(cfg: DictConfig) -> (Tensor, Tensor, Tensor):
             0.005288,
             0.004467,
         ],
-        device=cfg.device,
     )
     n_test_params = torch.tensor(
         [
@@ -135,7 +137,6 @@ def read_test_params(cfg: DictConfig) -> (Tensor, Tensor, Tensor):
             1.5276,
             1.4585,
         ],
-        device=cfg.device,
     )
 
     k_sat_test_params = torch.tensor(
@@ -159,7 +160,6 @@ def read_test_params(cfg: DictConfig) -> (Tensor, Tensor, Tensor):
             0.02,
             0.2,
         ],
-        device=cfg.device,
     )
 
     return alpha_test_params, n_test_params, k_sat_test_params

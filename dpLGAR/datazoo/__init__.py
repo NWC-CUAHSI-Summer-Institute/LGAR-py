@@ -45,7 +45,7 @@ def get_dataset(cfg: DictConfig,
     if cfg.datazoo.dataset.lower() == "phillipsburg":
         Dataset = Phillipsburg
     else:
-        raise NotImplementedError(f"No dataset class implemented for dataset {cfg.dataset}")
+        raise NotImplementedError(f"No dataset class implemented for dataset {cfg.datazoo.dataset}")
 
     ds = Dataset(cfg=cfg,
                  is_train=is_train,

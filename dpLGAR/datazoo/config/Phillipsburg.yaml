@@ -1,6 +1,7 @@
 data_dir: {$cwd}
 # Setting the dataset and information related:
 dataset: Phillipsburg
+soil_state: c_soil
 batch_size: 1
 forcing_file: ${cwd}/flat_files/LGAR-C-tests/forcing_data_resampled_uniform_Phillipsburg.csv
 soil_params_file: ${cwd}/flat_files/vG_default_params.dat
