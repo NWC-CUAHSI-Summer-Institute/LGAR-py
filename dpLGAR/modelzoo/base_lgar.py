@@ -5,15 +5,8 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 
-from dpLGAR.datautils.utils import read_test_params
+from dpLGAR.datautils import read_test_params
 from dpLGAR.modelzoo.basemodel import BaseModel
-from dpLGAR.modelzoo.physics.GlobalParams import GlobalParams
-from dpLGAR.modelzoo.physics.layers.Layer import Layer
-from dpLGAR.modelzoo.physics.lgar.frozen_factor import (
-    frozen_factor_hydraulic_conductivity,
-)
-from dpLGAR.modelzoo.physics.lgar.giuh import calc_giuh
-
 log = logging.getLogger(__name__)
 
 

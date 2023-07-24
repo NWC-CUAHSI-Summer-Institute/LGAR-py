@@ -12,8 +12,6 @@ from typing import (
     TypeVar,
 )
 
-from dpLGAR.data.utils import read_df
-
 log = logging.getLogger("flat_files.Data")
 T_co = TypeVar("T_co", covariant=True)
 T = TypeVar("T")

@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 
 from dpLGAR.lgar.soil_column.base_state import BaseState
+from dpLGAR.lgar.layers.Layer import Layer
 
 
 class BaseModel(nn.Module):
@@ -47,6 +48,7 @@ class BaseModel(nn.Module):
             "n": 9,
         }
 
+        self._read_attributes()
         self._set_parameters()
         self._create_soil_profile()
         self._create_local_mass_balance()
@@ -64,6 +66,17 @@ class BaseModel(nn.Module):
     def _create_soil_profile(self):
         """Creates the soil state and soil layers"""
         self.soil_state = self._create_soil_state()
+        layer_index = 0  # This is the top layer
+        self.top_layer = Layer(
+            self.global_params,
+            layer_index,
+            self.c,
+            self.ksat,
+            self.rank,
+        )
+        self.bottom_layer = self.top_layer
+        while self.bottom_layer.next_layer is not None:
+            self.bottom_layer = self.bottom_layer.next_layer
 
     def _create_soil_state(self):
         """Defines all global soil parameters"""

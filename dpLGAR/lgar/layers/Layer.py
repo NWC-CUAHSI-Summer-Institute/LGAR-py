@@ -1,21 +1,18 @@
 import logging
-from omegaconf import DictConfig
-from tqdm import tqdm
 import torch
 from torch import Tensor
-import torch.nn as nn
 
-from dpLGAR.modelzoo.physics.layers.WettingFront import WettingFront
-from dpLGAR.modelzoo.physics.lgar.aet import calc_aet
-from dpLGAR.modelzoo.physics.lgar.green_ampt import calc_geff
-from dpLGAR.modelzoo.physics.utils import (
+from dpLGAR.lgar.layers.WettingFront import WettingFront
+from dpLGAR.lgar.aet import calc_aet
+from dpLGAR.lgar.green_ampt import calc_geff
+from dpLGAR.lgar.utils import (
     calc_theta_from_h,
     calc_se_from_theta,
     calc_h_from_se,
     calc_k_from_se,
 )
 
-log = logging.getLogger("modelzoo.physics.layers.Layer")
+log = logging.getLogger(__name__)
 
 
 class Layer:

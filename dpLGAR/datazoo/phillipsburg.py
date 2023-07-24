@@ -8,7 +8,7 @@ from typing import (
     TypeVar,
 )
 
-from dpLGAR.datautils.utils import read_df
+from dpLGAR.datazoo import read_df
 from dpLGAR.datazoo.basedataset import BaseDataset
 
 log = logging.getLogger("datazoo.lgar_c")

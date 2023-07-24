@@ -1,11 +1,34 @@
 import logging
+from pathlib import Path
 
 from omegaconf import DictConfig
+import pandas as pd
 
 from dpLGAR.datazoo.basedataset import BaseDataset
 from dpLGAR.datazoo.phillipsburg import Phillipsburg
 
 log = logging.getLogger(__name__)
+
+
+def read_df(file: str) -> pd.DataFrame:
+    """
+    a function to read a input dataset
+    :param file: the file we want to read
+    :return: a pandas df
+    """
+    file_path = Path(file)
+
+    # Checking the file extension so we correctly read the file
+    # Csv files are usually from forcings
+    # .dat are from soil
+    if file_path.suffix == ".csv":
+        df = pd.read_csv(file_path)
+    elif file_path.suffix == ".dat":
+        df = pd.read_csv(file_path, delimiter=r"\s+", engine="python")
+    else:
+        log.error(f"File {file_path} has an invalid type")
+        raise ValueError
+    return df
 
 
 def get_dataset(cfg: DictConfig,
