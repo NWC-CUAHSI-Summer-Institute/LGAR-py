@@ -77,4 +77,4 @@ class Phillipsburg(BaseDataset):
 
     def load_soils_df(self):
         from dpLGAR.datazoo import read_df
-        read_df(self.cfg.datazoo.soil_params_file)
+        return read_df(self.cfg.datazoo.soil_params_file)

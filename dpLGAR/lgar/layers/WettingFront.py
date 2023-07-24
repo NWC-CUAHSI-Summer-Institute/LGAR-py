@@ -18,7 +18,7 @@ log = logging.getLogger("modelzoo.physics.layers.WettingFront")
 class WettingFront:
     def __init__(
         self,
-        global_params,
+        soil_state,
         cum_layer_thickness: Tensor,
         layer_num: int,
         attributes: Tensor,
@@ -38,13 +38,13 @@ class WettingFront:
         self.depth = cum_layer_thickness
         self.layer_num = layer_num
         # self.attributes = attributes
-        self.theta = attributes[global_params.soil_index["theta_init"]]
-        self.dzdt = torch.tensor(0.0, device=global_params.device)
-        theta_r = attributes[global_params.soil_index["theta_r"]]
-        theta_e = attributes[global_params.soil_index["theta_e"]]
-        m = attributes[global_params.soil_index["m"]]
+        self.theta = attributes[soil_state.soil_index["theta_init"]]
+        self.dzdt = torch.tensor(0.0)
+        theta_r = attributes[soil_state.soil_index["theta_r"]]
+        theta_e = attributes[soil_state.soil_index["theta_e"]]
+        m = attributes[soil_state.soil_index["m"]]
         self.se = calc_se_from_theta(self.theta, theta_e, theta_r)
-        self.psi_cm = global_params.initial_psi
+        self.psi_cm = soil_state.initial_psi
         self.k_cm_per_h = calc_k_from_se(self.se, ksat, m)
         self.to_bottom = bottom_flag
 

@@ -62,20 +62,14 @@ class BaseLGAR(BaseModel):
         _alpha_layer = _alpha[soil_types]
         _n_layer = _n[soil_types]
         _ksat_layer = _ksat[soil_types]
-        num_layers = self.cfg.datazoo.num_soil_layers
 
         self.ponded_depth_max = nn.Parameter(
-            torch.tensor(self.cfg.datazoo.ponded_depth_max)
+            torch.tensor(self.cfg.datazoo.ponded_depth_max, dtype=torch.float64)
         )
-        self.alpha = nn.ParameterList([])
-        self.n = nn.ParameterList([])
-        self.ksat = nn.ParameterList([])
-        for i in range(num_layers):
-            self.alpha.append(nn.Parameter(_alpha_layer[i]))
-            self.n.append(nn.Parameter(_n_layer[i]))
-            # Addressing Frozen Factor
-            self.ksat.append(
-                nn.Parameter(
-                    _ksat_layer[i] * self.cfg.datautils.constants.frozen_factor
-                )
-            )
+        self.alpha = nn.ParameterList([nn.Parameter(a) for a in _alpha_layer])
+        self.n = nn.ParameterList([nn.Parameter(n) for n in _n_layer])
+        self.ksat = nn.ParameterList([
+            nn.Parameter(k * self.cfg.datautils.constants.frozen_factor)
+            for k in _ksat_layer
+        ])
+

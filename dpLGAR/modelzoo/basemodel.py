@@ -63,6 +63,7 @@ class BaseModel(nn.Module):
 
     def _create_local_mass_balance(self):
         """Creates the local mass balance parameters"""
+        # TODO SET LOCAL MASS BALANCE AND GLOBAL
         raise NotImplementedError
 
     def _create_soil_params(self, c: pd.DataFrame):
@@ -74,7 +75,7 @@ class BaseModel(nn.Module):
         self.soil_state = self._create_soil_state()
         layer_index = 0  # This is the top layer
         self.top_layer = Layer(
-            self.global_params,
+            self.soil_state,
             layer_index,
             self.soil_parameters,
             self.ksat,

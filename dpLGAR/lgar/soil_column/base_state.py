@@ -65,22 +65,22 @@ class BaseState:
         - giuh_ordinates
         - num_giuh_ordinates
         """
-        self.layer_thickness_cm = torch.tensor(self.cfg.data.layer_thickness)
-        self.cum_layer_thickness = torch.zeros([len(self.cfg.data.layer_thickness)])
-        self.layer_thickness_cm = torch.tensor(self.cfg.data.layer_thickness)
+        self.layer_thickness_cm = torch.tensor(self.cfg.datazoo.layer_thickness)
+        self.cum_layer_thickness = torch.zeros([len(self.cfg.datazoo.layer_thickness)])
+        self.layer_thickness_cm = torch.tensor(self.cfg.datazoo.layer_thickness)
         self.cum_layer_thickness = self.layer_thickness_cm.cumsum(dim=0)
-        self.num_layers = len(self.cfg.data.layer_thickness)
+        self.num_layers = len(self.cfg.datazoo.layer_thickness)
         self.soil_depth_cm = self.cum_layer_thickness[-1]
 
-        self.initial_psi = torch.tensor(self.cfg.data.initial_psi)
+        self.initial_psi = torch.tensor(self.cfg.datazoo.initial_psi)
 
-        self.use_closed_form_G = self.cfg.data.use_closed_form_G
+        self.use_closed_form_G = self.cfg.datazoo.use_closed_form_G
 
-        self.num_soil_types = torch.tensor(self.cfg.data.max_soil_types)
+        self.num_soil_types = self.cfg.datazoo.num_soil_layers
 
-        self.wilting_point_psi_cm = torch.tensor(self.cfg.data.wilting_point_psi_cm)
-        self.frozen_factor = torch.tensor(self.cfg.constants.frozen_factor)
-        self.soil_index = self.cfg.data.soil_parameter_index
+        self.wilting_point_psi_cm = torch.tensor(self.cfg.datazoo.wilting_point_psi_cm)
+        self.frozen_factor = torch.tensor(self.cfg.datautils.constants.frozen_factor)
+        self.soil_index = self.cfg.datazoo.soil_parameter_index
 
     def _initialize_giuh_params(self):
         """
@@ -88,6 +88,6 @@ class BaseState:
         :param cfg:
         :return:
         """
-        self.giuh_ordinates = torch.tensor(self.cfg.data.giuh_ordinates)
+        self.giuh_ordinates = torch.tensor(self.cfg.datazoo.giuh_ordinates)
         self.giuh_runoff = torch.zeros([len(self.giuh_ordinates)])
         self.num_giuh_ordinates = len(self.giuh_ordinates)

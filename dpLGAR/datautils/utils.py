@@ -17,8 +17,8 @@ log = logging.getLogger(__name__)
 
 def generate_soil_metrics(
     cfg: DictConfig,
-    alpha,
-    n,
+    alpha_,
+    n_,
     theta_e: Tensor,
     theta_r: Tensor,
 ) -> Tensor:
@@ -38,10 +38,15 @@ def generate_soil_metrics(
 
     :return:
     """
+    if isinstance(alpha_, torch.nn.ParameterList):
+        alpha = torch.stack([p for p in alpha_])
+
+    if isinstance(n_, torch.nn.ParameterList):
+        n = torch.stack([p for p in n_])
     h = torch.tensor(
-        cfg.data.wilting_point_psi_cm, device=cfg.device
+        cfg.datazoo.wilting_point_psi_cm, device=cfg.device
     )  # Wilting point in cm
-    initial_psi = torch.tensor(cfg.data.initial_psi, device=cfg.device)
+    initial_psi = torch.tensor(cfg.datazoo.initial_psi, device=cfg.device)
     m = calc_m(n)
     theta_wp = calc_theta_from_h(h, alpha, m, n, theta_e, theta_r)
     theta_init = calc_theta_from_h(
