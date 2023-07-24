@@ -1,23 +1,38 @@
 import logging
 
+import pandas as pd
 from omegaconf import DictConfig
 import torch
 from torch import Tensor
 import torch.nn as nn
 
 from dpLGAR.datautils import read_test_params
+from dpLGAR.datautils.utils import generate_soil_metrics
 from dpLGAR.modelzoo.basemodel import BaseModel
+
 log = logging.getLogger(__name__)
 
 
 class BaseLGAR(BaseModel):
-    def __init__(self, cfg: DictConfig) -> None:
+    def __init__(self, cfg: DictConfig, c: pd.DataFrame) -> None:
         """
 
         :param cfg:
         :param soil_information: soil attributes
         """
-        super(BaseLGAR, self).__init__(cfg=cfg)
+        super(BaseLGAR, self).__init__(cfg=cfg, c=c)
+
+    def _create_soil_params(self, c: pd.DataFrame):
+        soil_types = self.cfg.datazoo.layer_soil_type
+        self.theta_e = torch.tensor(c["theta_e"])[soil_types]
+        self.theta_r = torch.tensor(c["theta_r"])[soil_types]
+        self.soil_parameters = generate_soil_metrics(
+            self.cfg,
+            self.alpha,
+            self.n,
+            self.theta_e,
+            self.theta_r,
+        )
 
     def _set_parameters(self):
         self.set_parameter_lists()
@@ -49,7 +64,9 @@ class BaseLGAR(BaseModel):
         _ksat_layer = _ksat[soil_types]
         num_layers = self.cfg.datazoo.num_soil_layers
 
-        self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max))
+        self.ponded_depth_max = nn.Parameter(
+            torch.tensor(self.cfg.datazoo.ponded_depth_max)
+        )
         self.alpha = nn.ParameterList([])
         self.n = nn.ParameterList([])
         self.ksat = nn.ParameterList([])
@@ -57,7 +74,8 @@ class BaseLGAR(BaseModel):
             self.alpha.append(nn.Parameter(_alpha_layer[i]))
             self.n.append(nn.Parameter(_n_layer[i]))
             # Addressing Frozen Factor
-            self.ksat.append(nn.Parameter(_ksat_layer[i] * self.cfg.datautils.constants.frozen_factor))
-
-
-
+            self.ksat.append(
+                nn.Parameter(
+                    _ksat_layer[i] * self.cfg.datautils.constants.frozen_factor
+                )
+            )

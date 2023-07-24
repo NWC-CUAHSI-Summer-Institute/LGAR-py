@@ -1,6 +1,7 @@
 import logging
 import warnings
 
+import pandas as pd
 from omegaconf import DictConfig
 import torch.nn as nn
 
@@ -9,7 +10,7 @@ from dpLGAR.modelzoo.base_lgar import BaseLGAR
 log = logging.getLogger(__name__)
 
 
-def get_model(cfg: DictConfig) -> nn.Module:
+def get_model(cfg: DictConfig, c: pd.DataFrame) -> nn.Module:
     """Get model object, depending on the run configuration.
 
     Parameters
@@ -24,7 +25,7 @@ def get_model(cfg: DictConfig) -> nn.Module:
     """
 
     if cfg.modelzoo.model.lower() == "base":
-        model = BaseLGAR(cfg=cfg)
+        model = BaseLGAR(cfg=cfg, c=c)
     else:
         raise NotImplementedError(f"{cfg.modelzoo.model} not implemented or not linked in `get_model()`")
 

@@ -1,5 +1,6 @@
 from typing import Dict, Optional, Callable
 
+import pandas as pd
 from omegaconf import DictConfig
 import torch
 import torch.nn as nn
@@ -17,7 +18,7 @@ class BaseModel(nn.Module):
         The run configuration.
     """
 
-    def __init__(self, cfg: DictConfig):
+    def __init__(self, cfg: DictConfig, c: pd.DataFrame):
         super(BaseModel, self).__init__()
         self.cfg = cfg
 
@@ -27,6 +28,7 @@ class BaseModel(nn.Module):
         self.theta_e = {}
         self.theta_r = {}
         self.ponded_depth_max = torch.tensor(0.0)
+        self.soil_parameters = torch.tensor(0.0)
 
         self.top_layer = None
         self.bottom_layer = None
@@ -35,7 +37,7 @@ class BaseModel(nn.Module):
 
         self.soil_state = None
 
-        self.cfg.data.soil_index = {
+        self.cfg.datazoo.soil_parameter_index = {
             "theta_r": 0,
             "theta_e": 1,
             "theta_wp": 2,
@@ -48,8 +50,8 @@ class BaseModel(nn.Module):
             "n": 9,
         }
 
-        self._read_attributes()
         self._set_parameters()
+        self._create_soil_params(c)
         self._create_soil_profile()
         self._create_local_mass_balance()
         self._create_global_mass_balance()
@@ -63,6 +65,10 @@ class BaseModel(nn.Module):
         """Creates the local mass balance parameters"""
         raise NotImplementedError
 
+    def _create_soil_params(self, c: pd.DataFrame):
+        """Creates the rest of the van Genuchten parameters"""
+        raise NotImplementedError
+
     def _create_soil_profile(self):
         """Creates the soil state and soil layers"""
         self.soil_state = self._create_soil_state()
@@ -70,9 +76,8 @@ class BaseModel(nn.Module):
         self.top_layer = Layer(
             self.global_params,
             layer_index,
-            self.c,
+            self.soil_parameters,
             self.ksat,
-            self.rank,
         )
         self.bottom_layer = self.top_layer
         while self.bottom_layer.next_layer is not None:

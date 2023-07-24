@@ -60,7 +60,7 @@ class SyntheticLGAR(nn.Module):
 
         # Initializing Values
         self.c = None
-        self.cfg.data.soil_index = {
+        self.cfg.data.soil_parameter_index = {
             "theta_r": 0,
             "theta_e": 1,
             "theta_wp": 2,

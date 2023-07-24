@@ -37,9 +37,13 @@ class BaseDataset(Dataset):
         # TODO Support reading the list of basins from a text file
         self.basins = [basin]
 
-        self._x = {}
-        self.attributes = {}
-        self._y = {}
+        self.custom_normalization = {
+            0: {"centering": "min", "scaling": "minmax"},
+        }
+
+        self._x = torch.zeros([1])
+        self.attributes = torch.zeros([1])
+        self._y = torch.zeros([1])
 
         self._load_data()
 
@@ -62,7 +66,6 @@ class BaseDataset(Dataset):
 
         self._load_observations()
 
-
     def _load_observations(self):
         raise NotImplementedError
         # start_date = self.cfg.data.time_interval.warmup
@@ -79,8 +82,8 @@ class BaseDataset(Dataset):
     def _setup_normalization(self):
         # initialize scaler dict with default center and scale values (mean and std)
         self.scaler = {
-            "center": self.soil_attributes.mean(dim=[0, 1], keepdim=True),
-            "scale": self.soil_attributes.std(dim=[0, 1], keepdim=True),
+            "center": self.attributes.mean(dim=[0, 1], keepdim=True),
+            "scale": self.attributes.std(dim=[0, 1], keepdim=True),
         }
 
         # check for feature-wise custom normalization
@@ -92,11 +95,11 @@ class BaseDataset(Dataset):
                         self.scaler["center"][..., feature_idx] = 0.0
                     elif val.lower() == "median":
                         self.scaler["center"][..., feature_idx] = torch.median(
-                            self.soil_attributes[..., feature_idx]
+                            self.attributes[..., feature_idx]
                         )
                     elif val.lower() == "min":
                         self.scaler["center"][..., feature_idx] = torch.min(
-                            self.soil_attributes[..., feature_idx]
+                            self.attributes[..., feature_idx]
                         )
                     elif val.lower() == "mean":
                         # do nothing, since this is the default
@@ -110,8 +113,8 @@ class BaseDataset(Dataset):
                         self.scaler["scale"][..., feature_idx] = 1.0
                     elif val == "minmax":
                         self.scaler["scale"][..., feature_idx] = torch.max(
-                            self.soil_attributes[..., feature_idx]
-                        ) - torch.min(self.soil_attributes[..., feature_idx])
+                            self.attributes[..., feature_idx]
+                        ) - torch.min(self.attributes[..., feature_idx])
                     elif val == "std":
                         # do nothing, since this is the default
                         pass

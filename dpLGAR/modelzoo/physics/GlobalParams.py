@@ -120,7 +120,7 @@ class GlobalParams:
             cfg.data.wilting_point_psi_cm, device=cfg.device
         )
         self.frozen_factor = torch.tensor(cfg.constants.frozen_factor, device=cfg.device)
-        self.soil_index = cfg.data.soil_index
+        self.soil_index = cfg.data.soil_parameter_index
 
     def initialize_giuh_params(self, cfg: DictConfig):
         """

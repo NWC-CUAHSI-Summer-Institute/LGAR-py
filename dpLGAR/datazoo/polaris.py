@@ -29,6 +29,12 @@ class Polaris(BaseDataset):
                                          period,
                                          basin,)
 
+        self._setup_normalization()
+
+        self.normalized_soil_attributes = (
+            self.attributes - self.scaler["center"]
+        ) / self.scaler["scale"]
+
     def _load_attributes(self):
         """This function has to return the attributes in a Tensor."""
         return self.get_polaris_atributes()

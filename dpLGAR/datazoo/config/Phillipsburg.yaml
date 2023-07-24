@@ -21,7 +21,7 @@ layer_soil_type:
   - 14
 num_soil_layers: 3
 wilting_point_psi_cm: 154950.0  # AJ-correction
-soil_index: ???
+soil_parameter_index: ???
 wilting_point_psi: 15495.0 #[cm]
 giuh_ordinates:
   - 0.06

@@ -18,18 +18,17 @@ log = logging.getLogger(__name__)
 class Layer:
     def __init__(
         self,
-        global_params,
+        soil_state,
         layer_index: int,
         c: Tensor,
-        ksat: Tensor,
-        rank,
+        ksat,
         previous_layer=None,
     ):
         """
         A layer of soil (within the soil stack).
         Each soil layer can have many wetting fronts and several properties
         :param cfg: The DictConfig
-        :param global_params: many of the values within the cfg file, but as tensors
+        :param soil_state: many of the values within the cfg file, but as tensors
         :param c: All soil attributes
         :param alpha: All alpha van Genuchten params
         :param n: All n van Genuchten params
@@ -37,27 +36,26 @@ class Layer:
         :param is_top: TBD if this is necessary. Rn it's always true
         """
         super().__init__()
-        self.rank = rank
-        self.global_params = global_params
-        self.num_layers = global_params.num_layers
+        self.soil_state = soil_state
+        self.num_layers = soil_state.num_layers
         self.layer_num = layer_index
-        self.layer_thickness = self.global_params.layer_thickness_cm[self.layer_num]
-        self.cumulative_layer_thickness = self.global_params.cum_layer_thickness[
+        self.layer_thickness = self.soil_state.layer_thickness_cm[self.layer_num]
+        self.cumulative_layer_thickness = self.soil_state.cum_layer_thickness[
             self.layer_num
         ]
         self.attributes = c[self.layer_num]
-        self.alpha_layer = c[self.layer_num][self.global_params.soil_index["alpha"]]
-        self.n_layer = c[self.layer_num][self.global_params.soil_index["n"]]
+        self.alpha_layer = c[self.layer_num][self.soil_state.soil_index["alpha"]]
+        self.n_layer = c[self.layer_num][self.soil_state.soil_index["n"]]
         self.ksat_layer = ksat[self.layer_num]
 
         # For mass balance
-        self.tolerance = torch.tensor(1e-12, device=self.global_params.device)
+        self.tolerance = torch.tensor(1e-12, device=self.soil_state.device)
 
         # Setting up wetting fronts. Each layer can have many wetting fronts
         self.wetting_fronts = []
         self.wetting_fronts.append(
             WettingFront(
-                self.global_params,
+                self.soil_state,
                 self.cumulative_layer_thickness,
                 self.layer_num,
                 self.attributes,
@@ -69,14 +67,13 @@ class Layer:
         self.previous_layer = previous_layer
         self.next_layer = None
         if (
-            layer_index < global_params.num_layers - 1
+            layer_index < soil_state.num_layers - 1
         ):  # Checking to see if there is a layer below this one
             self.next_layer = Layer(
-                global_params,
+                soil_state,
                 layer_index + 1,
                 c,
                 ksat,
-                self.rank,
                 previous_layer=self,
             )
         self.previous_state = self.deepcopy()
@@ -88,7 +85,7 @@ class Layer:
         self.attributes = c[self.layer_num]
         for wf in self.wetting_fronts:
             wf.update_soil_parameters(
-                self.global_params,
+                self.soil_state,
                 self.attributes,
                 self.alpha_layer,
                 self.n_layer,
@@ -107,7 +104,7 @@ class Layer:
         state = []
         for i in range(len(self.wetting_fronts)):
             wf = WettingFront(
-                self.global_params,
+                self.soil_state,
                 self.cumulative_layer_thickness,
                 self.layer_num,
                 self.attributes,
@@ -175,15 +172,15 @@ class Layer:
         :param delta_thickness:
         :return:
         """
-        m = self.attributes[self.global_params.soil_index["m"]]
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
+        m = self.attributes[self.soil_state.soil_index["m"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+        theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
         theta_old = calc_theta_from_h(
             psi_cm_old, self.alpha_layer, m, self.n_layer, theta_e, theta_r
         )
-        theta_below_old = torch.tensor(0.0, device=self.global_params.device)
+        theta_below_old = torch.tensor(0.0, device=self.soil_state.device)
         local_delta_theta_old = theta_old - theta_below_old
-        layer_thickness = self.global_params.layer_thickness_cm[self.layer_num]
+        layer_thickness = self.soil_state.layer_thickness_cm[self.layer_num]
         prior_mass = prior_mass + layer_thickness * local_delta_theta_old
         theta = calc_theta_from_h(
             psi_cm, self.alpha_layer, m, self.n_layer, theta_e, theta_r
@@ -213,9 +210,9 @@ class Layer:
         """
         layer_num = self.layer_num
         if layer_num < (len(delta_thickness) - 1):
-            theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-            theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
-            m = self.attributes[self.global_params.soil_index["m"]]
+            theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+            theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
+            m = self.attributes[self.soil_state.soil_index["m"]]
             theta_layer = calc_theta_from_h(
                 psi_cm, self.alpha_layer, m, self.n_layer, theta_e, theta_r
             )
@@ -239,16 +236,16 @@ class Layer:
         delta_thetas,
         delta_thickness,
     ):
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
-        m = self.attributes[self.global_params.soil_index["m"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+        theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
+        m = self.attributes[self.soil_state.soil_index["m"]]
         delta_mass = torch.abs(new_mass - prior_mass)
 
         # flag that determines capillary head to be incremented or decremented
         switched = False
-        factor = torch.tensor(1.0, device=self.global_params.device)
+        factor = torch.tensor(1.0, device=self.soil_state.device)
         theta = torch.tensor(
-            0.0, device=self.global_params.device
+            0.0, device=self.soil_state.device
         )  # this will be updated and returned
         psi_cm_loc_prev = psi_cm
         delta_mass_prev = delta_mass
@@ -331,9 +328,9 @@ class Layer:
         previous_current_front = neighboring_fronts["previous_current_front"]
 
         current_front.depth = current_front.depth + current_front.dzdt * subtimestep
-        delta_thetas = torch.zeros([self.num_layers], device=self.global_params.device)
+        delta_thetas = torch.zeros([self.num_layers], device=self.soil_state.device)
         delta_thickness = torch.zeros(
-            [self.num_layers], device=self.global_params.device
+            [self.num_layers], device=self.soil_state.device
         )
         psi_cm_old = previous_current_front.psi_cm
 
@@ -341,7 +338,7 @@ class Layer:
         try:
             base_thickness = self.previous_layer.cumulative_layer_thickness
         except AttributeError:
-            base_thickness = torch.tensor(0.0, device=self.global_params.device)
+            base_thickness = torch.tensor(0.0, device=self.soil_state.device)
         # mass = delta(depth) * delta(theta)
         # 0.0 = next->theta;
         prior_mass = (previous_current_front.depth - base_thickness) * (
@@ -371,9 +368,9 @@ class Layer:
             delta_thetas,
             delta_thickness,
         )
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
-        m = self.attributes[self.global_params.soil_index["m"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+        theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
+        m = self.attributes[self.soil_state.soil_index["m"]]
         current_front.theta = torch.minimum(theta_new, theta_e)
         se = calc_se_from_theta(current_front.theta, theta_e, theta_r)
         current_front.psi_cm = calc_h_from_se(se, self.alpha_layer, m, self.n_layer)
@@ -401,9 +398,9 @@ class Layer:
         """
         current_front = neighboring_fronts["current_front"]
         next_front = neighboring_fronts["next_front"]
-        m = self.attributes[self.global_params.soil_index["m"]]
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
+        m = self.attributes[self.soil_state.soil_index["m"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+        theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
         current_front.theta = calc_theta_from_h(
             next_front.psi_cm, self.alpha_layer, m, self.n_layer, theta_e, theta_r
         )
@@ -420,9 +417,9 @@ class Layer:
         /*************************************************************************************/
         :return:
         """
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
-        m = self.attributes[self.global_params.soil_index["m"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+        theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
+        m = self.attributes[self.soil_state.soil_index["m"]]
         current_front = neighboring_fronts["current_front"]
         next_front = neighboring_fronts["next_front"]
         previous_next_front = neighboring_fronts["previous_next_front"]
@@ -445,7 +442,7 @@ class Layer:
             # / * condition to bound the wetting front depth, if depth of a wf, at this timestep,
             # gets greater than the domain depth, it will be merge anyway as it is passing
             # the layer depth * /
-            column_depth = self.global_params.cum_layer_thickness[-1]
+            column_depth = self.soil_state.cum_layer_thickness[-1]
             current_front.depth = torch.min(current_front.depth, column_depth)
             zero = torch.tensor(0.0)
             zero_dzdt = torch.isclose(current_front.dzdt, zero, 1e-8)
@@ -494,10 +491,10 @@ class Layer:
             )
 
             delta_thetas = torch.zeros(
-                [self.layer_num + 1], device=self.global_params.device
+                [self.layer_num + 1], device=self.soil_state.device
             )
             delta_thickness = torch.zeros(
-                [self.layer_num + 1], device=self.global_params.device
+                [self.layer_num + 1], device=self.soil_state.device
             )
             (
                 prior_mass,
@@ -568,9 +565,9 @@ class Layer:
         the respective layers to get the total mass above the current wetting front
         :return:
         """
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
-        m = self.attributes[self.global_params.soil_index["m"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+        theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
+        m = self.attributes[self.soil_state.soil_index["m"]]
         previous_layer_thickness = torch.tensor(0.0)
         if self.previous_layer is not None:
             previous_layer_thickness = self.previous_layer.cumulative_layer_thickness
@@ -655,7 +652,7 @@ class Layer:
         layer_attributes = self.get_layer_attributes(
             self.wf_free_drainage_demand.layer_num
         )
-        theta_e_k1 = layer_attributes[self.global_params.soil_index["theta_e"]]
+        theta_e_k1 = layer_attributes[self.soil_state.soil_index["theta_e"]]
 
         # Making sure that the mass is correct
         # assert (old_mass > 0.0).item()
@@ -667,24 +664,24 @@ class Layer:
             current_mass = self.mass_balance()
             mass_balance_error = torch.abs(current_mass - mass_timestep)
             switched = False
-            factor = torch.tensor(1.0, device=self.global_params.device)
+            factor = torch.tensor(1.0, device=self.soil_state.device)
             depth_new = self.wf_free_drainage_demand.depth
             # loop to adjust the depth for mass balance
             while torch.abs(mass_balance_error - self.tolerance) > 1e-12:
                 if current_mass < mass_timestep:
                     depth_new = (
                         depth_new
-                        + torch.tensor(0.01, device=self.global_params.device) * factor
+                        + torch.tensor(0.01, device=self.soil_state.device) * factor
                     )
                     switched = False
                 else:
                     if not switched:
                         switched = True
                         factor = factor * torch.tensor(
-                            0.001, device=self.global_params.device
+                            0.001, device=self.soil_state.device
                         )
                     depth_new = depth_new - (
-                        torch.tensor(0.01, device=self.global_params.device) * factor
+                        torch.tensor(0.01, device=self.soil_state.device) * factor
                     )
 
                 self.wf_free_drainage_demand.depth = depth_new
@@ -758,11 +755,11 @@ class Layer:
         :return:
         """
         top_wetting_front = self.wetting_fronts[0]
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
-        m = self.attributes[self.global_params.soil_index["m"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+        theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
+        m = self.attributes[self.soil_state.soil_index["m"]]
         aet = calc_aet(
-            self.global_params,
+            self.soil_state,
             subtimestep_h,
             pet,
             top_wetting_front.psi_cm,
@@ -781,7 +778,7 @@ class Layer:
         :return:
         """
         top_wetting_front = self.wetting_fronts[0]
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
         return True if top_wetting_front.theta >= theta_e else False
 
     def mass_balance(self) -> Tensor:
@@ -793,7 +790,7 @@ class Layer:
         """
         sum = torch.tensor(0, dtype=torch.float64)
         if self.layer_num == 0:
-            base_depth = torch.tensor(0.0, device=self.global_params.device)
+            base_depth = torch.tensor(0.0, device=self.soil_state.device)
         else:
             # The base depth is the depth at the top of the layer
             base_depth = self.cumulative_layer_thickness - self.layer_thickness
@@ -859,9 +856,9 @@ class Layer:
             return None
 
     def pass_front(self, extended_neighbors):
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
-        m = self.attributes[self.global_params.soil_index["m"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+        theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
+        m = self.attributes[self.soil_state.soil_index["m"]]
         current_front = extended_neighbors["current_front"]
         next_front = extended_neighbors["next_front"]
         next_to_next_front = extended_neighbors["next_to_next_front"]
@@ -889,9 +886,9 @@ class Layer:
         :return:
         """
         layer_fronts = self.get_len_layers()
-        m = self.attributes[self.global_params.soil_index["m"]]
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
+        m = self.attributes[self.soil_state.soil_index["m"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+        theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
         for i in range(layer_fronts):
             extended_neighbors = self.get_extended_neighbors(i)
             current_front = extended_neighbors["current_front"]
@@ -971,14 +968,14 @@ class Layer:
         #  Highly unlikely, but could be worth checking into
         try:
             next_theta_r = self.next_layer.attributes[
-                self.global_params.soil_index["theta_r"]
+                self.soil_state.soil_index["theta_r"]
             ]
         except AttributeError:
             log.error("here")
         next_theta_e = self.next_layer.attributes[
-            self.global_params.soil_index["theta_e"]
+            self.soil_state.soil_index["theta_e"]
         ]
-        next_m = self.next_layer.attributes[self.global_params.soil_index["m"]]
+        next_m = self.next_layer.attributes[self.soil_state.soil_index["m"]]
         next_alpha = self.next_layer.alpha_layer
         next_n = self.next_layer.n_layer
         theta_new = calc_theta_from_h(
@@ -997,7 +994,7 @@ class Layer:
         next_front.depth = depth_new
         next_front.layer_num = self.next_layer.layer_num
         next_front.dzdt = current_front.dzdt
-        current_front.dzdt = torch.tensor(0.0, device=self.global_params.device)
+        current_front.dzdt = torch.tensor(0.0, device=self.soil_state.device)
         current_front.to_bottom = True
         next_front.to_bottom = False
         return current_front, next_front
@@ -1010,14 +1007,14 @@ class Layer:
         /**********************************************************/
         :return:
         """
-        bottom_flux_cm = torch.tensor(0.0, device=self.global_params.device)
+        bottom_flux_cm = torch.tensor(0.0, device=self.soil_state.device)
         layer_fronts = self.get_len_layers()
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
-        m = self.attributes[self.global_params.soil_index["m"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+        theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
+        m = self.attributes[self.soil_state.soil_index["m"]]
         for i in range(layer_fronts):
             extended_neighbors = self.get_extended_neighbors(i)
-            bottom_flux_cm_temp = torch.tensor(0.0, device=self.global_params.device)
+            bottom_flux_cm_temp = torch.tensor(0.0, device=self.soil_state.device)
             current_front = extended_neighbors["current_front"]
             next_front = extended_neighbors["next_front"]
             next_to_next_front = extended_neighbors["next_to_next_front"]
@@ -1055,7 +1052,7 @@ class Layer:
         and the front gets drier than the lower wetting front */
         :return:
         """
-        mass_change = torch.tensor(0.0, device=self.global_params.device)
+        mass_change = torch.tensor(0.0, device=self.soil_state.device)
         for i in range(len(self.wetting_fronts)):
             neighboring_fronts = self.get_neighboring_fronts(i)
             current_front = neighboring_fronts["current_front"]
@@ -1095,9 +1092,9 @@ class Layer:
         for i in range(len(self.wetting_fronts)):
             current_front = self.wetting_fronts[i]
             if current_front.is_equal(next_front):
-                theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-                theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
-                m = self.attributes[self.global_params.soil_index["m"]]
+                theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+                theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
+                m = self.attributes[self.soil_state.soil_index["m"]]
                 se_k = calc_se_from_theta(current_front.theta, theta_e, theta_r)
                 current_front.psi_cm = calc_h_from_se(
                     se_k, self.alpha_layer, m, self.n_layer
@@ -1119,9 +1116,9 @@ class Layer:
         if self.layer_num < dry_front.layer_num:
             for i in range(len(self.wetting_fronts)):
                 current_front = self.wetting_fronts[i]
-                theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-                theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
-                m = self.attributes[self.global_params.soil_index["m"]]
+                theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+                theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
+                m = self.attributes[self.soil_state.soil_index["m"]]
                 se_l = calc_se_from_theta(dry_front.theta, theta_e, theta_r)
                 current_front.psi_cm = calc_h_from_se(
                     se_l, self.alpha_layer, m, self.n_layer
@@ -1156,9 +1153,9 @@ class Layer:
         :return:
         """
         layer_fronts = self.get_len_layers()
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
-        m = self.attributes[self.global_params.soil_index["m"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+        theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
+        m = self.attributes[self.soil_state.soil_index["m"]]
         for i in range(layer_fronts):
             current_front = self.wetting_fronts[i]
             se = calc_se_from_theta(current_front.theta, theta_e, theta_r)
@@ -1182,11 +1179,11 @@ class Layer:
             current_front = neighboring_fronts["current_front"]
             next_front = neighboring_fronts["next_front"]
             # needed for multi-layered dz/dt equation.  Equal to sum from n=1 to N-1 of (L_n/K_n(theta_n))
-            bottom_sum = torch.tensor(0.0, device=self.global_params.device)
+            bottom_sum = torch.tensor(0.0, device=self.soil_state.device)
             theta_1 = next_front.theta
             theta_2 = current_front.theta
             if current_front.to_bottom:
-                current_front.dzdt = torch.tensor(0.0, device=self.global_params.device)
+                current_front.dzdt = torch.tensor(0.0, device=self.soil_state.device)
                 continue
             else:
                 if current_front.layer_num > 0:
@@ -1204,7 +1201,7 @@ class Layer:
                         raise ValueError
 
                 geff = calc_geff(
-                    self.global_params,
+                    self.soil_state,
                     self.attributes,
                     theta_1,
                     theta_2,
@@ -1225,7 +1222,7 @@ class Layer:
                             )
                         )
                     else:
-                        dzdt = torch.tensor(0.0, device=self.global_params.device)
+                        dzdt = torch.tensor(0.0, device=self.soil_state.device)
                 else:  # we are in the second or greater layer
                     denominator = bottom_sum
                     denominator = self.find_front_layer().calc_bottom_sum(
@@ -1239,7 +1236,7 @@ class Layer:
                             + self.ksat_layer * (geff + h_p) / current_front.depth
                         )
                     else:
-                        dzdt = torch.tensor(0.0, device=self.global_params.device)
+                        dzdt = torch.tensor(0.0, device=self.soil_state.device)
 
                 current_front.dzdt = dzdt
         if self.next_layer is not None:
@@ -1269,8 +1266,8 @@ class Layer:
         is_bottom_layer = True if self.next_layer is None else False
         # has_many_layers = True if len(self.wetting_fronts) > 1 else False
         # deepest_layer_index = num_wetting_fronts - 1
-        volume_infiltraton = torch.tensor(0.0, device=self.global_params.device)
-        free_drainage_demand = torch.tensor(0.0, device=self.global_params.device)
+        volume_infiltraton = torch.tensor(0.0, device=self.soil_state.device)
+        free_drainage_demand = torch.tensor(0.0, device=self.soil_state.device)
         for i in reversed(range(len(self.wetting_fronts))):
             neighboring_fronts = self.get_neighboring_fronts(i)
             if num_wetting_front_count < num_wetting_fronts:
@@ -1303,7 +1300,7 @@ class Layer:
             return volume_infiltraton
 
     def calc_dry_depth(self, subtimestep):
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
         head_index = 0  # 0 is always the starting index
         current_front = self.wetting_fronts[head_index]
 
@@ -1315,7 +1312,7 @@ class Layer:
         )  # water content of the first (most surficial) existing wetting front
         tau = subtimestep * self.ksat_layer / delta_theta
         geff = calc_geff(
-            self.global_params,
+            self.soil_state,
             self.attributes,
             theta_1,
             theta_2,
@@ -1345,9 +1342,9 @@ class Layer:
         current_front = self.wetting_fronts[
             head_index
         ]  # Specifically pointing to the first front
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
-        m = self.attributes[self.global_params.soil_index["m"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+        theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
+        m = self.attributes[self.soil_state.soil_index["m"]]
 
         delta_theta = theta_e - current_front.theta
 
@@ -1358,7 +1355,7 @@ class Layer:
                 (current_front.theta + ponded_depth / dry_depth), theta_e
             )
             new_front = WettingFront(
-                self.global_params,
+                self.soil_state,
                 self.cumulative_layer_thickness,
                 self.layer_num,
                 self.attributes,
@@ -1369,7 +1366,7 @@ class Layer:
             new_front.to_bottom = to_bottom
             # inserting the new front in the front layer
             self.wetting_fronts.insert(0, new_front)
-            ponded_depth = torch.tensor(0.0, device=self.global_params.device)
+            ponded_depth = torch.tensor(0.0, device=self.soil_state.device)
         else:
             # // not all ponded depth fits in
             infiltration = dry_depth * delta_theta
@@ -1378,7 +1375,7 @@ class Layer:
             if dry_depth < self.cumulative_layer_thickness:
                 # checking against the first layer
                 new_front = WettingFront(
-                    self.global_params,
+                    self.soil_state,
                     self.cumulative_layer_thickness,
                     self.layer_num,
                     self.attributes,
@@ -1389,7 +1386,7 @@ class Layer:
                 new_front.to_bottom = to_bottom
             else:
                 new_front = WettingFront(
-                    self.global_params,
+                    self.soil_state,
                     self.cumulative_layer_thickness,
                     self.layer_num,
                     self.attributes,
@@ -1404,9 +1401,9 @@ class Layer:
         se = calc_se_from_theta(theta_new, theta_e, theta_r)
         new_front.psi_cm = calc_h_from_se(se, self.alpha_layer, m, self.n_layer)
         new_front.k_cm_per_h = (
-            calc_k_from_se(se, self.ksat_layer, m) * self.global_params.frozen_factor
+            calc_k_from_se(se, self.ksat_layer, m) * self.soil_state.frozen_factor
         )  # // AJ - K_temp in python version for 1st layer
-        new_front.dzdt = torch.tensor(0.0, device=self.global_params.device)
+        new_front.dzdt = torch.tensor(0.0, device=self.soil_state.device)
         # for now assign 0 to dzdt as it will be computed/updated in lgar_dzdt_calc function
 
         return ponded_depth, infiltration
@@ -1430,8 +1427,8 @@ class Layer:
         """
         wf_that_supplies_free_drainage_demand = self.wf_free_drainage_demand
 
-        f_p = torch.tensor(0.0, device=self.global_params.device)
-        runoff = torch.tensor(0.0, device=self.global_params.device)
+        f_p = torch.tensor(0.0, device=self.soil_state.device)
+        runoff = torch.tensor(0.0, device=self.soil_state.device)
 
         # water ponded on the surface
         h_p_ = (ponded_depth - precip) * subtimestep
@@ -1449,15 +1446,15 @@ class Layer:
         layer_num_fp = current_free_drainage.layer_num
         free_drainage_layer = self.find_layer(layer_num_fp)
         free_drainage_ksat = (
-                free_drainage_layer.ksat_layer * self.global_params.frozen_factor
+                free_drainage_layer.ksat_layer * self.soil_state.frozen_factor
         )
         if number_of_wetting_fronts == self.num_layers:
             # i.e., case of no capillary suction, dz/dt is also zero for all wetting fronts
-            geff = torch.tensor(0.0, device=self.global_params.device)
+            geff = torch.tensor(0.0, device=self.soil_state.device)
             # i.e., case of no capillary suction, dz/dt is also zero for all wetting fronts
         else:
             theta_e = free_drainage_layer.attributes[
-                self.global_params.soil_index["theta_e"]
+                self.soil_state.soil_index["theta_e"]
             ]
             try:
                 theta_1 = next_free_drainage.theta  # theta_below
@@ -1467,10 +1464,10 @@ class Layer:
                 theta_1 = current_front.theta
             theta_2 = theta_e
             free_drainage_ksat = (
-                free_drainage_layer.ksat_layer * self.global_params.frozen_factor
+                free_drainage_layer.ksat_layer * self.soil_state.frozen_factor
             )
             geff = calc_geff(
-                self.global_params,
+                self.soil_state,
                 free_drainage_layer.attributes,
                 theta_1,
                 theta_2,
@@ -1482,7 +1479,7 @@ class Layer:
         if layer_num_fp == 0:
             f_p = self.ksat_layer * (1 + (geff + h_p) / current_free_drainage.depth)
         else:
-            previous_layer_thickness = self.global_params.cum_layer_thickness[
+            previous_layer_thickness = self.soil_state.cum_layer_thickness[
                 layer_num_fp - 1
             ]
             bottom_sum = (
@@ -1500,8 +1497,8 @@ class Layer:
         thetas_equal = (current_free_drainage.theta == theta_e1).item()
         layers_equal_wetting_fronts = self.num_layers == number_of_wetting_fronts
         if layers_equal_wetting_fronts and thetas_equal and layer_nums_equal:
-            f_p = torch.tensor(0.0, device=self.global_params.device)
-        free_drainage_demand = torch.tensor(0.0, device=self.global_params.device)
+            f_p = torch.tensor(0.0, device=self.soil_state.device)
+        free_drainage_demand = torch.tensor(0.0, device=self.soil_state.device)
         ponded_depth_temp_ = ponded_depth - f_p * subtimestep - free_drainage_demand * 0
         ponded_depth_temp = torch.clamp(ponded_depth_temp_, min=0.0)
 
@@ -1509,17 +1506,17 @@ class Layer:
             f_p * subtimestep + free_drainage_demand / subtimestep
         )  # infiltration in cm
 
-        if self.global_params.ponded_depth_max > 0.0:
-            if ponded_depth_temp < self.global_params.ponded_depth_max:
+        if self.soil_state.ponded_depth_max > 0.0:
+            if ponded_depth_temp < self.soil_state.ponded_depth_max:
                 # Runnoff will clamp to zero in this case
                 infiltration = torch.min(ponded_depth, fp_cm)
                 ponded_depth = ponded_depth - infiltration
                 # PTL: does this code account for the case where volin_this_timestep can not all infiltrate?
-            elif ponded_depth_temp > self.global_params.ponded_depth_max:
+            elif ponded_depth_temp > self.soil_state.ponded_depth_max:
                 # Runoff will be positive in this case
-                ponded_depth = self.global_params.ponded_depth_max
+                ponded_depth = self.soil_state.ponded_depth_max
                 infiltration = fp_cm
-            _runoff_ = ponded_depth_temp - self.global_params.ponded_depth_max
+            _runoff_ = ponded_depth_temp - self.soil_state.ponded_depth_max
             runoff = torch.clamp(_runoff_, min=0)  # Ensuring Runoff has a gradient
             return runoff, infiltration, ponded_depth
         else:
@@ -1527,12 +1524,12 @@ class Layer:
             # order is important here; assign zero to ponded depth once we compute volume in and runoff
             infiltration = torch.min(ponded_depth, fp_cm)
             # if ponded_depth < fp_cm:
-            #     runoff = torch.tensor(0.0, device=self.global_params.device)
+            #     runoff = torch.tensor(0.0, device=self.soil_state.device)
             # else:
             #     runoff = ponded_depth - infiltration
-            # ponded_depth = torch.tensor(0.0, device=self.global_params.device)
+            # ponded_depth = torch.tensor(0.0, device=self.soil_state.device)
             _runoff_ = ponded_depth - infiltration
-            ponded_depth = self.global_params.ponded_depth_max
+            ponded_depth = self.soil_state.ponded_depth_max
             runoff = torch.clamp(_runoff_, min=0.0)
 
         return runoff, infiltration, ponded_depth
@@ -1544,8 +1541,8 @@ class Layer:
         :param current_free_drainage:
         :return:
         """
-        k_cm_per_h = self.ksat_layer * self.global_params.frozen_factor
-        previous_layer_thickness = torch.tensor(0.0, device=self.global_params.device)
+        k_cm_per_h = self.ksat_layer * self.soil_state.frozen_factor
+        previous_layer_thickness = torch.tensor(0.0, device=self.soil_state.device)
         if self.layer_num != 0:
             previous_layer_thickness = self.previous_layer.cumulative_layer_thickness
         bottom_sum = bottom_sum + (
@@ -1557,9 +1554,9 @@ class Layer:
         return self.next_layer.calc_bottom_sum(bottom_sum, current_free_drainage)
 
     def calc_bottom_sum(self, bottom_sum, current_front):
-        theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
-        theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
-        m = self.attributes[self.global_params.soil_index["m"]]
+        theta_e = self.attributes[self.soil_state.soil_index["theta_e"]]
+        theta_r = self.attributes[self.soil_state.soil_index["theta_r"]]
+        m = self.attributes[self.soil_state.soil_index["m"]]
         theta_prev_loc = calc_theta_from_h(
             current_front.psi_cm,
             self.alpha_layer,
@@ -1571,7 +1568,7 @@ class Layer:
         se_prev_loc = calc_se_from_theta(theta_prev_loc, theta_e, theta_r)
 
         k_cm_per_h_prev_loc = calc_k_from_se(se_prev_loc, self.ksat_layer, m)
-        previous_layer_thickness = torch.tensor(0.0, device=self.global_params.device)
+        previous_layer_thickness = torch.tensor(0.0, device=self.soil_state.device)
         if self.layer_num != 0:
             previous_layer_thickness = self.previous_layer.cumulative_layer_thickness
         bottom_sum = bottom_sum + (
@@ -1647,7 +1644,6 @@ class Layer:
 
     def print(self, first=True):
         if first:
-            log.info(f"Printing the top_layer for rank: {self.rank}")
             log.info(
                 f"[     Depth       Theta   Layer_num   dzdt     k_cm_hr    psi   ]"
             )

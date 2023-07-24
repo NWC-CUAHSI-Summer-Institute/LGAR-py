@@ -1,4 +1,4 @@
-model: lgarpy
+model: base
 save_path: ${cwd}/runs/${basin_id}/
 not_finished_name: ${save_name}_epoch_{}_${now:%m-%d}_${now:%H-%M-%S}.pth
 save_name: ${save_name}_trained_model_${now:%m-%d}_${now:%H-%M-%S}.pth

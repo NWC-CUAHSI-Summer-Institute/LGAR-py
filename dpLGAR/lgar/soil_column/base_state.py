@@ -11,7 +11,7 @@ class BaseState:
     def __init__(self, cfg: DictConfig, ponded_depth_max: torch.Tensor) -> None:
         super(BaseState).__init__()
 
-        self.device = cfg.device
+        self.cfg = cfg
 
         self.ponded_depth_max = ponded_depth_max.clone()
 
@@ -36,16 +36,16 @@ class BaseState:
         self.sft_coupled = False
         self.use_closed_form_G = False
 
-        self.soil_index = None
+        self.soil_index = self.cfg.datazoo.soil_parameter_index
 
-        self._initialize_config_parameters(cfg)
-        self._initialize_giuh_params(cfg)
+        self._initialize_config_parameters()
+        self._initialize_giuh_params()
 
         # Variables for specific functions:
-        self.relative_moisture_at_which_PET_equals_AET = torch.tensor(0.75, device=self.device)
-        self.nint = torch.tensor(cfg.datautils.constants.nint, device=self.device)
+        self.relative_moisture_at_which_PET_equals_AET = torch.tensor(0.75)
+        self.nint = torch.tensor(self.cfg.datautils.constants.nint)
 
-    def _initialize_config_parameters(self, cfg: DictConfig) -> None:
+    def _initialize_config_parameters(self) -> None:
         """
         Reading variables from the config file specific to each testcase
         :param cfg: The config file
@@ -65,35 +65,29 @@ class BaseState:
         - giuh_ordinates
         - num_giuh_ordinates
         """
-        self.layer_thickness_cm = torch.tensor(
-            cfg.data.layer_thickness, device=cfg.device
-        )
-        self.cum_layer_thickness = torch.zeros(
-            [len(cfg.data.layer_thickness)], device=cfg.device
-        )
-        self.layer_thickness_cm = torch.tensor(cfg.data.layer_thickness, device=cfg.device)
+        self.layer_thickness_cm = torch.tensor(self.cfg.data.layer_thickness)
+        self.cum_layer_thickness = torch.zeros([len(self.cfg.data.layer_thickness)])
+        self.layer_thickness_cm = torch.tensor(self.cfg.data.layer_thickness)
         self.cum_layer_thickness = self.layer_thickness_cm.cumsum(dim=0)
-        self.num_layers = len(cfg.data.layer_thickness)
+        self.num_layers = len(self.cfg.data.layer_thickness)
         self.soil_depth_cm = self.cum_layer_thickness[-1]
 
-        self.initial_psi = torch.tensor(cfg.data.initial_psi, device=cfg.device)
+        self.initial_psi = torch.tensor(self.cfg.data.initial_psi)
 
-        self.use_closed_form_G = cfg.data.use_closed_form_G
+        self.use_closed_form_G = self.cfg.data.use_closed_form_G
 
-        self.num_soil_types = torch.tensor(cfg.data.max_soil_types, device=cfg.device)
+        self.num_soil_types = torch.tensor(self.cfg.data.max_soil_types)
 
-        self.wilting_point_psi_cm = torch.tensor(
-            cfg.data.wilting_point_psi_cm, device=cfg.device
-        )
-        self.frozen_factor = torch.tensor(cfg.constants.frozen_factor, device=cfg.device)
-        self.soil_index = cfg.data.soil_index
+        self.wilting_point_psi_cm = torch.tensor(self.cfg.data.wilting_point_psi_cm)
+        self.frozen_factor = torch.tensor(self.cfg.constants.frozen_factor)
+        self.soil_index = self.cfg.data.soil_parameter_index
 
-    def _initialize_giuh_params(self, cfg: DictConfig):
+    def _initialize_giuh_params(self):
         """
         Initalizing all giuh params
         :param cfg:
         :return:
         """
-        self.giuh_ordinates = torch.tensor(cfg.data.giuh_ordinates, device=cfg.device)
-        self.giuh_runoff = torch.zeros([len(self.giuh_ordinates)], device=cfg.device)
+        self.giuh_ordinates = torch.tensor(self.cfg.data.giuh_ordinates)
+        self.giuh_runoff = torch.zeros([len(self.giuh_ordinates)])
         self.num_giuh_ordinates = len(self.giuh_ordinates)

@@ -17,8 +17,8 @@ log = logging.getLogger(__name__)
 
 def generate_soil_metrics(
     cfg: DictConfig,
-    alpha: Tensor,
-    n: Tensor,
+    alpha,
+    n,
     theta_e: Tensor,
     theta_r: Tensor,
 ) -> Tensor:

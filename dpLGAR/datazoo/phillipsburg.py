@@ -8,7 +8,6 @@ from typing import (
     TypeVar,
 )
 
-from dpLGAR.datazoo import read_df
 from dpLGAR.datazoo.basedataset import BaseDataset
 
 log = logging.getLogger("datazoo.lgar_c")
@@ -56,6 +55,7 @@ class Phillipsburg(BaseDataset):
         return None
 
     def load_phillipsburg_data(self):
+        from dpLGAR.datazoo import read_df
         # Configuring timesteps
         endtime_s = self.cfg.datazoo.endtime * self.cfg.datautils.conversions.hr_to_sec
         forcing_resolution_h = (
@@ -76,4 +76,5 @@ class Phillipsburg(BaseDataset):
         return x_tr * self.cfg.datautils.conversions.mm_to_cm
 
     def load_soils_df(self):
+        from dpLGAR.datazoo import read_df
         read_df(self.cfg.datazoo.soil_params_file)
