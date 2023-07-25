@@ -10,10 +10,11 @@ class LocalMassBalance(BaseMassBalance):
         super(LocalMassBalance).__init__()
 
     def print(self, top_layer):
-        self.top_layer.print()
+        top_layer.print()
+        local_mb = self._calc_mb()
         log.info(f"Local mass balance at timestep {i}:")
         log.info(f"Error         = {local_mb.item():14.10f}")
-        log.info(f"Initial water = {starting_volume_sub.item():14.10f}")
+        log.info(f"Initial water = {self.starting_volume_sub.item():14.10f}")
         log.info(f"Water added   = {precip_sub.item():14.10f}")
         log.info(f"Ponded water  = {ponded_water_sub.item():14.10f}")
         log.info(f"Infiltration  = {infiltration_sub.item():14.10f}")

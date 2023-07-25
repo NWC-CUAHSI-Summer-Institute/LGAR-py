@@ -15,15 +15,7 @@ class GlobalMassBalance(BaseMassBalance):
 
     def print(self, ending_volume):
         self.ending_volume = ending_volume
-        global_error_cm = (
-                self.starting_volume
-                + self.precip
-                - self.runoff
-                - self.AET
-                - self.ponded_water
-                - self.percolation
-                - self.ending_volume
-        )
+        global_error_cm = self._calc_mb()
         log.info("********************************************************* ")
         log.info("-------------------- Simulation Summary ----------------- ")
         log.info("------------------------ Mass balance ------------------- ")

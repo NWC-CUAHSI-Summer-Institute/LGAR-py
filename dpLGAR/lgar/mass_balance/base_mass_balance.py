@@ -26,9 +26,9 @@ class BaseMassBalance:
         self.groundwater_discharge = None
         self.percolation = None
 
-    def _calc_local_mb(self, starting_volume):
-        self.local_mb = (
-                starting_volume
+    def _calc_mb(self):
+        return (
+                self.starting_volume
                 + self.precip
                 + self.ponded_water
                 - self.runoff

@@ -29,6 +29,8 @@ class BaseTrainer:
         self.basins = cfg.basin_id
         self.current_epoch = self._get_start_epoch_number()
 
+        self.device = torch.device(cfg.device)
+
     def load_checkpoint(self, file_name):
         """
         Latest checkpoint loader

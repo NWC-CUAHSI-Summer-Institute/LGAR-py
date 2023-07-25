@@ -63,7 +63,6 @@ class BaseModel(nn.Module):
 
     def _create_local_mass_balance(self):
         """Creates the local mass balance parameters"""
-        # TODO SET LOCAL MASS BALANCE AND GLOBAL
         self.local_mb = LocalMassBalance()
 
     def _create_soil_params(self, c: pd.DataFrame):
