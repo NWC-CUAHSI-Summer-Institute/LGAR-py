@@ -91,7 +91,7 @@ class BaseModel(nn.Module):
         """Sets the module parameters"""
         raise NotImplementedError
 
-    def forward(self, i, x) -> (torch.Tensor, torch.Tensor):
+    def forward(self, x) -> (torch.Tensor, torch.Tensor):
         """Perform a forward pass.
 
         Parameters

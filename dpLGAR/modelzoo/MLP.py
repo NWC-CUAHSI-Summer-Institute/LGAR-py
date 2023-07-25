@@ -1,12 +1,11 @@
 """A class to hold the Multilayer Perceptron Model to estimate river parameters"""
 import logging
 from omegaconf import DictConfig
-import torch
 from torch import Tensor
 import torch.nn as nn
 from torch.nn import Sigmoid, Linear
 
-from dpLGAR.modelzoo.functions.utils import to_physical
+from dpLGAR.training.utils import to_physical
 
 log = logging.getLogger("graphs.MLP")
 

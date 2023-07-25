@@ -1,15 +1,22 @@
 """
 The Base Agent class, where all other training inherit from, that contains definitions for all the necessary functions
 """
+import logging
+import sys
+
 import pandas as pd
 from omegaconf import DictConfig
 import torch
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from dpLGAR.datazoo import get_dataset
 from dpLGAR.datazoo import BaseDataset
 from dpLGAR.modelzoo import get_model
 from dpLGAR.training import get_optimizer, get_loss_obj
+
+
+log = logging.getLogger(__name__)
 
 
 class BaseTrainer:
@@ -22,59 +29,13 @@ class BaseTrainer:
         self.model = None
         self.optimizer = None
         self.loss_obj = None
-        self.experiment_logger = None
         self.loader = None
         self.validator = None
 
         self.basins = cfg.basin_id
-        self.current_epoch = self._get_start_epoch_number()
+        self._epoch = self._get_start_epoch_number()
 
         self.device = torch.device(cfg.device)
-
-    def load_checkpoint(self, file_name):
-        """
-        Latest checkpoint loader
-        :param file_name: name of the checkpoint file
-        :return:
-        """
-        raise NotImplementedError
-
-    def save_checkpoint(self, file_name="checkpoint.pth.tar", is_best=0):
-        """
-        Checkpoint saver
-        :param file_name: name of the checkpoint file
-        :param is_best: boolean flag to indicate whether current checkpoint's metric is the best so far
-        :return:
-        """
-        raise NotImplementedError
-
-    def train(self):
-        """
-        Main training loop
-        :return:
-        """
-        raise NotImplementedError
-
-    def train_one_epoch(self):
-        """
-        One epoch of training
-        :return:
-        """
-        raise NotImplementedError
-
-    def validate(self, pred, obs):
-        """
-        One cycle of model validation
-        :return:
-        """
-        raise NotImplementedError
-
-    def finalize(self):
-        """
-        Finalizes all the operations of the 2 Main classes of the process, the operator and the flat_files loader
-        :return:
-        """
-        raise NotImplementedError
 
     def _get_dataset(self) -> BaseDataset:
         return get_dataset(cfg=self.cfg, is_train=True, period="train", basin=self.basins)
@@ -119,5 +80,39 @@ class BaseTrainer:
         self.optimizer = self._get_optimizer()
         self.loss_obj = self._get_loss_obj().to(self.device)
 
+    def train_and_validate(self):
+        """Train and validate the model.
 
+        Train the model for the number of epochs specified in the run configuration, and perform validation after every
+        ``validate_every`` epochs.
+        """
+        for epoch in range(self._epoch + 1, self._epoch + self.cfg.epochs + 1):
+            if epoch in self.cfg.learning_rate.keys():
+                log.info(f"Setting learning rate to {self.cfg.learning_rate[epoch]}")
+                for param_group in self.optimizer.param_groups:
+                    param_group["lr"] = self.cfg.learning_rate[epoch]
 
+            self._train_epoch(epoch=epoch)
+
+    def _train_epoch(self, epoch: int):
+        self.model.train()
+
+        # process bar handle
+        pbar = tqdm(self.loader, file=sys.stdout)
+        pbar.set_description(f'# Epoch {epoch}')
+
+        for data in pbar:
+            predictions = self.model(data)
+        self.model.global_mb.print()
+        loss = self.loss_obj(predictions, data)
+
+        # delete old gradients
+        self.optimizer.zero_grad()
+
+        # get gradients
+        loss.backward()
+
+        # update weights
+        self.optimizer.step()
+
+        pbar.set_postfix_str(f"Loss: {loss.item():.4f}")

@@ -5,14 +5,14 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 import torch.distributed as dist
-from tqdm import tqdm, trange
+from tqdm import tqdm
 
 from dpLGAR.training.basetrainer import BaseAgent
 from dpLGAR.data.Data import Data
 from dpLGAR.data.graphdatasampler import GraphDataSampler
 from dpLGAR.data.metrics import calculate_nse
 from dpLGAR.modelzoo.dpLGAR import dpLGAR
-from dpLGAR.modelzoo.functions.loss import MSE_loss, RangeBoundLoss
+from dpLGAR.training.loss import MSE_loss, RangeBoundLoss
 from dpLGAR.modelzoo.physics.MassBalance import MassBalance
 
 log = logging.getLogger("training.DataParallelLGAR")

@@ -51,8 +51,15 @@ class Phillipsburg(BaseDataset):
         self._y = self.load_observations()
 
     def load_observations(self):
-        # There are no observations from LGAR-C
-        return None
+        cols = ["date", "QObs(mm/h)"]
+        data = pd.read_csv(self.cfg.datazoo.observations_file, usecols=cols, parse_dates=["date"])
+        nsteps = int(self.cfg.datazoo.endtime)
+        filtered_data = data.iloc[:nsteps]
+        q_obs = filtered_data["QObs(mm/h)"]
+        q_obs_tensor = torch.tensor(q_obs.to_numpy(), device=self.cfg.device)
+        nan_mask = torch.isnan(q_obs_tensor)
+        q_obs_tensor[nan_mask] = 0.0
+        return q_obs_tensor
 
     def load_phillipsburg_data(self):
         from dpLGAR.datazoo import read_df

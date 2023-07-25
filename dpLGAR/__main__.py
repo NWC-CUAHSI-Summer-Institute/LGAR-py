@@ -22,7 +22,7 @@ def main(cfg: DictConfig) -> None:
 def start_train(cfg: DictConfig) -> None:
     trainer = BaseTrainer(cfg)
     trainer.initialize_training()
-
+    trainer.train_and_validate()
 
 if __name__ == "__main__":
     main()

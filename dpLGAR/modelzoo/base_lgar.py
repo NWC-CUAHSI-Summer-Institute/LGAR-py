@@ -37,7 +37,7 @@ class BaseLGAR(BaseModel):
     def _set_parameters(self):
         self.set_parameter_lists()
 
-    def forward(self, i, x) -> (Tensor, Tensor):
+    def forward(self, x) -> (Tensor, Tensor):
         """
         The forward function to model Precip/PET through LGAR functions
         /* Note unit conversion:
