@@ -5,9 +5,10 @@ from omegaconf import DictConfig
 import torch
 import torch.nn as nn
 
-from dpLGAR.lgar.soil_column.base_state import BaseState
+from dpLGAR.lgar.mass_balance.global_mass_balance import GlobalMassBalance
+from dpLGAR.lgar.mass_balance.local_mass_balance import LocalMassBalance
 from dpLGAR.lgar.layers.Layer import Layer
-
+from dpLGAR.lgar.soil_column.base_state import BaseState
 
 class BaseModel(nn.Module):
     """Abstract base model class, don't use this class for model training.
@@ -56,15 +57,14 @@ class BaseModel(nn.Module):
         self._create_local_mass_balance()
         self._create_global_mass_balance()
 
-
     def _create_global_mass_balance(self):
         """Creates the local mass balance parameters"""
-        raise NotImplementedError
+        self.global_mb = GlobalMassBalance()
 
     def _create_local_mass_balance(self):
         """Creates the local mass balance parameters"""
         # TODO SET LOCAL MASS BALANCE AND GLOBAL
-        raise NotImplementedError
+        self.local_mb = LocalMassBalance()
 
     def _create_soil_params(self, c: pd.DataFrame):
         """Creates the rest of the van Genuchten parameters"""

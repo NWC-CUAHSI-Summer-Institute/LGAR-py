@@ -1,96 +1,29 @@
-from omegaconf import DictConfig
 import logging
-import numpy as np
-import torch
-from torch import Tensor
 
-log = logging.getLogger("modelzoo.physics.MassBalance")
+from dpLGAR.lgar.mass_balance.base_mass_balance import BaseMassBalance
+
+log = logging.getLogger(__name__)
 
 
-class BaseMassBalance:
-    def __init__(self, cfg: DictConfig, model):
-        super().__init__()
-        self.device = cfg.device
+class GlobalMassBalance(BaseMassBalance):
+    def __init__(self):
+        super(GlobalMassBalance).__init__()
 
-        self.precip = None
-        self.infiltration = None
-        self.starting_volume = None
-        self.ending_volume = None
-        self.AET = None
-        self.percolation = None
-        self.runoff = None
-        self.giuh_runoff = None
-        self.discharge = None
-        self.PET = None
-        self.ponded_depth = None
-        self.ponded_water = None
-        self.groundwater_discharge = None
+    def finalize_giuh_runoff(self, soil_state):
+        for i in range(soil_state.num_giuh_ordinates):
+            self.giuh_runoff = self.giuh_runoff + soil_state.giuh_runoff[i]
 
-        self.set_internal_states(model)
-
-    def change_mass(self, model):
-        self.precip = self.precip + model.precip
-        self.infiltration = self.infiltration + model.infiltration
-        self.AET = self.AET + model.AET
-        self.percolation = self.percolation + model.percolation
-        self.runoff = self.runoff + model.runoff
-        self.giuh_runoff = self.giuh_runoff + model.giuh_runoff
-        self.discharge = self.discharge + model.discharge
-        self.PET = self.PET + model.PET
-        self.ponded_water = model.ponded_water
-        self.groundwater_discharge = (
-            self.groundwater_discharge + model.groundwater_discharge
-        )
-
-        model.precip = torch.tensor(0.0, device=self.device)
-        model.PET = torch.tensor(0.0, device=self.device)
-        model.AET = torch.tensor(0.0, device=self.device)
-        model.infiltration = torch.tensor(0.0, device=self.device)
-        model.runoff = torch.tensor(0.0, device=self.device)
-        model.percolation = torch.tensor(0.0, device=self.device)
-        model.giuh_runoff = torch.tensor(0.0, device=self.device)
-        model.discharge = torch.tensor(0.0, device=self.device)
-        model.groundwater_discharge = torch.tensor(0.0, device=self.device)
-
-    def reset_mass(self, model):
-        self.set_internal_states(model)
-
-    def set_internal_states(self, model):
-        self.precip = torch.tensor(0.0, device=self.device)
-        self.infiltration = torch.tensor(0.0, device=self.device)
-        self.starting_volume = model.ending_volume.clone()
-        self.ending_volume = torch.tensor(0.0, device=self.device)
-        self.AET = torch.tensor(0.0, device=self.device)
-        self.percolation = torch.tensor(0.0, device=self.device)
-        self.runoff = torch.tensor(0.0, device=self.device)
-        self.giuh_runoff = torch.tensor(0.0, device=self.device)
-        self.discharge = torch.tensor(0.0, device=self.device)
-        self.PET = torch.tensor(0.0, device=self.device)
-        self.ponded_depth = torch.tensor(0.0, device=self.device)
-
-        # setting volon and precip at the initial time to 0.0 as they determine the creation of surficail wetting front
-        self.ponded_water = torch.tensor(0.0, device=self.device)
-
-        # setting flux from groundwater_reservoir_to_stream to zero, will be non-zero when groundwater reservoir is added/simulated
-        self.groundwater_discharge = torch.tensor(0.0, device=self.device)
-
-    def report_mass(self, model):
-        global_params = model.global_params
-        for i in range(global_params.num_giuh_ordinates):
-            self.giuh_runoff = self.giuh_runoff + global_params.giuh_runoff[i]
-
-        self.ending_volume = model.ending_volume
-
+    def print(self, ending_volume):
+        self.ending_volume = ending_volume
         global_error_cm = (
-            self.starting_volume
-            + self.precip
-            - self.runoff
-            - self.AET
-            - self.ponded_water
-            - self.percolation
-            - self.ending_volume
+                self.starting_volume
+                + self.precip
+                - self.runoff
+                - self.AET
+                - self.ponded_water
+                - self.percolation
+                - self.ending_volume
         )
-
         log.info("********************************************************* ")
         log.info("-------------------- Simulation Summary ----------------- ")
         log.info("------------------------ Mass balance ------------------- ")
