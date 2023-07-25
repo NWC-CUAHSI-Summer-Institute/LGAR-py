@@ -12,3 +12,4 @@ dpLGAR/modelzoo/physics/lgar/__pycache__/
 dpLGAR/modelzoo/physics/layers/__pycache__/
 dpLGAR/modelzoo/functions/__pycache__/
 runs/
+lgar_C_Py_comparison.ipynb
