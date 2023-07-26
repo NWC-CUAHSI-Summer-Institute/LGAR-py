@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 
 class GlobalMassBalance(BaseMassBalance):
     def __init__(self):
-        super(GlobalMassBalance).__init__()
+        super(GlobalMassBalance, self).__init__()
 
     def finalize_giuh_runoff(self, soil_state):
         for i in range(soil_state.num_giuh_ordinates):

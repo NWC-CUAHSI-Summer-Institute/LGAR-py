@@ -11,20 +11,20 @@ log = logging.getLogger(__name__)
 class BaseMassBalance:
     def __init__(self):
         super().__init__()
-        self.starting_volume = None
-        self.ending_volume = None
-        self.precip = None
-        self.PET = None
-        self.AET = None
-        self.ponded_water = None
-        self.previous_precip = None
-        self.infiltration = None
-        self.runoff = None
-        self.giuh_runoff = None
-        self.giuh_runoff_queue = None
-        self.discharge = None
-        self.groundwater_discharge = None
-        self.percolation = None
+        self.starting_volume = torch.tensor(0.0)
+        self.ending_volume = torch.tensor(0.0)
+        self.precip = torch.tensor(0.0)
+        self.PET = torch.tensor(0.0)
+        self.AET = torch.tensor(0.0)
+        self.ponded_water = torch.tensor(0.0)
+        self.previous_precip = torch.tensor(0.0)
+        self.infiltration = torch.tensor(0.0)
+        self.runoff = torch.tensor(0.0)
+        self.giuh_runoff = torch.tensor(0.0)
+        self.giuh_runoff_queue = torch.tensor(0.0)
+        self.discharge = torch.tensor(0.0)
+        self.groundwater_discharge = torch.tensor(0.0)
+        self.percolation = torch.tensor(0.0)
 
     def _calc_mb(self):
         return (

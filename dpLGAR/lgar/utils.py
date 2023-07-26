@@ -7,7 +7,8 @@ from torch import Tensor
 
 
 zero = torch.tensor(0.0, dtype=torch.float64)
-threshold = torch.tensor(1e-12, dtype=torch.float64)
+threshold = torch.tensor(0.0, dtype=torch.float64)
+# threshold = torch.tensor(1e-12, dtype=torch.float64)
 log = logging.getLogger(__name__)
 
 

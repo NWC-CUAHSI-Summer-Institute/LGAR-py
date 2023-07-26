@@ -10,6 +10,8 @@ learning_rate: 0.001
 #  minibatch: 31 # [days]
 #  minibatch: 15 # [days]
 minibatch: 0.04166666667 # this makes no minibatch
+subcycle_length: 3600
+forcing_resolution: 3600
 range:
   lb:
     - 0.0015 # alpha
