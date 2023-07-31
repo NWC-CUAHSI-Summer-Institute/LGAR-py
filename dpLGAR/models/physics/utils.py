@@ -6,7 +6,7 @@ from torch import Tensor
 
 log = logging.getLogger("physics.utils")
 zero = torch.tensor(0.0, dtype=torch.float64)
-threshold = torch.tensor(1e-12, dtype=torch.float64)
+threshold = torch.tensor(0.0, dtype=torch.float64)
 
 
 def safe_pow(base, exponent):

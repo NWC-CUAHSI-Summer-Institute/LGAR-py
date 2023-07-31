@@ -111,9 +111,12 @@ class DifferentiableLGAR(BaseAgent):
         One epoch of training
         :return:
         """
+        import numpy as np
         y_hat_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
         y_t_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
         self.optimizer.zero_grad()
+        layer_depths = []
+        water_content = []
         for i, (x, y_t) in enumerate(tqdm(self.data_loader, desc=f"Epoch {self.current_epoch + 1} Training")):
             # Resetting output vars
             runoff, percolation = self.model(x.squeeze())
@@ -122,8 +125,15 @@ class DifferentiableLGAR(BaseAgent):
             time.sleep(0.01)
             # percolation_batch[j] = percolation
             # Updating the total mass of the system
+            layer_depths.append(self.model.top_layer.get_layer_depth([]))
+            water_content.append(self.model.top_layer.get_layer_thetas([]))
             self.mass_balance.change_mass(self.model)  # Updating global balance
-        self.mass_balance.report_mass(self.model)  # Global mass balance
+        self.mass_balance.report_mass(self.model) # Global mass balance
+        layer_depths_np = np.array(layer_depths)
+        water_content_np = np.array(water_content)
+        # save the numpy array as a .npy file
+        np.save('~/projects/dpLGAR/layer_depths.npy', layer_depths_np)
+        np.save('~/projects/dpLGAR/water_content.npy', water_content_np)
         warmup = self.cfg.models.hyperparameters.warmup
         self.y_hat = y_hat_[warmup:]
         self.y_t = y_t_[warmup:]

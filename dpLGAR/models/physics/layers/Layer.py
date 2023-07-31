@@ -1624,6 +1624,22 @@ class Layer:
         else:
             return self
 
+    def get_layer_depth(self, layers):
+        for wf in self.wetting_fronts:
+            layers.append(wf.depth.item())
+        if self.next_layer is not None:
+            return self.next_layer.get_layer_depth(layers)
+        else:
+            return layers
+
+    def get_layer_thetas(self, thetas):
+        for wf in self.wetting_fronts:
+            thetas.append(wf.theta.item())
+        if self.next_layer is not None:
+            return self.next_layer.get_layer_thetas(thetas)
+        else:
+            return thetas
+
     def find_layer(self, layer_num):
         if self.layer_num == layer_num:
             return self

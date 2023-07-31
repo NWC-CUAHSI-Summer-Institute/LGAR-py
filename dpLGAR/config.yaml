@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - data: config/Phillipsburg_spring
+  - data: config/Phillipsburg
   - models: config/shorter_subcycle
 #cwd: /mnt/sdb1/tkb5476/dpLGAR/
 cwd: /Users/taddbindas/projects/dpLGAR
