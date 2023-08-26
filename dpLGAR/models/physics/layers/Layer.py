@@ -24,10 +24,8 @@ class Layer:
         global_params,
         layer_index: int,
         c: Tensor,
-        alpha: torch.nn.ParameterList,
-        n: torch.nn.ParameterList,
-        ksat: torch.nn.ParameterList,
-        texture_map: dict,
+        ksat: Tensor,
+        rank,
         previous_layer=None,
     ):
         """
@@ -42,6 +40,7 @@ class Layer:
         :param is_top: TBD if this is necessary. Rn it's always true
         """
         super().__init__()
+        self.rank = rank
         self.global_params = global_params
         self.num_layers = global_params.num_layers
         self.layer_num = layer_index
@@ -49,11 +48,9 @@ class Layer:
         self.cumulative_layer_thickness = self.global_params.cum_layer_thickness[
             self.layer_num
         ]
-        self.soil_type = self.global_params.layer_soil_type[self.layer_num]
-        self.texture = texture_map[self.soil_type]
         self.attributes = c[self.layer_num]
-        self.alpha_layer = alpha[self.layer_num]
-        self.n_layer = n[self.layer_num]
+        self.alpha_layer = c[self.layer_num][self.global_params.soil_index["alpha"]]
+        self.n_layer = c[self.layer_num][self.global_params.soil_index["n"]]
         self.ksat_layer = ksat[self.layer_num]
 
         # For mass balance
@@ -81,10 +78,8 @@ class Layer:
                 global_params,
                 layer_index + 1,
                 c,
-                alpha,
-                n,
                 ksat,
-                texture_map,
+                self.rank,
                 previous_layer=self,
             )
         self.previous_state = self.deepcopy()
@@ -307,7 +302,7 @@ class Layer:
             if torch.abs(psi_cm - psi_cm_loc_prev) < 1e-15 and factor < 1e-13:
                 break
             if torch.abs(delta_mass - delta_mass_prev) < 1e-15:
-                count_no_mass_change += 1
+                count_no_mass_change = count_no_mass_change + 1
             else:
                 count_no_mass_change = 0
             if count_no_mass_change == break_no_mass_change:
@@ -911,8 +906,8 @@ class Layer:
             next_depth_equal_to_thickness = (
                 next_front.depth == self.cumulative_layer_thickness
             )
-            # Supposed to not work if the last layer, but that's taken care of before the loop
-            if depth_greater_than_layer and next_depth_equal_to_thickness:
+            # Supposed to not work if the wetting front is in the last soil layer
+            if depth_greater_than_layer and next_depth_equal_to_thickness and self.next_layer is not None:
                 current_theta = torch.min(theta_e, current_front.theta)
                 overshot_depth = current_front.depth - next_front.depth
                 # Adding the current wetting front (popped_front) to the next layer
@@ -977,9 +972,12 @@ class Layer:
         """
         # TODO there is a case that if there is too much rainfall we can traverse two layers in one go.
         #  Highly unlikely, but could be worth checking into
-        next_theta_r = self.next_layer.attributes[
-            self.global_params.soil_index["theta_r"]
-        ]
+        try:
+            next_theta_r = self.next_layer.attributes[
+                self.global_params.soil_index["theta_r"]
+            ]
+        except AttributeError:
+            log.error("here")
         next_theta_e = self.next_layer.attributes[
             self.global_params.soil_index["theta_e"]
         ]
@@ -1451,17 +1449,24 @@ class Layer:
         number_of_wetting_fronts = self.calc_num_wetting_fronts()
 
         layer_num_fp = current_free_drainage.layer_num
-
+        free_drainage_layer = self.find_layer(layer_num_fp)
+        free_drainage_ksat = (
+                free_drainage_layer.ksat_layer * self.global_params.frozen_factor
+        )
         if number_of_wetting_fronts == self.num_layers:
             # i.e., case of no capillary suction, dz/dt is also zero for all wetting fronts
             geff = torch.tensor(0.0, device=self.global_params.device)
             # i.e., case of no capillary suction, dz/dt is also zero for all wetting fronts
         else:
-            free_drainage_layer = self.find_layer(layer_num_fp)
             theta_e = free_drainage_layer.attributes[
                 self.global_params.soil_index["theta_e"]
             ]
-            theta_1 = next_free_drainage.theta  # theta_below
+            try:
+                theta_1 = next_free_drainage.theta  # theta_below
+            except AttributeError:
+                self.find_front_layer().print()
+                # TODO Temp setting to theta. Talk to peter about the theta_below when the last layer is a wetting front
+                theta_1 = current_front.theta
             theta_2 = theta_e
             free_drainage_ksat = (
                 free_drainage_layer.ksat_layer * self.global_params.frozen_factor
@@ -1494,7 +1499,7 @@ class Layer:
 
         theta_e1 = current_front.theta
         layer_nums_equal = layer_num_fp == self.num_layers
-        thetas_equal = current_free_drainage.theta == theta_e1
+        thetas_equal = (current_free_drainage.theta == theta_e1).item()
         layers_equal_wetting_fronts = self.num_layers == number_of_wetting_fronts
         if layers_equal_wetting_fronts and thetas_equal and layer_nums_equal:
             f_p = torch.tensor(0.0, device=self.global_params.device)
@@ -1531,7 +1536,6 @@ class Layer:
             _runoff_ = ponded_depth - infiltration
             ponded_depth = self.global_params.ponded_depth_max
             runoff = torch.clamp(_runoff_, min=0.0)
-            _x_ = "test"
 
         return runoff, infiltration, ponded_depth
 
@@ -1600,11 +1604,20 @@ class Layer:
                             self.wetting_fronts[i + 1],
                         )
                     else:
-                        return (
-                            current_front,
-                            current_free_drainage,
-                            self.next_layer.wetting_fronts[0],
-                        )
+                        try:
+                            if self.next_layer is None:
+                                return (
+                                    current_front,
+                                    current_free_drainage,
+                                    None
+                                )
+                            return (
+                                current_front,
+                                current_free_drainage,
+                                self.next_layer.wetting_fronts[0],
+                            )
+                        except AttributeError:
+                            log.error("help")
 
     def find_front_layer(self):
         """
@@ -1652,8 +1665,9 @@ class Layer:
 
     def print(self, first=True):
         if first:
+            log.info(f"Printing the top_layer for rank: {self.rank}")
             log.info(
-                f"[     Depth   Theta       Layer_num   dzdt     k_cm_hr    psi   ]"
+                f"[     Depth       Theta   Layer_num   dzdt     k_cm_hr    psi   ]"
             )
         for wf in self.wetting_fronts:
             wf.print()

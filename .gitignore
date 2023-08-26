@@ -1,6 +1,8 @@
 output/
 data/*
+data/.DS_Store
 .idea/
+<<<<<<< HEAD
 lgar_C_Py_comparison.ipynb
 runs/
 __pychache__/
@@ -17,11 +19,18 @@ dpLGAR/modelzoo/physics/__pycache__/
 dpLGAR/modelzoo/physics/lgar/__pycache__/
 dpLGAR/modelzoo/physics/layers/__pycache__/
 dpLGAR/modelzoo/functions/__pycache__/
+=======
+.DS_Store
+dpLGAR/__pycache__/
+dpLGAR/agents/__pycache__/
+dpLGAR/data/__pycache__/
+>>>>>>> 76fa7f6bda0c675664797ebfdce954f574f1f779
 dpLGAR/models/__pycache__/
 dpLGAR/models/physics/__pycache__/
 dpLGAR/models/physics/lgar/__pycache__/
 dpLGAR/models/physics/layers/__pycache__/
 dpLGAR/models/functions/__pycache__/
+<<<<<<< HEAD
 dpLGAR/agents/__pycache__/
 dpLGAR/data/__pycache__/
 runs/
@@ -188,3 +197,6 @@ cython_debug/
 .idea/
 #
 output/
+=======
+saved_model_runs/
+>>>>>>> 76fa7f6bda0c675664797ebfdce954f574f1f779
