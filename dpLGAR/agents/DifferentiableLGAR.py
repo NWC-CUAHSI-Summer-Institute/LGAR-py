@@ -97,14 +97,15 @@ class DifferentiableLGAR(BaseAgent):
         :return:
         """
         self.model.train()
-        for epoch in range(1, self.cfg.models.hyperparameters.epochs + 1):
-            self.train_one_epoch()
-            self.current_epoch += 1
+        # for epoch in range(1, self.cfg.models.hyperparameters.epochs + 1):
+        log.info("Hardcoding to only run for one epoch")
+        self.train_one_epoch()
+        self.current_epoch += 1
 
-            # Resetting the internal states (soil layers) for the next run
-            self.model.set_internal_states()
-            # Resetting the mass
-            self.mass_balance.reset_mass(self.model)
+        # Resetting the internal states (soil layers) for the next run
+        self.model.set_internal_states()
+        # Resetting the mass
+        self.mass_balance.reset_mass(self.model)
 
     def train_one_epoch(self):
         """
@@ -129,15 +130,15 @@ class DifferentiableLGAR(BaseAgent):
             water_content.append(self.model.top_layer.get_layer_thetas([]))
             self.mass_balance.change_mass(self.model)  # Updating global balance
         self.mass_balance.report_mass(self.model) # Global mass balance
-        layer_depths_np = np.array(layer_depths)
-        water_content_np = np.array(water_content)
+        # layer_depths_np = np.array(layer_depths)
+        # water_content_np = np.array(water_content)
         # save the numpy array as a .npy file
-        np.save('~/projects/dpLGAR/layer_depths.npy', layer_depths_np)
-        np.save('~/projects/dpLGAR/water_content.npy', water_content_np)
-        warmup = self.cfg.models.hyperparameters.warmup
-        self.y_hat = y_hat_[warmup:]
-        self.y_t = y_t_[warmup:]
-        self.validate()
+        # np.save('~/projects/dpLGAR/layer_depths.npy', layer_depths_np)
+        # np.save('~/projects/dpLGAR/water_content.npy', water_content_np)
+        # warmup = self.cfg.models.hyperparameters.warmup
+        # self.y_hat = y_hat_[warmup:]
+        # self.y_t = y_t_[warmup:]
+        # self.validate()
 
     def validate(self) -> None:
         """
