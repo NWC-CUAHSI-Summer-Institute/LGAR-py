@@ -12,3 +12,4 @@ dpLGAR/models/physics/lgar/__pycache__/
 dpLGAR/models/physics/layers/__pycache__/
 dpLGAR/models/functions/__pycache__/
 saved_model_runs/
+flat_files/
