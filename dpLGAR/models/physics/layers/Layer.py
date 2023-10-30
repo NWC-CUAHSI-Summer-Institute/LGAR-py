@@ -1046,8 +1046,10 @@ class Layer:
                     _ = self.wetting_fronts.pop(
                         i
                     )  # deleting the current front (i.e front with index i)
-
             bottom_flux_cm = bottom_flux_cm + bottom_flux_cm_temp
+        if self.next_layer is not None:
+            return bottom_flux_cm + self.next_layer.wetting_front_cross_domain_boundary()
+        else:
             return bottom_flux_cm
 
     def fix_dry_over_wet_fronts(self):

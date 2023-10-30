@@ -3,7 +3,7 @@ defaults:
   - data: config/Phillipsburg_spring
   - models: config/shorter_subcycle
 #cwd: /mnt/sdb1/tkb5476/dpLGAR/
-cwd: /Users/taddbindas/projects/dpLGAR
+cwd: /Users/taddbindas/projects/soils_work/dpLGAR-NWC-SI/
 save_name: debugger
 output_dir: ${cwd}/output
 device: cpu
