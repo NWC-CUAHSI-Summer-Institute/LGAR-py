@@ -3,11 +3,9 @@ defaults:
   - data: config/lumped_catchment
   - models: config/shorter_subcycle
   - override hydra/launcher: joblib
-cwd: /mnt/sdb1/tkb5476/dpLGAR/
-#cwd: /Users/taddbindas/projects/dpLGAR
-#basin_id: "01031500"  # Default basin
-basin_id: "06332515"
-save_name: ${basin_id}_train
+#cwd: /mnt/sdb1/tkb5476/dpLGAR/
+cwd: /Users/taddbindas/projects/soils_work/dpLGAR-NWC-SI/
+save_name: debugger
 output_dir: ${cwd}/output
 device: cpu
 print_output: False # Not supported rn
