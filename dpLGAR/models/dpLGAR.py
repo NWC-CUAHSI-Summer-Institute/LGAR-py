@@ -10,13 +10,12 @@
 """
 from omegaconf import DictConfig
 import logging
-import time
-from tqdm import tqdm
 import torch
 from torch import Tensor
 import torch.nn as nn
 
-from dpLGAR.data.utils import generate_soil_metrics, read_df, read_test_params
+from dpLGAR.data.utils import generate_soil_metrics
+from dpLGAR.models.MLP import MLP
 from dpLGAR.models.physics.GlobalParams import GlobalParams
 from dpLGAR.models.physics.layers.Layer import Layer
 from dpLGAR.models.physics.lgar.frozen_factor import (
@@ -28,37 +27,45 @@ log = logging.getLogger("models.dpLGAR")
 
 
 class dpLGAR(nn.Module):
-    def __init__(self, cfg: DictConfig) -> None:
+    def __init__(self, cfg: DictConfig, data) -> None:
         """
 
         :param cfg:
+        :param soil_information: soil attributes
         """
         super(dpLGAR, self).__init__()
 
         self.cfg = cfg
+        self.rank = cfg.local_rank
 
-        # Getting Soils information
-        alpha_, n_, ksat_ = read_test_params(cfg)
-        soil_types = cfg.data.layer_soil_type
-        alpha_layer = alpha_[soil_types]
-        n_layer = n_[soil_types]
-        ksat_layer = ksat_[soil_types]
+        self.soil_attributes = data.soil_attributes
+        self.normalized_soil_attributes = data.normalized_soil_attributes
 
-        # Setting NN parameters
-        # self.ponded_depth_max = nn.Parameter(torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64))
-        self.ponded_depth_max = torch.tensor(self.cfg.data.ponded_depth_max, dtype=torch.float64)
-        self.alpha = nn.ParameterList([])
-        self.n = nn.ParameterList([])
-        self.ksat = nn.ParameterList([])
-        for i in range(alpha_layer.shape[0]):
-            self.alpha.append(nn.Parameter(alpha_layer[i]))
-            self.n.append(nn.Parameter(n_layer[i]))
-            # Addressing Frozen Factor
-            self.ksat.append(nn.Parameter(ksat_layer[i] * cfg.constants.frozen_factor))
+        self.mlp = MLP(cfg, self.normalized_soil_attributes)
+
+        # We're assuming two soil layers of the same "type" The first layer is topsoil
+        # The bottom is of the same "type" but will be trained to closer mimic what the physics tells us will be there
+        # self.textures = [soil_information[1], soil_information[1], soil_information[1]]
+        # The soil type in this basin, adding 1 for indexing error (Tadd's fault)
+        # SINCE PYTHON is 0-BASED FOR LISTS AND C IS 1-BASED
+        # layer = soil_information[2] - 1
+        # self.cfg.data.layer_soil_type = [layer, layer, layer]
+
+        # Getting starting values for soil information (File from Fred Ogden)
+        self.alpha = torch.zeros(
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
+        )
+        self.n = torch.zeros([self.cfg.data.num_soil_layers], device=self.cfg.device)
+        self.ksat = torch.zeros([self.cfg.data.num_soil_layers], device=self.cfg.device)
+        self.theta_e = torch.zeros(
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
+        )
+        self.theta_r = torch.zeros(
+            [self.cfg.data.num_soil_layers], device=self.cfg.device
+        )
+        self.ponded_depth_max = torch.tensor(0.0, device=self.cfg.device)
 
         # Initializing Values
-        self.soils_df = None
-        self.texture_map = None
         self.c = None
         self.cfg.data.soil_index = {
             "theta_r": 0,
@@ -69,6 +76,8 @@ class dpLGAR(nn.Module):
             "bc_lambda": 5,
             "bc_psib_cm": 6,
             "h_min_cm": 7,
+            "alpha": 8,
+            "n": 9,
         }
 
         self.top_layer = None
@@ -96,10 +105,18 @@ class dpLGAR(nn.Module):
 
     def set_internal_states(self):
         # Creating static soil params
-        self.soils_df = read_df(self.cfg.data.soil_params_file)
-        texture_values = self.soils_df["Texture"].values
-        self.texture_map = {idx: texture for idx, texture in enumerate(texture_values)}
-        self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
+        (
+            self.alpha,
+            self.n,
+            self.ksat,
+            self.theta_e,
+            self.theta_r,
+            self.ponded_depth_max,
+        ) = self.mlp(self.normalized_soil_attributes)
+
+        self.c = generate_soil_metrics(
+            self.cfg, self.alpha, self.n, self.theta_e, self.theta_r
+        )
 
         self.global_params = GlobalParams(self.cfg, self.ponded_depth_max)
 
@@ -110,10 +127,8 @@ class dpLGAR(nn.Module):
             self.global_params,
             layer_index,
             self.c,
-            self.alpha,
-            self.n,
             self.ksat,
-            self.texture_map,
+            self.rank,
         )
 
         # Gaining a reference to the bottom layer
@@ -145,13 +160,14 @@ class dpLGAR(nn.Module):
         self.discharge = torch.tensor(0.0, device=self.cfg.device)
         self.groundwater_discharge = torch.tensor(0.0, device=self.cfg.device)
         self.percolation = torch.tensor(0.0, device=self.cfg.device)
+        # self.top_layer.print()
 
     def update_soil_parameters(self):
         self.global_params.ponded_depth_max = self.ponded_depth_max.clone()
         self.c = generate_soil_metrics(self.cfg, self.soils_df, self.alpha, self.n)
         self.top_layer.update_soil_parameters(self.c)
 
-    def forward(self, x) -> (Tensor, Tensor):
+    def forward(self, i, x) -> (Tensor, Tensor):
         """
         The forward function to model Precip/PET through LGAR functions
         /* Note unit conversion:
@@ -176,7 +192,8 @@ class dpLGAR(nn.Module):
         for _ in range(int(self.cfg.models.num_subcycles)):
             self.top_layer.copy_states()
             precip_sub = precip * subtimestep_h
-            pet_sub = pet * subtimestep_h
+            # Making sure PET >=0
+            pet_sub = torch.clamp(pet * subtimestep_h, min=0.0)
             previous_precip_sub = self.previous_precip.clone()
             ponded_depth_sub = precip_sub + self.ponded_water
             ponded_water_sub = torch.tensor(0.0, device=self.cfg.device)
@@ -200,26 +217,25 @@ class dpLGAR(nn.Module):
                 # ------------------------------------------------------------------------------------------------------
                 # /* create a new wetting front if the following is true. Meaning there is no
                 #    wetting front in the top layer to accept the water, must create one. */
-                if is_top_layer_saturated is False:
-                    temp_pd = torch.tensor(0.0, device=self.cfg.device)
-                    # // move the wetting fronts without adding any water; this is done to close the mass balance
-                    temp_pd, AET_sub = self.move_wetting_front(
-                        temp_pd,
-                        AET_sub,
-                        ending_volume_sub,
-                        subtimestep_h,
-                        bottom_boundary_flux,
-                    )
-                    # depth of the surficial front to be created
-                    dry_depth = self.top_layer.calc_dry_depth(subtimestep_h)
-                    (
-                        ponded_depth_sub,
-                        infiltration_sub,
-                    ) = self.top_layer.create_surficial_front(
-                        dry_depth, ponded_depth_sub, infiltration_sub
-                    )
-                    self.top_layer.copy_states()
-                    self.infiltration = self.infiltration + infiltration_sub
+                temp_pd = torch.tensor(0.0, device=self.cfg.device)
+                # // move the wetting fronts without adding any water; this is done to close the mass balance
+                temp_pd, AET_sub = self.move_wetting_front(
+                    temp_pd,
+                    AET_sub,
+                    ending_volume_sub,
+                    subtimestep_h,
+                    bottom_boundary_flux,
+                )
+                # depth of the surficial front to be created
+                dry_depth = self.top_layer.calc_dry_depth(subtimestep_h)
+                (
+                    ponded_depth_sub,
+                    infiltration_sub,
+                ) = self.top_layer.create_surficial_front(
+                    dry_depth, ponded_depth_sub, infiltration_sub
+                )
+                self.top_layer.copy_states()
+                self.infiltration = self.infiltration + infiltration_sub
             if create_surficial_front is False and ponded_depth_sub > 0:
                 # ------------------------------------------------------------------------------------------------------
                 # /* infiltrate water based on the infiltration capacity given no new wetting front
@@ -296,7 +312,19 @@ class dpLGAR(nn.Module):
                 self.giuh_runoff = self.giuh_runoff + giuh_runoff_sub
                 self.discharge = self.discharge + giuh_runoff_sub
                 self.groundwater_discharge = groundwater_discharge_sub
-        return self.runoff, self.percolation
+        # self.print_local_mass_balance(
+        #     local_mb,
+        #     starting_volume_sub,
+        #     precip_sub,
+        #     runoff_sub,
+        #     AET_sub,
+        #     ponded_water_sub,
+        #     percolation_sub,
+        #     ending_volume_sub,
+        #     infiltration_sub,
+        #     i,
+        # )
+        return self.runoff
 
     def calc_mass_balance(self) -> Tensor:
         """
@@ -376,9 +404,9 @@ class dpLGAR(nn.Module):
         else:
             # This is the timestep that adds runoff
             runoff_sub = ponded_depth_sub - self.global_params.ponded_depth_max
-            ponded_depth_sub = self.global_params.ponded_depth_max
-            ponded_water_sub = ponded_depth_sub
             self.runoff = self.runoff + runoff_sub
+            ponded_water_sub = ponded_depth_sub
+            ponded_depth_sub = self.global_params.ponded_depth_max
         return ponded_depth_sub, ponded_water_sub, runoff_sub
 
     def print_params(self):
@@ -391,6 +419,12 @@ class dpLGAR(nn.Module):
         for i in range(len(self.ksat)):
             ksat = self.ksat[i]
             log.info(f"Ksat for soil {i+1}: {ksat.detach().item():.4f}")
+        for i in range(len(self.theta_e)):
+            theta_e = self.theta_e[i]
+            log.info(f"theta_e for soil {i+1}: {theta_e.detach().item():.4f}")
+        for i in range(len(self.theta_r)):
+            theta_r = self.theta_r[i]
+            log.info(f"theta_r for soil {i+1}: {theta_r.detach().item():.4f}")
         log.info(f"Max Ponded Depth: {self.ponded_depth_max.detach().item():.4f}")
 
     def print_local_mass_balance(
@@ -404,9 +438,10 @@ class dpLGAR(nn.Module):
         percolation_sub,
         ending_volume_sub,
         infiltration_sub,
+        i,
     ):
         self.top_layer.print()
-        log.info(f"Local mass balance at this timestep...")
+        log.info(f"Local mass balance at timestep {i}:")
         log.info(f"Error         = {local_mb.item():14.10f}")
         log.info(f"Initial water = {starting_volume_sub.item():14.10f}")
         log.info(f"Water added   = {precip_sub.item():14.10f}")

@@ -1,10 +1,13 @@
 output/
 data/*
+data/.DS_Store
 .idea/
+saved_model_runs/
 runs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
+.DS_Store
 dpLGAR/__pycache__/
 dpLGAR/agents/__pycache__/
 dpLGAR/data/__pycache__/
@@ -164,4 +167,3 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-
