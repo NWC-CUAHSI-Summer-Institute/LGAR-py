@@ -1,8 +1,6 @@
 # LGAR-py
 
-**NOTE: All dpLGAR work has been moved into the repo here: https://github.com/taddyb/dpLGAR in order to be compliant with Neural Hydrology standards**
-
-**See release 0.2.0 for the forward run python code that emulates LGAR-C**
+**See release 0.3.0 for the latest code**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) ![versions](https://img.shields.io/pypi/pyversions/hydra-core.svg) [![CodeStyle](https://img.shields.io/badge/code%20style-Black-black)]()
 
