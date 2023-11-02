@@ -1,7 +1,8 @@
 defaults:
   - _self_
   - data: config/Phillipsburg_spring
-  - models: config/shorter_subcycle
+  - models: config/nh
+#  - models: config/shorter_subcycle
 #cwd: /mnt/sdb1/tkb5476/dpLGAR/
 cwd: /Users/taddbindas/projects/soils_work/dpLGAR-NWC-SI/
 save_name: debugger
