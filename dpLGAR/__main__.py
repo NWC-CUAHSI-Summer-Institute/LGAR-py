@@ -8,7 +8,7 @@ from dpLGAR.agents.DifferentiableLGAR import DifferentiableLGAR
 log = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path=".", config_name="config")
+@hydra.main(version_base=None, config_path=".", config_name="confgit ig")
 def main(cfg: DictConfig) -> None:
     start = time.perf_counter()
     agent = DifferentiableLGAR(cfg)  # For Running against Observed Data
