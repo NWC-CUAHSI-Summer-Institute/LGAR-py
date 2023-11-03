@@ -2,8 +2,8 @@ output/
 data/*
 .idea/
 runs/
+dpLGAR/plugins/neuralhydrology/
 dpLGAR/plugins/neuralhydrology
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 dpLGAR/__pycache__/

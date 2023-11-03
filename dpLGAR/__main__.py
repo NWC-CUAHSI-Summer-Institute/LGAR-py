@@ -9,7 +9,7 @@ from dpLGAR.plugins import neural_hydrology_config_adapter
 log = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path=".", config_name="config")
+@hydra.main(version_base=None, config_path="conf/", config_name="config")
 def main(cfg: DictConfig) -> None:
     start = time.perf_counter()
     hybrid_cfg = neural_hydrology_config_adapter(cfg)
