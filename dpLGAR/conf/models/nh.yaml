@@ -50,6 +50,14 @@ statics_embedding:
   # dropout applied to embedding network
   dropout: 0.0
 
+target_variables:
+  - max_ponded_depth
+  - alpha
+  - n
+  - ksat
+  - theta_e
+  - theta_r
+
 # define embedding network for dynamic inputs
 dynamics_embedding:
   type: fc

@@ -31,6 +31,8 @@ def read_df(file: str) -> pd.DataFrame:
         df = pd.read_csv(file_path)
     elif file_path.suffix == ".dat":
         df = pd.read_csv(file_path, delimiter=r"\s+", engine="python")
+    elif file_path.suffix == ".feather":
+        df = pd.read_feather(file_path)
     else:
         log.error(f"File {file_path} has an invalid type")
         raise ValueError

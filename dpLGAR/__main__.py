@@ -1,10 +1,13 @@
 import hydra
 import logging
 from omegaconf import DictConfig
+import sys
 import time
 
+sys.path.insert(0, '/Users/taddbindas/projects/soils_work/lgar-py/dpLGAR/plugins/')
+
 from dpLGAR.agents.DifferentiableLGAR import DifferentiableLGAR
-from dpLGAR.plugins import neural_hydrology_config_adapter
+from dpLGAR.plugins import HybridConfig
 
 log = logging.getLogger(__name__)
 
@@ -12,7 +15,7 @@ log = logging.getLogger(__name__)
 @hydra.main(version_base=None, config_path="conf/", config_name="config")
 def main(cfg: DictConfig) -> None:
     start = time.perf_counter()
-    hybrid_cfg = neural_hydrology_config_adapter(cfg)
+    hybrid_cfg = HybridConfig(cfg)
     agent = DifferentiableLGAR(hybrid_cfg)
     agent.run()
     agent.finalize()

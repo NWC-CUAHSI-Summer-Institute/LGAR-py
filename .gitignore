@@ -4,6 +4,8 @@ data/*
 runs/
 dpLGAR/plugins/neuralhydrology/
 dpLGAR/plugins/neuralhydrology
+dpLGAR/plugins/dPLHBVrelease/
+dpLGAR/plugins/dPLHBVrelease
 # Byte-compiled / optimized / DLL files
 __pycache__/
 dpLGAR/__pycache__/

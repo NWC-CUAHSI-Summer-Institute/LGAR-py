@@ -8,16 +8,20 @@ from tqdm import tqdm, trange
 
 from dpLGAR.agents.base import BaseAgent
 from dpLGAR.data.Data import Data
+from dpLGAR.data.arid_single_basin import Basin_06332515
 from dpLGAR.data.metrics import calculate_nse
 from dpLGAR.models.dpLGAR import dpLGAR
 from dpLGAR.models.functions.loss import MSE_loss, RangeBoundLoss
 from dpLGAR.models.physics.MassBalance import MassBalance
+from dpLGAR.plugins import HybridConfig
 
-log = logging.getLogger("agents.DifferentiableLGAR")
+from dpLGAR.plugins.neuralhydrology.modelzoo.cudalstm import CudaLSTM
+
+log = logging.getLogger(__name__)
 
 
 class DifferentiableLGAR(BaseAgent):
-    def __init__(self, cfg: DictConfig) -> None:
+    def __init__(self, hybrid_cfg: HybridConfig) -> None:
         """
         Initialize the Differentiable LGAR code
 
@@ -27,7 +31,8 @@ class DifferentiableLGAR(BaseAgent):
         super().__init__()
 
         # Setting the cfg object and manual seed for reproducibility
-        self.cfg = cfg
+        self.cfg = hybrid_cfg.cfg
+        self.plugin_cfg = hybrid_cfg.nh_config
         torch.manual_seed(0)
         torch.set_default_dtype(torch.float64)
 
@@ -52,10 +57,10 @@ class DifferentiableLGAR(BaseAgent):
         )
 
         self.hourly_mini_batch = int(
-            cfg.models.hyperparameters.minibatch * 24
+            self.cfg.models.hyperparameters.minibatch * 24
         )  # daily to hourly
         # Defining the torch Dataset and Dataloader
-        self.data = Data(self.cfg)
+        self.data = Basin_06332515(self.cfg)
         self.data_loader = DataLoader(
             self.data, batch_size=self.hourly_mini_batch, shuffle=False
         )
@@ -65,15 +70,15 @@ class DifferentiableLGAR(BaseAgent):
         self.percolation_output = torch.zeros(
             [self.cfg.models.nsteps], device=self.cfg.device
         )
-        self.mass_balance = MassBalance(cfg, self.model)
+        self.mass_balance = MassBalance(self.cfg, self.model)
 
         self.criterion = MSE_loss
         self.optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=cfg.models.hyperparameters.learning_rate
+            self.model.parameters(), lr=self.cfg.models.hyperparameters.learning_rate
         )
 
-        lb = cfg.models.hyperparameters.lb
-        ub = cfg.models.hyperparameters.ub
+        lb = self.cfg.models.hyperparameters.lb
+        ub = self.cfg.models.hyperparameters.ub
         self.range_bound_loss = RangeBoundLoss(lb, ub, factor=1.0)
 
         self.y_hat = None

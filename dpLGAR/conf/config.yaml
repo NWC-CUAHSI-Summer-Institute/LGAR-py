@@ -1,10 +1,10 @@
 defaults:
   - _self_
-  - data: Phillipsburg_spring
+  - data: basin_06332515_no_polaris
   - models: nh
 #  - models: config/shorter_subcycle
 #cwd: /mnt/sdb1/tkb5476/dpLGAR/
-cwd: /Users/taddbindas/projects/soils_work/dpLGAR-NWC-SI/
+cwd: /Users/taddbindas/projects/soils_work/lgar-py/
 save_name: debugger
 output_dir: ${cwd}/output
 device: cpu
