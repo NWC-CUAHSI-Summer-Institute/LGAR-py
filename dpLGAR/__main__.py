@@ -6,7 +6,7 @@ import time
 
 sys.path.insert(0, '/Users/taddbindas/projects/soils_work/lgar-py/dpLGAR/plugins/')
 
-from dpLGAR.agents.DifferentiableLGAR import DifferentiableLGAR
+from dpLGAR.agents.LSTM_LGAR import Agent
 from dpLGAR.plugins import HybridConfig
 
 log = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 def main(cfg: DictConfig) -> None:
     start = time.perf_counter()
     hybrid_cfg = HybridConfig(cfg)
-    agent = DifferentiableLGAR(hybrid_cfg)
+    agent = Agent(hybrid_cfg)
     agent.run()
     agent.finalize()
     end = time.perf_counter()

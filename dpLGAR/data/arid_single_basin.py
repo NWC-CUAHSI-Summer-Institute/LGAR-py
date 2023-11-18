@@ -25,10 +25,10 @@ class Basin_06332515(Dataset):
         super().__init__()
 
         df = read_df(cfg.data.forcing_file)
-        df['datetime'] = pd.to_datetime(df['datetime'])
+        df['date'] = pd.to_datetime(df['date'])
         start_datetime = datetime.strptime(cfg.data.start_time, '%Y-%m-%d %H:%M:%S')
         end_datetime = start_datetime + timedelta(hours=int(cfg.models.endtime))
-        mask = (df['datetime'] >= start_datetime) & (df['datetime'] <= end_datetime)
+        mask = (df['date'] >= start_datetime) & (df['date'] <= end_datetime)
         self.forcing_df = df.loc[mask]
         precip = torch.tensor(self.forcing_df["P(mm/h)"].values, device=cfg.device)
         pet = torch.tensor(self.forcing_df["PET(mm/h)"].values, device=cfg.device)
