@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - data: basin_06332515_no_polaris
+  - data: basin_06332515
   - models: nh
 #  - models: config/shorter_subcycle
 #cwd: /mnt/sdb1/tkb5476/dpLGAR/

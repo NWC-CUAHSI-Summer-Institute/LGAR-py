@@ -1,9 +1,48 @@
 data_dir: ${cwd}/data/agu_2023
 basin_id: 06332515
+camels_basin_information: ${data.data_dir}/06332515_attr.feather
+attributes_file: ${data.data_dir}/CAMELS_Soil_Attributes_POLARIS_gage_1000pts6332515.csv
 forcing_file: ${data.data_dir}/06332515_hourly_nldas.csv
 streamflow_observations: ${data.data_dir}/06332515-usgs-hourly.csv
-soil_moisture_observations: ${data.data_dir}/soil_moisture_06332515.csv
+soil_moisture_observations: ${data.data_dir}/06332515_hourly_soil_moisture.csv
 soil_params_file: ${cwd}/data/vG_default_params.dat
+attributes:
+  - clay_0_5
+  - clay_5_15
+  - clay_15_30
+  - clay_30_60
+  - clay_60_100
+  - sand_0_5
+  - sand_5_15
+  - sand_15_30
+  - sand_30_60
+  - sand_60_100
+  - silt_0_5
+  - silt_5_15
+  - silt_15_30
+  - silt_30_60
+  - silt_60_100
+  - om_0_5
+  - om_5_15
+  - om_15_30
+  - om_30_60
+  - om_60_100
+  - om_0_5
+  - ph_5_15
+  - ph_15_30
+  - ph_30_60
+  - ph_60_100
+forcings:
+  - potential_evaporation
+  - temperature
+  - total_precipitation
+streamflow_target:
+  - QObs(mm/h)
+soil_moisture_target:
+  - soil_moisture_layer_1
+  - soil_moisture_layer_2
+scaler:
+  stat_dict: ${data.data_dir}/statistics_{save_name}.json
 layer_thickness: #[cm]
   - 7.0
   - 21.0
@@ -15,7 +54,7 @@ layer_soil_type:
   - 12
   - 13
   - 14
-start_time: 2010-01-01 00:00:00
+start_time: 1996-01-01 00:00:00
 endtime: 3000.0 #[hr]
 num_soil_types: 15  # must be less than or equal to MAX_NUM_SOIL_TYPES
 num_soil_layers: 3  # must be less than or equal to MAX_NUM_SOIL_LAYERS
