@@ -1,0 +1,18 @@
+hydra:
+  help:
+    app_name: LGAR-TORCH
+    header: == ${hydra.help.app_name} ==
+    template: |-
+      ${hydra.help.header}
+
+      This is ${hydra.help.app_name}!
+      Work in progress
+
+      ${hydra.help.footer}
+    footer: |-
+      Powered by Hydra (https://hydra.cc)
+      Use --hydra-help to view Hydra specific help
+  job:
+    name: ${save_name}
+  run:
+    dir: ${cwd}/output/${now:%Y-%m-%d}_${hydra.job.name}/${now:%H-%M-%S}

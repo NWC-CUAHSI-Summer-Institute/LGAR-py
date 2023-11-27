@@ -13,7 +13,8 @@ from typing import (
     TypeVar,
 )
 
-from dpLGAR.data.scaler import BasinNormScaler
+from dpLGAR.data import BasinData
+from dpLGAR.data.scaler import BasinNormScaler, MinMax
 from dpLGAR.data.utils import read_df
 
 log = logging.getLogger("data.Data")
@@ -25,44 +26,63 @@ class Basin_06332515(Dataset):
     def __init__(self, cfg: DictConfig) -> None:
         super().__init__()
         self.cfg = cfg
-        self.scaler = BasinNormScaler(cfg=self.cfg.data)
-        self.c = None
-        self.x = None
-        self.y = None
+        # self.scaler = BasinNormScaler(cfg=self.cfg.data)
+        self.scaler = MinMax(cfg=self.cfg.data)
+        self.data = BasinData()
         self._read_attributes()
         self._read_forcings()
         self._read_observations()
-        stat_dict_path = Path(self.cfg.data.scaler.stat_dict)
-        if not stat_dict_path.is_file():
-            self.scaler.create_stat_dict((self.c, self.x), self.y)
-            self.scaler.write()
-        else:
-            self.scaler.initialize(data)
+        # stat_dict_path = Path(self.cfg.data.scaler.stat_dict)
+        # if not stat_dict_path.is_file():
+        #     self.scaler.create_stat_dict(self.data)
+        #     self.scaler.write()
+        # else:
+        #     self.scaler.initialize(self.data)
+        self.normalized_data = BasinData()
+        self._set_normalized_data()
 
     def _read_attributes(self):
-        df = read_df(self.cfg.data.attributes_file)
-        attr_df = df[self.cfg.data.attributes]
-        self.c = attr_df.values
+        df = read_df(self.cfg.data.attributes_files.polaris)
+        attr_df = df[self.cfg.data.varC]
+        camels_df = read_df(self.cfg.data.attributes_files.camels)
+        self.data.basin_attributes = attr_df
+        self.data.camels_attributes = camels_df
 
     def _read_forcings(self):
-        df = read_df(self.cfg.data.forcing_file)
-        filtered_df = self._filter_dates(df, "date")
-        filtered_df["potential_evaporation"] = filtered_df["potential_evaporation"] * self.cfg.conversions.mm_to_cm
-        filtered_df["total_precipitation"] = filtered_df["total_precipitation"] * self.cfg.conversions.mm_to_cm
-        self.x = filtered_df[self.cfg.data.forcings].values
-        # precip = torch.tensor(forcing_df["P(mm/h)"].values)
-        # pet = torch.tensor(forcing_df["PET(mm/h)"].values)
-        # x_ = torch.stack([precip, pet])  # Index 0: Precip, index 1: PET
-        # x_tr = x_.transpose(0, 1)
-        # self.x = x_tr * self.cfg.conversions.mm_to_cm # Convert from mm/hr to cm/hr
+        precip_df = read_df(self.cfg.data.forcing_files.precip)
+        filtered_precip_df = self._filter_dates(precip_df, "date")
+        precip = filtered_precip_df["total_precipitation"] * self.cfg.conversions.mm_to_cm
+        pet_df = read_df(self.cfg.data.forcing_files.pet)
+        filtered_pet_df = self._filter_dates(pet_df, "Date")
+        pet = filtered_pet_df["PET(mm/h)"] * self.cfg.conversions.mm_to_cm
+        self.data.pet = pet
+        self.data.precip = precip
 
     def _read_observations(self):
         streamflow_df = read_df(self.cfg.data.streamflow_observations)
         soil_moisture_df = read_df(self.cfg.data.soil_moisture_observations)
         filtered_streamflow_df = self._filter_dates(streamflow_df, "date")
         filtered_soil_moisture_df = self._filter_dates(soil_moisture_df, "Date")
+        self.data.streamflow = filtered_streamflow_df.values
+        self.data.soil_moisture = filtered_soil_moisture_df.values
 
-        self.y = (filtered_streamflow_df.values, filtered_soil_moisture_df.values)
+    @staticmethod
+    def _log_normal_transform(value):
+        return torch.log10(torch.sqrt(value) + 0.1)
+
+    def _set_normalized_data(self):
+        # TODO make sure the normalization works
+        # - plotting make sure there is variance
+        # - after set up normalization and LSTM
+        np_attr = torch.tensor(self.data.basin_attributes.values)
+        self.normalized_data.basin_attributes = self.scaler(np_attr)
+        torch_precip = torch.tensor(self.data.precip.values.reshape((1, 3001)))
+        torch_pet = torch.tensor(self.data.pet.values.reshape((1, 3001)))
+        torch_precip[torch.isnan(torch_precip)] = 0.0
+        torch_pet[torch.isnan(torch_pet)] = 0.0
+        self.normalized_data.precip = self._log_normal_transform(torch_precip)
+        self.normalized_data.pet = self._log_normal_transform(torch_pet)
+        self.normalized_data.basin_attributes[torch.isnan(self.normalized_data.basin_attributes)] = 0.0
 
     def _filter_dates(self, df: pd.DataFrame, date_column: str) -> pd.DataFrame:
         """
@@ -81,33 +101,22 @@ class Basin_06332515(Dataset):
         mask = (df[date_column] >= start_datetime) & (df[date_column] <= end_datetime)
         return df.loc[mask]
 
-    def _calculate_PET(self):
-        # Get forcing
-        self.nldas_forcing = nldas_forcing
-        self.input_forcing = self.prepare_input(nldas_forcing)
-
-        # Get CAMELS basin attributes
-        basin_attrs = pd.read_csv(self.cfg.camels_attr_file)
-        basin_attrs['gauge_id'] = basin_attrs['gauge_id'].astype(str).str.zfill(8)
-        basin_idx = basin_attrs['gauge_id'] == basin_id
-        self.lon = basin_attrs['gauge_lon'][basin_idx].values[0]
-        self.lat = basin_attrs['gauge_lat'][basin_idx].values[0]
-        self.elevation = basin_attrs['elev_mean'][basin_idx].values[0]
-
-
     def __getitem__(self, index) -> T_co:
         """
         Method from the torch.Dataset parent class
         :param index: the date you're iterating on
         :return: the forcing and observed data for a particular index
         """
-        return self.x[index], self.y[index]
+        return (
+            self.data.pet[index],
+            self.data.precip[index],
+        )
 
     def __len__(self):
         """
         Method from the torch.Dataset parent class
         """
-        return self.x.shape[0]
+        return self.data.pet.shape[0]
 
     def read_oberservations(self, cfg: DictConfig):
         """

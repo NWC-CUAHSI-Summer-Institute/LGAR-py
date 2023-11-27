@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import json
 import logging
@@ -7,6 +8,16 @@ import numpy as np
 from omegaconf import DictConfig
 
 log = logging.getLogger(__name__)
+
+
+@dataclass
+class BasinData:
+    pet: np.ndarray = None
+    precip: np.ndarray = None
+    basin_attributes: np.ndarray = None
+    camels_attributes: np.ndarray = None
+    streamflow: np.ndarray = None
+    soil_moisture: np.ndarray = None
 
 
 class Scaler(ABC):
@@ -161,6 +172,7 @@ class Scaler(ABC):
                         "runoff",
                         "Runoff",
                         "Runofferror",
+                        "total_precipitation"
                     ]:
                         temp = np.log10(np.sqrt(x[:, :, k]) + 0.1)
                         out[:, :, k] = (temp - stat[2]) / stat[3]
@@ -174,6 +186,7 @@ class Scaler(ABC):
                         "runoff",
                         "Runoff",
                         "Runofferror",
+                        "total_precipitation",
                     ]:
                         temp = np.log10(np.sqrt(x[:, k]) + 0.1)
                         out[:, k] = (temp - stat[2]) / stat[3]
