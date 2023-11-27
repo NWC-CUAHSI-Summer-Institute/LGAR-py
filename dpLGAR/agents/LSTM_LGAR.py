@@ -7,21 +7,19 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
 from dpLGAR.agents.base import BaseAgent
-from dpLGAR.data.Data import Data
 from dpLGAR.data.arid_single_basin import Basin_06332515
 from dpLGAR.data.metrics import calculate_nse
 from dpLGAR.models.dpLGAR import dpLGAR
+from dpLGAR.models.lstm import LSTM
 from dpLGAR.models.functions.loss import MSE_loss, RangeBoundLoss
 from dpLGAR.models.physics.MassBalance import MassBalance
 from dpLGAR.plugins import HybridConfig
-
-from dpLGAR.plugins.neuralhydrology.modelzoo.cudalstm import CudaLSTM
 
 log = logging.getLogger(__name__)
 
 
 class Agent(BaseAgent):
-    def __init__(self, hybrid_cfg: HybridConfig) -> None:
+    def __init__(self, cfg: DictConfig) -> None:
         """
         Initialize the Differentiable LGAR code
 
@@ -31,8 +29,8 @@ class Agent(BaseAgent):
         super().__init__()
 
         # Setting the cfg object and manual seed for reproducibility
-        self.cfg = hybrid_cfg.cfg
-        self.plugin_cfg = hybrid_cfg.nh_config
+        self.cfg = cfg.cfg
+        # self.plugin_cfg = hybrid_cfg.nh_config
         torch.manual_seed(0)
         torch.set_default_dtype(torch.float64)
 
@@ -64,17 +62,17 @@ class Agent(BaseAgent):
         self.data_loader = DataLoader(
             self.data, batch_size=self.hourly_mini_batch, shuffle=False
         )
-
+        self.lstm = LSTM(self.cfg)
         # Defining the model and output variables to save
-        self.model = dpLGAR(self.cfg)
+        self.physics_model = dpLGAR(self.cfg)
         self.percolation_output = torch.zeros(
             [self.cfg.models.nsteps], device=self.cfg.device
         )
-        self.mass_balance = MassBalance(self.cfg, self.model)
+        self.mass_balance = MassBalance(self.cfg, self.physics_model)
 
         self.criterion = MSE_loss
         self.optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=self.cfg.models.hyperparameters.learning_rate
+            self.lstm.parameters(), lr=self.cfg.models.hyperparameters.learning_rate
         )
 
         lb = self.cfg.models.hyperparameters.lb
@@ -101,15 +99,15 @@ class Agent(BaseAgent):
         Main training loop
         :return:
         """
-        self.model.train()
+        self.physics_model.train()
         for epoch in range(1, self.cfg.models.hyperparameters.epochs + 1):
             self.train_one_epoch()
             self.current_epoch += 1
 
             # Resetting the internal states (soil layers) for the next run
-            self.model.set_internal_states()
+            self.physics_model.set_internal_states()
             # Resetting the mass
-            self.mass_balance.reset_mass(self.model)
+            self.mass_balance.reset_mass(self.physics_model)
 
     def train_one_epoch(self):
         """
@@ -121,14 +119,14 @@ class Agent(BaseAgent):
         self.optimizer.zero_grad()
         for i, (x, y_t) in enumerate(tqdm(self.data_loader, desc=f"Epoch {self.current_epoch + 1} Training")):
             # Resetting output vars
-            runoff, percolation = self.model(x.squeeze())
+            runoff, percolation = self.physics_model(x.squeeze())
             y_hat_[i] = runoff
             y_t_[i] = y_t
             time.sleep(0.01)
             # percolation_batch[j] = percolation
             # Updating the total mass of the system
-            self.mass_balance.change_mass(self.model)  # Updating global balance
-        self.mass_balance.report_mass(self.model)  # Global mass balance
+            self.mass_balance.change_mass(self.physics_model)  # Updating global balance
+        self.mass_balance.report_mass(self.physics_model)  # Global mass balance
         warmup = self.cfg.models.hyperparameters.warmup
         self.y_hat = y_hat_[warmup:]
         self.y_t = y_t_[warmup:]
@@ -154,10 +152,10 @@ class Agent(BaseAgent):
 
         # Compute the range bound loss for the parameters you want to constrain
         params = [
-            self.model.alpha,
-            self.model.n,
-            self.model.ksat,
-            self.model.ponded_depth_max,
+            self.physics_model.alpha,
+            self.physics_model.n,
+            self.physics_model.ksat,
+            self.physics_model.ponded_depth_max,
         ]
         bound_loss = self.range_bound_loss(params)
 

@@ -110,6 +110,11 @@ class Basin_06332515(Dataset):
         return (
             self.data.pet[index],
             self.data.precip[index],
+            self.normalized_data.precip[index],
+            self.normalized_data.pet[index],
+            self.normalized_data.basin_attributes,
+            self.data.streamflow[index],
+            self.data.soil_moisture[index]
         )
 
     def __len__(self):
