@@ -29,7 +29,7 @@ class Agent(BaseAgent):
         super().__init__()
 
         # Setting the cfg object and manual seed for reproducibility
-        self.cfg = cfg.cfg
+        self.cfg = cfg
         # self.plugin_cfg = hybrid_cfg.nh_config
         torch.manual_seed(0)
         torch.set_default_dtype(torch.float64)

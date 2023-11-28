@@ -58,7 +58,10 @@ class MassBalance:
     def set_internal_states(self, model):
         self.precip = torch.tensor(0.0, device=self.device)
         self.infiltration = torch.tensor(0.0, device=self.device)
-        self.starting_volume = model.ending_volume.clone()
+        if model.ending_volume is None:
+            self.starting_volume = torch.tensor(0.0, device=self.device)
+        else:
+            self.starting_volume = model.ending_volume.clone()
         self.ending_volume = torch.tensor(0.0, device=self.device)
         self.AET = torch.tensor(0.0, device=self.device)
         self.percolation = torch.tensor(0.0, device=self.device)

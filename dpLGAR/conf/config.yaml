@@ -1,7 +1,7 @@
 defaults:
   - _self_
   - data: basin_06332515
-  - models: lstm
+  - models: mlp
   #  - models: config/shorter_subcycle
   - hydra_settings: settings
 #cwd: /mnt/sdb1/tkb5476/dpLGAR/

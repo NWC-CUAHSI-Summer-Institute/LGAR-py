@@ -1,0 +1,41 @@
+units:
+  endtime_s: [hr]
+  forcing_resolution_h: [ sec ]
+  timestep_h: [s]
+subcycle_length: 3600 #[sec]
+subcycle_length_h: None #[hr]
+num_subcycles: None
+#num_time_step: 90000  # total simulation time is this number times the time_step_s
+#endtime: 372.0 #[hr]
+endtime: 3000.0 #[hr]
+endtime_s: None
+forcing_resolution_h: None
+time_per_step: None
+nsteps: None
+forcing_resolution: 3600 # [sec]
+target_variables:
+  - alpha
+  - n
+  - ksat
+  - ponded_depth_max
+transformations:
+  - [0.0015, 0.015] # alpha
+  - [1.0, 5.0] # n
+  - [1e-6, 30] # Ksat
+  - [0.001, 1] # ponded_depth_max
+  - [0.001, 1] # theta_e
+  - [0.001, 1] # theta_r
+num_lstm_layers: 2
+hyperparameters:
+  warmup: 168
+#  minibatch: 31 # [days]
+#  minibatch: 15 # [days]
+  minibatch: 0.04166666667 # this makes no minibatch
+
+  # https://www.pc-progress.com/Downloads/Public_Lib_H1D/HYDRUS-1D_Tutorial_V1.00_2018.pdf
+  # https://acsess.onlinelibrary.wiley.com/doi/pdf/10.2136/sssaj1980.03615995004400050002x
+epochs: 50
+learning_rate: 0.01
+hidden_size: 24
+initialization: xavier_normal
+gain: 0.7

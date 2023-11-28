@@ -2,7 +2,7 @@ data_dir: ${cwd}/data/agu_2023
 basin_id: 06332515
 camels_basin_information: ${data.data_dir}/06332515_attr.feather
 attributes_files:
-  polaris: ${data.data_dir}/CAMELS_Soil_Attributes_POLARIS_gage_1000pts6332515.csv
+  polaris: ${data.data_dir}/CAMELS_Soil_Attributes_POLARIS_gage_1000pts_bd_6332515.csv
   camels: ${data.data_dir}/06332515_attr.feather
 forcing_files:
   precip: ${data.data_dir}/06332515_hourly_nldas.csv
@@ -11,6 +11,11 @@ streamflow_observations: ${data.data_dir}/06332515-usgs-hourly.csv
 soil_moisture_observations: ${data.data_dir}/06332515_hourly_soil_moisture.csv
 soil_params_file: ${cwd}/data/vG_default_params.dat
 varC:
+  - bd_0_5
+  - bd_5_15
+  - bd_15_30
+  - bd_30_60
+  - bd_60_100
   - clay_0_5
   - clay_5_15
   - clay_15_30
@@ -54,9 +59,9 @@ initial_psi: 2000.0 #[cm]
 ponded_depth_max: 0.0 #[cm]
 use_closed_form_G: False
 layer_soil_type:
-  - 12
-  - 13
-  - 14
+  - 2  # Loam
+  - 2  # Loam
+  - 2  # Loam
 start_time: 1996-01-01 00:00:00
 endtime: 3000.0 #[hr]
 num_soil_types: 15  # must be less than or equal to MAX_NUM_SOIL_TYPES

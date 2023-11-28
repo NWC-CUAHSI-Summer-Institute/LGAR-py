@@ -17,11 +17,11 @@ class LSTM(nn.Module):
         self.cfg = cfg
         num_attributes = len(self.cfg.data.varC)
         num_forcings = len(self.cfg.data.varT)
-        output_vars = len(self.physics_parameters)
 
         # Assuming input to the model u is of shape [sequence_length, batch_size, features]
         # LSTM input size is the size of H_tensor plus the number of features in u
-        lstm_input_size = num_attributes + num_forcings
+        # lstm_input_size = num_attributes + num_forcings
+        lstm_input_size = num_forcings
         lstm_hidden_size = self.cfg.model.hidden_size
         output_size = len(self.cfg.model.target_variables)
         lstm_num_layers = self.cfg.model.num_lstm_layers

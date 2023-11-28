@@ -6,8 +6,8 @@ import time
 
 sys.path.insert(0, '/Users/taddbindas/projects/soils_work/lgar-py/dpLGAR/plugins/')
 
-from dpLGAR.agents.LSTM_LGAR import Agent
-from dpLGAR.plugins import HybridConfig
+from dpLGAR.agents.MLP_LGAR import Agent
+# from dpLGAR.plugins import HybridConfig
 
 log = logging.getLogger(__name__)
 

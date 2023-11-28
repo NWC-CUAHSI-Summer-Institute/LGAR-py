@@ -41,9 +41,10 @@ def read_df(file: str) -> pd.DataFrame:
 
 def generate_soil_metrics(
     cfg: DictConfig,
-    soils_df: pd.DataFrame,
-    alpha: torch.nn.ParameterList,
-    n: torch.nn.ParameterList,
+    theta_e: torch.Tensor,
+    theta_r: torch.Tensor,
+    alpha: torch.Tensor,
+    n: torch.Tensor,
 ) -> Tensor:
     """
     Reading the soils dataframe
@@ -66,8 +67,6 @@ def generate_soil_metrics(
         cfg.data.wilting_point_psi, device=cfg.device
     )  # Wilting point in cm
     initial_psi = torch.tensor(cfg.data.initial_psi, device=cfg.device)
-    theta_e = torch.tensor(soils_df["theta_e"], device=cfg.device)[soil_types]
-    theta_r = torch.tensor(soils_df["theta_r"], device=cfg.device)[soil_types]
     m = torch.zeros(len(alpha), device=cfg.device)
     theta_wp = torch.zeros(len(alpha), device=cfg.device)
     theta_init = torch.zeros(len(alpha), device=cfg.device)

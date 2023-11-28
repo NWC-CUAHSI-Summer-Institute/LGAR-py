@@ -55,33 +55,32 @@ class Basin_06332515(Dataset):
         pet_df = read_df(self.cfg.data.forcing_files.pet)
         filtered_pet_df = self._filter_dates(pet_df, "Date")
         pet = filtered_pet_df["PET(mm/h)"] * self.cfg.conversions.mm_to_cm
-        self.data.pet = pet
-        self.data.precip = precip
+        self.data.pet = pet.values
+        self.data.precip = precip.values
 
     def _read_observations(self):
         streamflow_df = read_df(self.cfg.data.streamflow_observations)
         soil_moisture_df = read_df(self.cfg.data.soil_moisture_observations)
-        filtered_streamflow_df = self._filter_dates(streamflow_df, "date")
+        filtered_streamflow_df = self._filter_dates(streamflow_df, "date").fillna(0.0)
         filtered_soil_moisture_df = self._filter_dates(soil_moisture_df, "Date")
-        self.data.streamflow = filtered_streamflow_df.values
-        self.data.soil_moisture = filtered_soil_moisture_df.values
+        self.data.streamflow = filtered_streamflow_df["QObs(mm/h)"].values
+        self.data.soil_moisture = filtered_soil_moisture_df[["soil_moisture_layer_1", "soil_moisture_layer_2"]].values
 
     @staticmethod
     def _log_normal_transform(value):
         return torch.log10(torch.sqrt(value) + 0.1)
 
     def _set_normalized_data(self):
-        # TODO make sure the normalization works
-        # - plotting make sure there is variance
-        # - after set up normalization and LSTM
         np_attr = torch.tensor(self.data.basin_attributes.values)
         self.normalized_data.basin_attributes = self.scaler(np_attr)
-        torch_precip = torch.tensor(self.data.precip.values.reshape((1, 3001)))
-        torch_pet = torch.tensor(self.data.pet.values.reshape((1, 3001)))
+        torch_precip = torch.tensor(self.data.precip)
+        torch_pet = torch.tensor(self.data.pet)
         torch_precip[torch.isnan(torch_precip)] = 0.0
         torch_pet[torch.isnan(torch_pet)] = 0.0
-        self.normalized_data.precip = self._log_normal_transform(torch_precip)
-        self.normalized_data.pet = self._log_normal_transform(torch_pet)
+        log_precip = self._log_normal_transform(torch_precip)
+        log_pet = self._log_normal_transform(torch_pet)
+        self.normalized_data.precip = log_precip
+        self.normalized_data.pet = log_pet  # TODO VERIFY THIS IS CORRECT
         self.normalized_data.basin_attributes[torch.isnan(self.normalized_data.basin_attributes)] = 0.0
 
     def _filter_dates(self, df: pd.DataFrame, date_column: str) -> pd.DataFrame:
