@@ -2,6 +2,7 @@ output/
 data/*
 .idea/
 runs/
+dpLGAR/outputs
 dpLGAR/plugins/neuralhydrology/
 dpLGAR/plugins/neuralhydrology
 dpLGAR/plugins/dPLHBVrelease/
