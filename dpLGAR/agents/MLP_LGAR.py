@@ -1,4 +1,6 @@
 import logging
+
+import numpy as np
 from omegaconf import DictConfig
 import time
 import torch
@@ -111,8 +113,10 @@ class Agent(BaseAgent):
         One epoch of training
         :return:
         """
-        y_hat_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
-        y_t_ = torch.zeros([len(self.data_loader)], device=self.cfg.device)  # runoff
+        y_hat_runoff = torch.zeros([int(self.cfg.models.endtime)], device=self.cfg.device)
+        y_hat_soil_moisture = torch.zeros([2, int(self.cfg.models.endtime)], device=self.cfg.device)
+        y_t_runoff = torch.zeros([int(self.cfg.models.endtime)], device=self.cfg.device)
+        y_t_soil_moisture = torch.zeros([2, int(self.cfg.models.endtime)], device=self.cfg.device)
         self.optimizer.zero_grad()
         for i, (
             pet,
@@ -128,16 +132,23 @@ class Agent(BaseAgent):
             if i == 0:
                 self.mass_balance.starting_volume = self.physics_model.ending_volume
             for j in tqdm(range(int(self.cfg.models.endtime)), desc=f"Epoch {self.current_epoch + 1} Training"):
-                # TODO test the code
-                runoff, _ = self.physics_model(precip, pet)
-                y_hat_[j] = runoff
-                y_t_[j] = streamflow[j]
-                time.sleep(0.01)
-                self.mass_balance.change_mass(self.physics_model)  # Updating global balance
+                with torch.no_grad():
+                    _precip = precip[j]
+                    _pet = pet[j]
+                    runoff, layered_soil_moisture = self.physics_model(_precip, _pet)
+                    y_hat_runoff[j] = runoff
+                    avg_soil_moisture = [torch.mean(list_) for list_ in layered_soil_moisture]
+                    y_hat_soil_moisture[0, j] = avg_soil_moisture[0]
+                    y_hat_soil_moisture[1, j] = avg_soil_moisture[1]
+                    y_t_runoff[j] = streamflow[j]
+                    y_t_soil_moisture[0, j] = soil_moisture[j, 0]
+                    y_t_soil_moisture[1, j] = soil_moisture[j, 1]
+                    self.mass_balance.change_mass(self.physics_model)  # Updating global balance
+                    time.sleep(0.01)
         self.mass_balance.report_mass(self.physics_model)  # Global mass balance
         warmup = self.cfg.models.hyperparameters.warmup
-        self.y_hat = y_hat_[warmup:]
-        self.y_t = y_t_[warmup:]
+        self.y_hat = torch.stack([y_hat_runoff, y_hat_soil_moisture[0], y_hat_soil_moisture[1]])[:, warmup:]
+        self.y_t = torch.stack([y_t_runoff, y_t_soil_moisture[0], y_t_soil_moisture[1]])[:, warmup:]
         self.validate()
 
     def validate(self) -> None:
@@ -151,9 +162,9 @@ class Agent(BaseAgent):
         - y_t_ : The tensor containing actual values.
         """
         # Outputting trained Nash-Sutcliffe efficiency (NSE) coefficient
-        y_hat_np = self.y_hat.detach().squeeze().numpy()
-        y_t_np = self.y_t.detach().squeeze().numpy()
-        log.info(f"trained NSE: {calculate_nse(y_hat_np, y_t_np):.4}")
+        y_hat_streamflow_np = self.y_hat[0].detach().squeeze().numpy()
+        y_t_streamflow_np = self.y_t[0].detach().squeeze().numpy()
+        log.info(f"trained NSE: {calculate_nse(y_hat_streamflow_np, y_t_streamflow_np):.4}")
 
         # Compute the overall loss
         loss = self.criterion(self.y_hat, self.y_t)

@@ -1,6 +1,6 @@
 output/
-data/*
 .idea/
+data/
 runs/
 dpLGAR/outputs
 dpLGAR/plugins/neuralhydrology/

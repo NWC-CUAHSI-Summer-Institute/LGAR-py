@@ -276,7 +276,10 @@ class dpLGAR(nn.Module):
                 self.giuh_runoff = self.giuh_runoff + giuh_runoff_sub
                 self.discharge = self.discharge + giuh_runoff_sub
                 self.groundwater_discharge = groundwater_discharge_sub
-        return self.runoff, self.percolation
+        return self.runoff, self.get_soil_moisture()
+
+    def get_soil_moisture(self):
+        return self.top_layer.get_soil_moisture([])
 
     def calc_mass_balance(self) -> Tensor:
         """
