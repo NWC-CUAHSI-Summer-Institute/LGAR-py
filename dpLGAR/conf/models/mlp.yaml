@@ -27,7 +27,7 @@ transformations:
   - [0.001, 1] # theta_r
 num_lstm_layers: 2
 hyperparameters:
-  warmup: 168
+  warmup: 7
 #  minibatch: 31 # [days]
 #  minibatch: 15 # [days]
   minibatch: 0.04166666667 # this makes no minibatch

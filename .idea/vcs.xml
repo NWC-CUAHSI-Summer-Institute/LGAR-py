@@ -2,7 +2,6 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/../../__template__" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/dpLGAR/plugins/neuralhydrology" vcs="Git" />
+    <mapping directory="/data/tkb5476/projects/marquette" vcs="Git" />
   </component>
 </project>

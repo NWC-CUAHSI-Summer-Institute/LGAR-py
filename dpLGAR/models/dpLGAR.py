@@ -11,6 +11,7 @@ from dpLGAR.models.physics.lgar.frozen_factor import (
     frozen_factor_hydraulic_conductivity,
 )
 from dpLGAR.models.physics.lgar.giuh import calc_giuh
+from dpLGAR.models.physics.utils import detach_attrs
 
 log = logging.getLogger(__name__)
 
@@ -279,7 +280,7 @@ class dpLGAR(nn.Module):
         return self.runoff, self.get_soil_moisture()
 
     def get_soil_moisture(self):
-        return self.top_layer.get_soil_moisture([])
+        return self.top_layer.get_soil_moisture(torch.zeros([2]))
 
     def calc_mass_balance(self) -> Tensor:
         """
@@ -411,3 +412,12 @@ class dpLGAR(nn.Module):
         #     ending_volume_sub,
         #     infiltration_sub,
         # )
+
+    # def detach_all(self):
+    #     # Detach all parameters
+    #     for param in self.parameters():
+    #         param.detach_()
+    #     detach_attrs(self)
+    #     detach_attrs(self.global_params)
+    #     detach_attrs(self.wf_free_drainage_demand)
+    #     self.top_layer.detach_all()

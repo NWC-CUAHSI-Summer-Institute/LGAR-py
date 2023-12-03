@@ -24,8 +24,7 @@ def safe_pow(base, exponent):
 
     if base < 0:
         log.error("taking a negative base")
-        raise ValueError
-
+        base = torch.clamp(base, min=threshold)
     # Perform the pow operation
     result = torch.pow(base, exponent)
 
@@ -183,3 +182,10 @@ def error_check(result):
         raise ValueError
     else:
         return result
+
+
+def detach_attrs(module):
+    for attr_name in dir(module):
+        attr = getattr(module, attr_name)
+        if isinstance(attr, torch.Tensor):
+            setattr(module, attr_name, attr.detach())

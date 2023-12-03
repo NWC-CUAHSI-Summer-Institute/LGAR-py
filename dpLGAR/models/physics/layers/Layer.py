@@ -13,6 +13,7 @@ from dpLGAR.models.physics.utils import (
     calc_se_from_theta,
     calc_h_from_se,
     calc_k_from_se,
+    detach_attrs,
 )
 
 log = logging.getLogger("models.physics.layers.Layer")
@@ -76,13 +77,7 @@ class Layer:
             layer_index < global_params.num_layers - 1
         ):  # Checking to see if there is a layer below this one
             self.next_layer = Layer(
-                global_params,
-                layer_index + 1,
-                c,
-                alpha,
-                n,
-                ksat,
-                previous_layer=self,
+                global_params, layer_index + 1, c, alpha, n, ksat, previous_layer=self,
             )
         self.previous_state = self.deepcopy()
 
@@ -237,12 +232,7 @@ class Layer:
             return mass_layers
 
     def theta_mass_balance(
-        self,
-        psi_cm,
-        new_mass,
-        prior_mass,
-        delta_thetas,
-        delta_thickness,
+        self, psi_cm, new_mass, prior_mass, delta_thetas, delta_thickness,
     ):
         theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
@@ -269,7 +259,8 @@ class Layer:
 
         # the loop increments/decrements the capillary head until mass difference between
         # the new and prior is within the tolerance
-        while delta_mass > self.tolerance:
+        count = 0
+        while delta_mass > self.tolerance and count < 100:
             if new_mass > prior_mass:
                 psi_cm = psi_cm + (0.1 * factor)
                 switched = False
@@ -312,6 +303,7 @@ class Layer:
             if psi_cm <= 0 and psi_cm_loc_prev < 1e-50:
                 break
             delta_mass_prev = delta_mass
+            count = count + 1
         return theta
 
     def base_case(self, percolation, aet, subtimestep, neighboring_fronts):
@@ -370,11 +362,7 @@ class Layer:
 
         # theta mass balance computes new theta that conserves the mass; new theta is assigned to the current wetting front
         theta_new = self.theta_mass_balance(
-            psi_cm,
-            new_mass,
-            prior_mass,
-            delta_thetas,
-            delta_thickness,
+            psi_cm, new_mass, prior_mass, delta_thetas, delta_thickness,
         )
         theta_e = self.attributes[self.global_params.soil_index["theta_e"]]
         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
@@ -532,11 +520,7 @@ class Layer:
                 prior_mass = prior_mass + infiltration - (free_drainage_demand + aet)
             # theta mass balance computes new theta that conserves the mass; new theta is assigned to the current wetting front
             theta_new = self.theta_mass_balance(
-                psi_cm,
-                new_mass,
-                prior_mass,
-                delta_thetas,
-                delta_thickness,
+                psi_cm, new_mass, prior_mass, delta_thetas, delta_thickness,
             )
             current_front.theta = torch.min(theta_new, theta_e)
 
@@ -581,20 +565,10 @@ class Layer:
             previous_layer_thickness = self.previous_layer.cumulative_layer_thickness
         if self.layer_num < stop_layer:
             theta_old = calc_theta_from_h(
-                psi_cm_old,
-                self.alpha_layer,
-                m,
-                self.n_layer,
-                theta_e,
-                theta_r,
+                psi_cm_old, self.alpha_layer, m, self.n_layer, theta_e, theta_r,
             )
             theta_below_old = calc_theta_from_h(
-                psi_cm_below_old,
-                self.alpha_layer,
-                m,
-                self.n_layer,
-                theta_e,
-                theta_r,
+                psi_cm_below_old, self.alpha_layer, m, self.n_layer, theta_e, theta_r,
             )
             local_delta_theta_old = theta_old - theta_below_old
             previous_layer_thickness = torch.tensor(0.0)
@@ -605,21 +579,11 @@ class Layer:
             # // -------------------------------------------
             # // do the same for the current state
             theta = calc_theta_from_h(
-                psi_cm,
-                self.alpha_layer,
-                m,
-                self.n_layer,
-                theta_e,
-                theta_r,
+                psi_cm, self.alpha_layer, m, self.n_layer, theta_e, theta_r,
             )
 
             theta_below = calc_theta_from_h(
-                psi_cm_below,
-                self.alpha_layer,
-                m,
-                self.n_layer,
-                theta_e,
-                theta_r,
+                psi_cm_below, self.alpha_layer, m, self.n_layer, theta_e, theta_r,
             )
 
             new_mass = new_mass + (layer_thickness * (theta - theta_below))
@@ -675,7 +639,7 @@ class Layer:
             factor = torch.tensor(1.0, device=self.global_params.device)
             depth_new = self.wf_free_drainage_demand.depth
             # loop to adjust the depth for mass balance
-            while torch.abs(mass_balance_error - self.tolerance) > 1e-12:
+            while torch.abs(mass_balance_error - self.tolerance) > 1e-3:  # tolerance moved from 1e-12
                 if current_mass < mass_timestep:
                     depth_new = (
                         depth_new
@@ -922,10 +886,7 @@ class Layer:
                     extended_neighbors["current_front"],
                     extended_neighbors["next_front"],
                 ) = self.recalibrate(
-                    current_front,
-                    next_front,
-                    next_to_next_front,
-                    overshot_depth,
+                    current_front, next_front, next_to_next_front, overshot_depth,
                 )
         if self.next_layer is not None:
             self.next_layer.wetting_fronts_cross_layer_boundary()
@@ -960,11 +921,7 @@ class Layer:
                 break
 
     def recalibrate(
-        self,
-        current_front,
-        next_front,
-        next_to_next_front,
-        overshot_depth,
+        self, current_front, next_front, next_to_next_front, overshot_depth,
     ):
         """
         Recalibrating parameters of the wetting front to match the new soil layer
@@ -1031,11 +988,7 @@ class Layer:
                     )
 
                     next_front.theta = current_front.theta
-                    se_k = calc_se_from_theta(
-                        current_front.theta,
-                        theta_e,
-                        theta_r,
-                    )
+                    se_k = calc_se_from_theta(current_front.theta, theta_e, theta_r,)
                     next_front.psi_cm = calc_h_from_se(
                         se_k, self.alpha_layer, m, self.n_layer
                     )
@@ -1045,7 +998,9 @@ class Layer:
                     )  # deleting the current front (i.e front with index i)
             bottom_flux_cm = bottom_flux_cm + bottom_flux_cm_temp
         if self.next_layer is not None:
-            return bottom_flux_cm + self.next_layer.wetting_front_cross_domain_boundary()
+            return (
+                bottom_flux_cm + self.next_layer.wetting_front_cross_domain_boundary()
+            )
         else:
             return bottom_flux_cm
 
@@ -1125,7 +1080,9 @@ class Layer:
                 m = self.attributes[self.global_params.soil_index["m"]]
                 se_l = calc_se_from_theta(dry_front.theta, theta_e, theta_r)
                 if se_l < 0:
-                    se_l = current_front.se  # HACK to make sure we don't have negative pressure
+                    se_l = (
+                        current_front.se
+                    )  # HACK to make sure we don't have negative pressure
                 current_front.psi_cm = calc_h_from_se(
                     se_l, self.alpha_layer, m, self.n_layer
                 )
@@ -1415,11 +1372,7 @@ class Layer:
         return ponded_depth, infiltration
 
     def insert_water(
-        self,
-        subtimestep,
-        precip,
-        ponded_depth,
-        infiltration,
+        self, subtimestep, precip, ponded_depth, infiltration,
     ):
         """
         // ############################################################################################
@@ -1558,12 +1511,7 @@ class Layer:
         theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
         m = self.attributes[self.global_params.soil_index["m"]]
         theta_prev_loc = calc_theta_from_h(
-            current_front.psi_cm,
-            self.alpha_layer,
-            m,
-            self.n_layer,
-            theta_e,
-            theta_r,
+            current_front.psi_cm, self.alpha_layer, m, self.n_layer, theta_e, theta_r,
         )
         se_prev_loc = calc_se_from_theta(theta_prev_loc, theta_e, theta_r)
 
@@ -1646,11 +1594,20 @@ class Layer:
             return None
 
     def get_soil_moisture(self, cumulative_theta):
-        wf_soil_moisture = []
-        for wf in self.wetting_fronts:
-            wf_soil_moisture.append(wf.theta)
-        cumulative_theta.append(torch.tensor(wf_soil_moisture))
-        if self.next_layer is not None:
+        wf_soil_moisture = torch.zeros([len(self.wetting_fronts)])
+        for idx, wf in enumerate(self.wetting_fronts):
+            wf_soil_moisture[idx] = wf.theta
+        cumulative_theta[self.layer_num] = wf_soil_moisture.mean()
+        if self.layer_num < 1:
             return self.next_layer.get_soil_moisture(cumulative_theta)
         else:
             return cumulative_theta
+
+    # def detach_all(self):
+    #     detach_attrs(self)
+    #     for wf in self.wetting_fronts:
+    #         detach_attrs(wf)
+    #     for state in self.previous_state:
+    #         detach_attrs(state)
+    #     if self.next_layer is not None:
+    #         self.next_layer.detach_all()

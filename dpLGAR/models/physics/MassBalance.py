@@ -8,7 +8,7 @@ log = logging.getLogger("models.physics.MassBalance")
 
 
 class MassBalance:
-    def __init__(self, cfg: DictConfig, model):
+    def __init__(self, cfg: DictConfig):
         super().__init__()
         self.device = cfg.device
 
@@ -26,7 +26,7 @@ class MassBalance:
         self.ponded_water = None
         self.groundwater_discharge = None
 
-        self.set_internal_states(model)
+        self.set_internal_states()
 
     def change_mass(self, model):
         self.precip = self.precip + model.precip
@@ -55,13 +55,10 @@ class MassBalance:
     def reset_mass(self, model):
         self.set_internal_states(model)
 
-    def set_internal_states(self, model):
+    def set_internal_states(self):
         self.precip = torch.tensor(0.0, device=self.device)
         self.infiltration = torch.tensor(0.0, device=self.device)
-        if model.ending_volume is None:
-            self.starting_volume = torch.tensor(0.0, device=self.device)
-        else:
-            self.starting_volume = model.ending_volume.clone()
+        self.starting_volume = torch.tensor(0.0, device=self.device)
         self.ending_volume = torch.tensor(0.0, device=self.device)
         self.AET = torch.tensor(0.0, device=self.device)
         self.percolation = torch.tensor(0.0, device=self.device)

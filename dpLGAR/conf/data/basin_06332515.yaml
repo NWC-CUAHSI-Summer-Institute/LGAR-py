@@ -57,6 +57,7 @@ layer_thickness: #[cm]
   - 72.0
 initial_psi: 2000.0 #[cm]
 ponded_depth_max: 0.0 #[cm]
+batch_size: 168
 use_closed_form_G: False
 layer_soil_type:
   - 2  # Loam
@@ -74,9 +75,10 @@ wilting_point_psi_cm: 154950.0  # AJ-correction
 soil_index: ???
 max_soil_types: 25
 wilting_point_psi: 15495.0 #[cm]
-giuh_ordinates:
+giuh_ordinates:  #specific to this basin
+  - 0.45
+  - 0.31
+  - 0.15
   - 0.06
-  - 0.51
-  - 0.28
-  - 0.12
-  - 0.03
+  - 0.02
+  - 0.01

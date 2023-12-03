@@ -4,8 +4,9 @@ defaults:
   - models: mlp
   #  - models: config/shorter_subcycle
   - hydra_settings: settings
-#cwd: /mnt/sdb1/tkb5476/dpLGAR/
-cwd: /Users/taddbindas/projects/soils_work/lgar-py/
+cwd: /mnt/sdb1/tkb5476/LGAR-py/
+#cwd: /Users/taddbindas/projects/soils_work/lgar-py/
+seed: 0
 save_name: debugger
 output_dir: ${cwd}/output
 device: cpu

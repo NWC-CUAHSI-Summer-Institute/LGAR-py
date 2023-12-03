@@ -65,12 +65,12 @@ class Agent(BaseAgent):
         #     self.data, batch_size=self.hourly_mini_batch, shuffle=False
         # )
         self.data_loader = DataLoader(
-            self.data, batch_size=int(self.cfg.models.endtime), shuffle=False
+            self.data, batch_size=self.cfg.data.batch_size, shuffle=False
         )
         self.mlp = MLP(self.cfg)
         # Defining the model and output variables to save
-        self.physics_model = dpLGAR(self.cfg)
-        self.mass_balance = MassBalance(self.cfg, self.physics_model)
+        self.physics_model = None
+        self.mass_balance = MassBalance(self.cfg)
 
         self.criterion = MSE_loss
         self.optimizer = torch.optim.Adam(
@@ -98,7 +98,6 @@ class Agent(BaseAgent):
         :return:
         """
         self.mlp.initialize_weights()
-        self.physics_model.train()
         for epoch in range(1, self.cfg.models.epochs + 1):
             self.train_one_epoch()
             self.current_epoch += 1
@@ -113,11 +112,6 @@ class Agent(BaseAgent):
         One epoch of training
         :return:
         """
-        y_hat_runoff = torch.zeros([int(self.cfg.models.endtime)], device=self.cfg.device)
-        y_hat_soil_moisture = torch.zeros([2, int(self.cfg.models.endtime)], device=self.cfg.device)
-        y_t_runoff = torch.zeros([int(self.cfg.models.endtime)], device=self.cfg.device)
-        y_t_soil_moisture = torch.zeros([2, int(self.cfg.models.endtime)], device=self.cfg.device)
-        self.optimizer.zero_grad()
         for i, (
             pet,
             precip,
@@ -126,30 +120,37 @@ class Agent(BaseAgent):
             normalized_attributes,
             streamflow,
             soil_moisture,
-        ) in enumerate(self.data_loader):
+        ) in enumerate(tqdm(self.data_loader, desc="Running through data")):
+            self.optimizer.zero_grad()
+            y_hat_runoff = torch.zeros([int(self.cfg.data.batch_size)], device=self.cfg.device)
+            y_hat_soil_moisture = torch.zeros([2, int(self.cfg.data.batch_size)], device=self.cfg.device)
+            y_t_runoff = torch.zeros([int(self.cfg.data.batch_size)], device=self.cfg.device)
+            y_t_soil_moisture = torch.zeros([2, int(self.cfg.data.batch_size)], device=self.cfg.device)
+
             alpha, n, ksat, theta_e, theta_r, ponded_depth_max = self.mlp(normalized_attributes[0])
+            self.physics_model = dpLGAR(self.cfg)
             self.physics_model.initialize(alpha, n, ksat, theta_e, theta_r, ponded_depth_max)
-            if i == 0:
-                self.mass_balance.starting_volume = self.physics_model.ending_volume
-            for j in tqdm(range(int(self.cfg.models.endtime)), desc=f"Epoch {self.current_epoch + 1} Training"):
-                with torch.no_grad():
-                    _precip = precip[j]
-                    _pet = pet[j]
-                    runoff, layered_soil_moisture = self.physics_model(_precip, _pet)
-                    y_hat_runoff[j] = runoff
-                    avg_soil_moisture = [torch.mean(list_) for list_ in layered_soil_moisture]
-                    y_hat_soil_moisture[0, j] = avg_soil_moisture[0]
-                    y_hat_soil_moisture[1, j] = avg_soil_moisture[1]
-                    y_t_runoff[j] = streamflow[j]
-                    y_t_soil_moisture[0, j] = soil_moisture[j, 0]
-                    y_t_soil_moisture[1, j] = soil_moisture[j, 1]
-                    self.mass_balance.change_mass(self.physics_model)  # Updating global balance
-                    time.sleep(0.01)
+
+            self.mass_balance.starting_volume = self.physics_model.ending_volume
+            for j in range(len(precip)):
+                _precip = precip[j]
+                _pet = pet[j]
+                runoff, layered_soil_moisture = self.physics_model(_precip, _pet)
+                y_hat_runoff[j] = runoff
+                y_hat_soil_moisture[0, j] = layered_soil_moisture[0]
+                y_hat_soil_moisture[1, j] = layered_soil_moisture[1]
+                y_t_runoff[j] = streamflow[j]
+                y_t_soil_moisture[0, j] = soil_moisture[j, 0]
+                y_t_soil_moisture[1, j] = soil_moisture[j, 1]
+                self.mass_balance.change_mass(self.physics_model)  # Updating global balance
+            self.y_hat = torch.stack([y_hat_runoff, y_hat_soil_moisture[0], y_hat_soil_moisture[1]])
+            self.y_t = torch.stack([y_t_runoff, y_t_soil_moisture[0], y_t_soil_moisture[1]])
+            # if i >= self.cfg.models.hyperparameters.warmup:
+            self.validate()
+            # self.physics_model.detach_all()
+            time.sleep(0.01)
         self.mass_balance.report_mass(self.physics_model)  # Global mass balance
-        warmup = self.cfg.models.hyperparameters.warmup
-        self.y_hat = torch.stack([y_hat_runoff, y_hat_soil_moisture[0], y_hat_soil_moisture[1]])[:, warmup:]
-        self.y_t = torch.stack([y_t_runoff, y_t_soil_moisture[0], y_t_soil_moisture[1]])[:, warmup:]
-        self.validate()
+
 
     def validate(self) -> None:
         """
@@ -164,29 +165,23 @@ class Agent(BaseAgent):
         # Outputting trained Nash-Sutcliffe efficiency (NSE) coefficient
         y_hat_streamflow_np = self.y_hat[0].detach().squeeze().numpy()
         y_t_streamflow_np = self.y_t[0].detach().squeeze().numpy()
-        log.info(f"trained NSE: {calculate_nse(y_hat_streamflow_np, y_t_streamflow_np):.4}")
+        if np.mean(y_hat_streamflow_np) > 0:
+            log.info(f"trained NSE: {calculate_nse(y_hat_streamflow_np, y_t_streamflow_np):.4}")
 
         # Compute the overall loss
         loss = self.criterion(self.y_hat, self.y_t)
 
         # Backpropagate the error
-        start = time.perf_counter()
+        # start = time.perf_counter()
         loss.backward()
-        end = time.perf_counter()
+        # end = time.perf_counter()
 
         # Log the time taken for backpropagation and the calculated loss
-        log.info(f"Back prop took : {(end - start):.6f} seconds")
+        # log.info(f"Back prop took : {(end - start):.6f} seconds")
         log.info(f"Loss: {loss}")
 
         # Update the model parameters
         self.optimizer.step()
-
-    def finalize(self):
-        """
-        Finalizes all the operations of the 2 Main classes of the process, the operator and the data loader
-        :return:
-        """
-        raise NotImplementedError
 
     def load_checkpoint(self, file_name):
         """
