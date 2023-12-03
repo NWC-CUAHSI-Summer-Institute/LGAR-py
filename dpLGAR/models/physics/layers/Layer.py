@@ -1079,10 +1079,10 @@ class Layer:
                 theta_r = self.attributes[self.global_params.soil_index["theta_r"]]
                 m = self.attributes[self.global_params.soil_index["m"]]
                 se_l = calc_se_from_theta(dry_front.theta, theta_e, theta_r)
-                if se_l < 0:
-                    se_l = (
-                        current_front.se
-                    )  # HACK to make sure we don't have negative pressure
+                # if se_l < 0:
+                #     se_l = (
+                #         current_front.se
+                #     )  # HACK to make sure we don't have negative pressure
                 current_front.psi_cm = calc_h_from_se(
                     se_l, self.alpha_layer, m, self.n_layer
                 )

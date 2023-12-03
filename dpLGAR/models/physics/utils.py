@@ -24,7 +24,8 @@ def safe_pow(base, exponent):
 
     if base < 0:
         log.error("taking a negative base")
-        base = torch.clamp(base, min=threshold)
+        raise ValueError
+        # base = torch.clamp(base, min=threshold)  # we can do this is we want to ignore?
     # Perform the pow operation
     result = torch.pow(base, exponent)
 
