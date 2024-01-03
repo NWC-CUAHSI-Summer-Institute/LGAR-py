@@ -45,7 +45,7 @@ class Basin_06332515(Dataset):
         df = read_df(self.cfg.data.attributes_files.polaris)
         attr_df = df[self.cfg.data.varC]
         camels_df = read_df(self.cfg.data.attributes_files.camels)
-        self.data.basin_attributes = attr_df
+        self.data.basin_attributes = attr_df.iloc[:self.cfg.data.num_samples]
         self.data.camels_attributes = camels_df
 
     def _read_forcings(self):

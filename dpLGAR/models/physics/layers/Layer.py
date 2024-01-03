@@ -639,7 +639,8 @@ class Layer:
             factor = torch.tensor(1.0, device=self.global_params.device)
             depth_new = self.wf_free_drainage_demand.depth
             # loop to adjust the depth for mass balance
-            while torch.abs(mass_balance_error - self.tolerance) > 1e-3:  # tolerance moved from 1e-12
+            log.info("Running mass-balance")
+            while torch.abs(mass_balance_error - self.tolerance) > 1e-12:  # tolerance moved from 1e-12
                 if current_mass < mass_timestep:
                     depth_new = (
                         depth_new

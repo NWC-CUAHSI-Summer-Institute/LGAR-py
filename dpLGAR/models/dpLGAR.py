@@ -64,7 +64,6 @@ class dpLGAR(nn.Module):
             "bc_psib_cm": 6,
             "h_min_cm": 7,
         }
-
         self.global_params = None
 
     def initialize(self, alpha: torch.Tensor, n: torch.Tensor, ksat: torch.Tensor, theta_e: torch.Tensor, theta_r: torch.Tensor, ponded_max_depth: torch.Tensor):

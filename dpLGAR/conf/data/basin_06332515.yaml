@@ -75,6 +75,7 @@ wilting_point_psi_cm: 154950.0  # AJ-correction
 soil_index: ???
 max_soil_types: 25
 wilting_point_psi: 15495.0 #[cm]
+num_samples: 100
 giuh_ordinates:  #specific to this basin
   - 0.45
   - 0.31

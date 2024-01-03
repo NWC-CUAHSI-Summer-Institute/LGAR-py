@@ -7,6 +7,7 @@ import torch
 from torch import Tensor
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
+from torchviz import make_dot
 
 from dpLGAR.agents.base import BaseAgent
 from dpLGAR.data.arid_single_basin import Basin_06332515
@@ -70,8 +71,7 @@ class Agent(BaseAgent):
         self.mlp = MLP(self.cfg)
         # Defining the model and output variables to save
         self.physics_model = None
-        self.mass_balance = MassBalance(self.cfg)
-
+        self.mass_balance = None
         self.criterion = MSE_loss
         self.optimizer = torch.optim.Adam(
             self.mlp.parameters(), lr=self.cfg.models.learning_rate
@@ -105,7 +105,7 @@ class Agent(BaseAgent):
             # Resetting the internal states (soil layers) for the next run
             self.physics_model.set_internal_states()
             # Resetting the mass
-            self.mass_balance.reset_mass(self.physics_model)
+            # self.mass_balance.reset_mass(self.physics_model)
 
     def train_one_epoch(self):
         """
@@ -126,11 +126,10 @@ class Agent(BaseAgent):
             y_hat_soil_moisture = torch.zeros([2, int(self.cfg.data.batch_size)], device=self.cfg.device)
             y_t_runoff = torch.zeros([int(self.cfg.data.batch_size)], device=self.cfg.device)
             y_t_soil_moisture = torch.zeros([2, int(self.cfg.data.batch_size)], device=self.cfg.device)
-
             alpha, n, ksat, theta_e, theta_r, ponded_depth_max = self.mlp(normalized_attributes[0])
             self.physics_model = dpLGAR(self.cfg)
             self.physics_model.initialize(alpha, n, ksat, theta_e, theta_r, ponded_depth_max)
-
+            self.mass_balance = MassBalance(self.cfg)
             self.mass_balance.starting_volume = self.physics_model.ending_volume
             for j in range(len(precip)):
                 _precip = precip[j]

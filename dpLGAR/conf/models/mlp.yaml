@@ -19,12 +19,18 @@ target_variables:
   - ksat
   - ponded_depth_max
 transformations:
-  - [0.0015, 0.015] # alpha
-  - [1.0, 5.0] # n
-  - [1e-6, 30] # Ksat
-  - [0.001, 1] # ponded_depth_max
-  - [0.001, 1] # theta_e
-  - [0.001, 1] # theta_r
+#  - [0.0015, 0.015] # alpha
+#  - [1.0, 5.0] # n
+#  - [1e-6, 30] # Ksat
+#  - [0.001, 1] # ponded_depth_max
+#  - [0.001, 1] # theta_e
+#  - [0.001, 1] # theta_r
+  - [0.0015, 0.015] # alpha smaller
+  - [1.0, 2.0] # n smaller
+  - [1e-6, 15] # Ksat smaller
+  - [0.001, 0.1] # ponded_depth_max smaller
+  - [0.3, 0.7] # theta_e smaller
+  - [0.001, 0.13] # theta_r smaller
 num_lstm_layers: 2
 hyperparameters:
   warmup: 7

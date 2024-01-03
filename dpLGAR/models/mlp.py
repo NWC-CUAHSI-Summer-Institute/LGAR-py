@@ -15,8 +15,8 @@ class MLP(nn.Module):
     def __init__(self, cfg: DictConfig):
         super(MLP, self).__init__()
         self.cfg = cfg
-        input_size = len(self.cfg.data.varC) * 1000  # Num_samples
-        hidden_size = self.cfg.models.hidden_size * 1000  # Num samples
+        input_size = len(self.cfg.data.varC) * self.cfg.data.num_samples  # Num_samples
+        hidden_size = self.cfg.models.hidden_size * self.cfg.data.num_samples  # Num samples
         output_size = 5 * len(self.cfg.data.layer_thickness) + 1
         self.Initialization = Initialization(self.cfg)
         self.m1 = nn.Flatten(start_dim=0, end_dim=-1)
@@ -49,7 +49,7 @@ class MLP(nn.Module):
         alpha = self._denormalize(0, x[0:3])
         n = self._denormalize(1, x[3:6])
         ksat = self._denormalize(2, x[6:9])
-        theta_e = self._denormalize(3, x[9:12])
-        theta_r = self._denormalize(4, x[12:15])
         ponded_depth_max = self._denormalize(3, x[-1])
+        theta_e = self._denormalize(4, x[9:12])
+        theta_r = self._denormalize(5, x[12:15])
         return alpha, n, ksat, theta_e, theta_r, ponded_depth_max
